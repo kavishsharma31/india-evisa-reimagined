@@ -33,9 +33,21 @@ This file is the authoritative project execution tracker. Update its statuses an
 
 ## Phase 1 — Product thesis and scope
 
-- **Status:** `NOT STARTED`
+- **Status:** `IN PROGRESS`
 - **Objective:** Define the applicant and institutional problems, proof-of-concept thesis, target users, intended outcomes, scope, non-goals, and measurable success criteria.
 - **Completion gate:** A coherent product thesis and bounded scope are documented, reviewed against the system dissection and charter, and explicitly approved by the user.
+
+### Numbered steps
+
+| # | Step | Status | Exit condition | Evidence |
+|---:|---|---|---|---|
+| 1 | AI necessity and decision framework | `COMPLETE` | An accepted decision and durable evaluation framework require material outcome improvement over a deterministic baseline, advisory and deterministically validated output where policy or application data is affected, safe fallback, uncertainty handling, measurable evaluation and synthetic-only data; prohibited authoritative decisions and deferred model/provider choices are explicit. | `planning/DECISIONS.md` contains accepted `D-007`, and `planning/AI_FEATURE_EVALUATION.md` defines mandatory gates, deterministic baselines, prohibited responsibilities, cross-cutting safeguards and all six required candidates as `UNDER EVALUATION`; no AI feature, model, provider, implementation or technology stack was selected. |
+| 2 | Target-user and problem prioritization | `NOT STARTED` | Priority primary and secondary users and their problems are ranked against evidence, intended outcomes, assumptions and constraints, with the rationale and exclusions recorded. | — |
+| 3 | Proof-of-concept scenario and category selection | `NOT STARTED` | One bounded proof-of-concept visa purpose/category and synthetic scenario are selected, including the golden path and essential exception and recovery cases, and explicitly approved. | — |
+| 4 | Value proposition and product thesis | `NOT STARTED` | A concise product thesis ties the selected scenario and prioritized users and problems to distinct applicant and institutional value, with its assumptions and evidence recorded. | — |
+| 5 | Scope, non-goals and feature prioritization | `NOT STARTED` | A bounded feature scope, priorities and non-goals are mapped to the thesis, selected scenario and project safety constraints without selecting technology or expanding live-system access. | — |
+| 6 | Success metrics and validation criteria | `NOT STARTED` | Each success measure has a defined metric, baseline or baseline-collection method, numeric target, evaluation method and acceptance threshold for the selected scope. | — |
+| 7 | Consolidated Phase 1 brief and approval | `NOT STARTED` | One Phase 1 brief integrates the verified outputs of Steps 1–6, passes consistency review against the authoritative documents and accepted decisions, and receives explicit user approval. | — |
 
 ## Phase 2 — Domain model and policy engine
 
