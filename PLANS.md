@@ -13,9 +13,10 @@ This file is the authoritative project execution tracker. Update its statuses an
 
 ## Phase 0 — Project grounding
 
-- **Status:** `IN PROGRESS`
+- **Status:** `COMPLETE`
 - **Objective:** Establish the repository, authoritative references, operating constraints, planning controls, and safe proof-of-concept boundaries.
 - **Completion gate:** All eight Phase 0 steps are `COMPLETE` with recorded evidence, and the verified repository baseline has been committed only after explicit user instruction.
+- **Completion evidence:** All eight Phase 0 exit conditions are verified.
 
 ### Numbered steps
 
@@ -28,7 +29,7 @@ This file is the authoritative project execution tracker. Update its statuses an
 | 5 | Project charter. | `COMPLETE` | The charter defines the problem, intended users, outcomes, scope, non-goals, constraints, success measures, and approval criteria. | `planning/PROJECT_CHARTER.md` was read back and verified with all 11 required sections and mandated boundaries present, no date or stack/branding/category decision introduced, and SHA-256 `2B0C899A2E7FA25DFB283910A8A85C9473EC57B32FCA227AAE420DA9BF1AF4C7`. |
 | 6 | Decision log. | `COMPLETE` | A decision-log structure records decisions, rationale, alternatives, consequences, status, and approvals without prematurely selecting a technology stack. | `planning/DECISIONS.md` was read back and verified with the required 11-field structure, exactly six `ACCEPTED` entries (`D-001`–`D-006`), explicit append-only and supersession rules, no dates or additional decisions, and SHA-256 `1146D5CB8F758E8527F7B7E9111D8AB76D2199B058BE8CFB4ECBA0E529E6B26B`. |
 | 7 | Synthetic-data and integration-boundary specification. | `COMPLETE` | The specification defines synthetic data classes, prohibited live interactions, mock integration contracts, privacy constraints, and verification checks. | `planning/SYNTHETIC_DATA_AND_INTEGRATION_BOUNDARIES.md` was read back and verified with all 11 required sections, exactly nine mock boundaries, every mandated data, watermark, labeling, isolation, reset, logging and automated-check control, no dates, and SHA-256 `C34E7D1B0B5D516A44DAE856F031BA6EF262CF8D0D97330F366EBA2521EA06CD`. |
-| 8 | Repository baseline verification and initial commit. | `IN PROGRESS` | The baseline tree and required documents are verified, explicit commit instruction is received, an initial commit is created, and its identifier and clean status are recorded. | `README.md` and `.gitignore` were created and read back; the pre-commit audit verified exactly eight expected files with no unexpected files, no application source, package manifest, or framework scaffold, seven readable non-empty Markdown files, 11/11 resolving repository-relative Markdown links, zero merge-conflict, secret, or realistic-personal-data findings, and only inert research URLs; SHA-256 hashes were captured for every baseline file. The explicit initial commit, commit identifier, and clean post-commit status remain pending. |
+| 8 | Repository baseline verification and initial commit. | `COMPLETE` | The baseline tree and required documents are verified, explicit commit instruction is received, an initial commit is created, and its identifier and clean status are recorded. | Baseline audit passed. Initial commit SHA: `0e10a5e3ad9c41df31b8832a0506e8ce68bcac04`. Branch renamed to `main`. Exactly eight expected files were committed. Post-commit working tree was clean. |
 
 ## Phase 1 — Product thesis and scope
 
