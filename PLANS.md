@@ -1,13 +1,21 @@
 # Project Execution Tracker
 
+## Current execution mode
+
+- **Mode:** `FOUR-DAY HACKATHON SPRINT`
+- **Submission deadline:** 27 August
+- **Sprint plan:** [`planning/HACKATHON_SPRINT_PLAN.md`](planning/HACKATHON_SPRINT_PLAN.md)
+- **Delivery constraint:** The frozen MVP must be functionally complete by the end of Day 3. Day 4 is reserved for testing, accessibility and safety verification, polish, deployment and submission.
+- **Governance:** Phases and numbered steps remain the authoritative governance structure for full scope, evidence and status. Accepted decision `D-009` is a time-boxed execution exception: one explicitly approved sprint task may package sequenced minimum outputs from multiple phases, even when those outputs do not satisfy the phases’ full completion gates. Batching never marks a phase or step complete, and every unmet gate remainder stays visible and deferred.
+
 ## Operating rules
 
-- Work on only one phase and one numbered step at a time.
-- Do not begin the next step until the current step’s exit condition is verified.
-- Do not begin the next phase without explicit user approval.
+- Work on only one phase and one numbered step at a time, except while accepted decision `D-009` is active; in that mode, work on only one explicitly approved sprint task and one of its internal work blocks at a time.
+- Do not begin the next step until the current step’s exit condition is verified. Under `D-009`, do not begin the next sprint work block until the current block’s required evidence is verified, and never mark an underlying step complete until its original exit condition is verified.
+- Do not begin the next phase without explicit user approval. Under `D-009`, approval of a larger sprint task authorizes only its documented cross-phase minimum outputs; it does not start, complete or approve the underlying phases in the tracker.
 - Use these statuses: `NOT STARTED`, `IN PROGRESS`, `BLOCKED`, and `COMPLETE`.
 - Record evidence of completion rather than marking tasks complete by assumption.
-- Do not place dates or make technology-stack decisions yet.
+- The only current date commitment is the user-supplied 27 August submission deadline; do not invent additional dates or make technology-stack decisions before their approved gate.
 
 This file is the authoritative project execution tracker. Update its statuses and evidence as work proceeds.
 
