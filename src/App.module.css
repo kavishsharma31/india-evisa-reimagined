@@ -1,0 +1,33 @@
+.foundationShell {
+  min-height: 100svh;
+  display: grid;
+  grid-template-rows: auto 1fr;
+}
+
+.prototypeNotice {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #c6cbd1;
+  background: #f4f5f6;
+  color: #20262d;
+  font-size: 0.875rem;
+  font-weight: 700;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.foundationStatus {
+  width: min(100% - 2rem, 42rem);
+  margin: 0 auto;
+  padding: 3rem 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1rem;
+  text-align: center;
+}
+
+.foundationStatus h1,
+.foundationStatus p {
+  margin: 0;
+}

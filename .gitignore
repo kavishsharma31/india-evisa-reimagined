@@ -18,6 +18,10 @@
 *.log
 *.log.*
 
+# Node.js dependencies and Vite build output
+node_modules/
+dist/
+
 # Operating-system metadata
 .DS_Store
 Thumbs.db
