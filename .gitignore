@@ -22,6 +22,9 @@
 node_modules/
 dist/
 
+# Local test artifacts
+test-results/
+
 # Operating-system metadata
 .DS_Store
 Thumbs.db
