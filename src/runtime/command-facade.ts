@@ -1,0 +1,751 @@
+import { z } from 'zod'
+
+import type { DomainCommand, ReasonCode, SyntheticId } from '../domain'
+import { policyQualifiedVersionSchema, syntheticIdSchema } from '../domain/ids'
+import {
+  canonicalScenarios,
+  createPolicyEvaluationRequest,
+  getSeed,
+} from '../fixtures'
+import {
+  ACTIVE_POLICY_QUALIFIED_VERSION,
+  activePolicyBundle,
+  evaluatePolicy,
+  type PolicyEvaluationResult,
+} from '../policy'
+import { deepFreeze } from '../policy/schema'
+import {
+  APPLICATION_STEP_IDS,
+  controlledAnswerMapSchema,
+  createCanonicalPersistenceEnvelope,
+  persistenceEnvelopeSchema,
+  type PersistedCase,
+  type PersistenceEnvelope,
+} from '../persistence'
+import {
+  applyBeginDraft,
+  applySaveSnapshot,
+  createRuntimeCase,
+  type BeginDraftCommand,
+  type CreateDraftCommand,
+  type SaveSnapshotCommand,
+} from './case-runtime'
+import type {
+  DemoRuntime,
+  DemoRuntimeDependencies,
+  RuntimeCommandAccepted,
+  RuntimeCommandRejected,
+  RuntimeEvaluationResult,
+  RuntimeInspectResult,
+  RuntimeMutationResult,
+  RuntimePolicyRejected,
+  RuntimeResumeResult,
+  RuntimeStorageFailure,
+} from './contracts'
+
+const scenarioInputSchema = z.object({ scenarioId: syntheticIdSchema }).strict()
+const createCaseInputSchema = z
+  .object({
+    scenarioId: syntheticIdSchema,
+    idempotencyKey: syntheticIdSchema,
+    policyQualifiedVersion: policyQualifiedVersionSchema.optional(),
+  })
+  .strict()
+const beginDraftInputSchema = z
+  .object({ caseId: syntheticIdSchema, idempotencyKey: syntheticIdSchema })
+  .strict()
+const saveSnapshotInputSchema = z
+  .object({
+    caseId: syntheticIdSchema,
+    idempotencyKey: syntheticIdSchema,
+    currentStep: z.enum(APPLICATION_STEP_IDS),
+    answers: z.record(z.string(), z.string()),
+  })
+  .strict()
+const resumeCaseInputSchema = z.object({ caseId: syntheticIdSchema.optional() }).strict()
+
+type CanonicalScenarioId = PersistedCase['scenarioId']
+
+const START_SEED_BY_SCENARIO = Object.freeze({
+  'SYN-MEDICAL-001': 'SEED-MEDICAL-START',
+  'SYN-TOURIST-001': 'SEED-TOURIST-START',
+} as const)
+
+function invalidCommand(
+  operation: RuntimeCommandRejected['operation'],
+  issueCount: number,
+  reasonCode: RuntimeCommandRejected['reasonCode'] = 'INVALID_COMMAND',
+  caseId?: SyntheticId,
+): RuntimeCommandRejected {
+  return deepFreeze({
+    status: 'COMMAND_REJECTED',
+    operation,
+    reasonCode,
+    ...(caseId === undefined ? {} : { caseId }),
+    diagnostic: { issueCount },
+  })
+}
+
+function isCanonicalScenarioId(scenarioId: SyntheticId): scenarioId is CanonicalScenarioId {
+  return scenarioId === 'SYN-MEDICAL-001' || scenarioId === 'SYN-TOURIST-001'
+}
+
+function scenarioFacts(scenarioId: CanonicalScenarioId) {
+  const facts = canonicalScenarios.find((scenario) => scenario.scenarioId === scenarioId)
+  if (facts === undefined) {
+    throw new Error(`Canonical scenario facts are missing for ${scenarioId}.`)
+  }
+  return facts
+}
+
+function evaluateCanonicalScenario(
+  scenarioId: CanonicalScenarioId,
+  mode: 'NEW_CASE' | 'RESUME' = 'NEW_CASE',
+): PolicyEvaluationResult {
+  return evaluatePolicy(
+    createPolicyEvaluationRequest(scenarioFacts(scenarioId), mode),
+    activePolicyBundle,
+  )
+}
+
+function unknownScenarioPolicyRejection(scenarioId: SyntheticId): RuntimePolicyRejected {
+  return deepFreeze({
+    status: 'POLICY_REJECTED',
+    scenarioId,
+    scenarioSupport: 'NOT_SUPPORTED_IN_DEMO',
+    reasonCodes: ['R-SYN-NOT-SUPPORTED'],
+  })
+}
+
+function evaluationPolicyRejection(
+  evaluation: PolicyEvaluationResult,
+): RuntimePolicyRejected {
+  return deepFreeze({
+    status: 'POLICY_REJECTED',
+    scenarioId: evaluation.scenarioId,
+    scenarioSupport:
+      evaluation.scenarioSupport === 'SUPPORTED_BY_DEMO'
+        ? 'POLICY_CONFLICT'
+        : evaluation.scenarioSupport,
+    reasonCodes:
+      evaluation.reasonCodes.length > 0
+        ? evaluation.reasonCodes
+        : (['R-SYN-POLICY-CONFLICT'] satisfies readonly ReasonCode[]),
+    evaluation,
+  })
+}
+
+function previewPolicyRejection(
+  scenarioId: SyntheticId,
+  policyQualifiedVersion: string,
+): RuntimePolicyRejected {
+  const previewRequested = policyQualifiedVersion.endsWith('-preview')
+  return deepFreeze({
+    status: 'POLICY_REJECTED',
+    scenarioId,
+    scenarioSupport: 'POLICY_CONFLICT',
+    reasonCodes: [
+      previewRequested ? 'R-SYN-DRAFT-PREVIEW-ONLY' : 'R-SYN-POLICY-CONFLICT',
+    ],
+  })
+}
+
+function mapStorageLoadFailure(
+  result: Exclude<ReturnType<DemoRuntimeDependencies['store']['load']>, { status: 'VALID_STATE' | 'NO_STATE' }>,
+): RuntimeStorageFailure {
+  if (result.status === 'STORAGE_UNAVAILABLE') {
+    return deepFreeze({
+      status: 'STORAGE_UNAVAILABLE',
+      diagnostic: result.diagnostic,
+    })
+  }
+
+  return deepFreeze({
+    status: 'STORAGE_REQUIRES_RESET',
+    storageStatus: result.status,
+    diagnostic: result.diagnostic,
+  })
+}
+
+function loadForMutation(dependencies: DemoRuntimeDependencies):
+  | Readonly<{ status: 'READY'; state: PersistenceEnvelope | null }>
+  | RuntimeStorageFailure {
+  const loaded = dependencies.store.load()
+  if (loaded.status === 'NO_STATE') {
+    return Object.freeze({ status: 'READY', state: null })
+  }
+  if (loaded.status === 'VALID_STATE') {
+    return Object.freeze({ status: 'READY', state: loaded.state })
+  }
+  return mapStorageLoadFailure(loaded)
+}
+
+function caseConflict(
+  operation: 'CreateDraft',
+  caseId: SyntheticId,
+): RuntimeCommandRejected {
+  return deepFreeze({
+    status: 'COMMAND_REJECTED',
+    operation,
+    reasonCode: 'CASE_CONFLICT',
+    caseId,
+    diagnostic: {},
+  })
+}
+
+function replaceCase(
+  envelope: PersistenceEnvelope,
+  nextCase: PersistedCase,
+): PersistenceEnvelope {
+  const validation = persistenceEnvelopeSchema.safeParse({
+    ...envelope,
+    activeCaseId: nextCase.caseId,
+    lastUpdatedAt:
+      nextCase.updatedAt > envelope.lastUpdatedAt
+        ? nextCase.updatedAt
+        : envelope.lastUpdatedAt,
+    cases: envelope.cases.map((candidate) =>
+      candidate.caseId === nextCase.caseId ? nextCase : candidate,
+    ),
+  })
+  if (!validation.success) {
+    throw new Error('A guarded runtime mutation produced an invalid persistence envelope.')
+  }
+  return deepFreeze(validation.data)
+}
+
+function appendCase(
+  envelope: PersistenceEnvelope,
+  persistedCase: PersistedCase,
+): PersistenceEnvelope | RuntimeCommandRejected {
+  const validation = persistenceEnvelopeSchema.safeParse({
+    ...envelope,
+    activeCaseId: persistedCase.caseId,
+    lastUpdatedAt:
+      persistedCase.updatedAt > envelope.lastUpdatedAt
+        ? persistedCase.updatedAt
+        : envelope.lastUpdatedAt,
+    cases: [...envelope.cases, persistedCase],
+  })
+  if (!validation.success) {
+    return invalidCommand(
+      'CreateDraft',
+      validation.error.issues.length,
+      'PERSISTENCE_VALIDATION_FAILED',
+      persistedCase.caseId,
+    )
+  }
+  return deepFreeze(validation.data)
+}
+
+function saveEnvelope(
+  dependencies: DemoRuntimeDependencies,
+  envelope: PersistenceEnvelope,
+  operation: 'CreateDraft' | 'BeginDraft' | 'SaveSnapshot',
+  caseId: SyntheticId,
+): PersistenceEnvelope | RuntimeCommandRejected | RuntimeStorageFailure {
+  const validation = persistenceEnvelopeSchema.safeParse(envelope)
+  if (!validation.success) {
+    return invalidCommand(
+      operation,
+      validation.error.issues.length,
+      'PERSISTENCE_VALIDATION_FAILED',
+      caseId,
+    )
+  }
+
+  const saved = dependencies.store.save(validation.data)
+  if (saved.status === 'SAVED') {
+    return saved.state
+  }
+  if (saved.status === 'STORAGE_UNAVAILABLE') {
+    return deepFreeze({ status: 'STORAGE_UNAVAILABLE', diagnostic: saved.diagnostic })
+  }
+  return invalidCommand(
+    operation,
+    saved.diagnostic.issueCount,
+    'PERSISTENCE_VALIDATION_FAILED',
+    caseId,
+  )
+}
+
+function acceptedResult(input: {
+  operation: RuntimeCommandAccepted['operation']
+  command: DomainCommand
+  persistedCase: PersistedCase
+  eventType: RuntimeCommandAccepted['emittedEventType']
+  eventId: SyntheticId
+  idempotentReplay: boolean
+  snapshotId?: SyntheticId
+}): RuntimeCommandAccepted {
+  return deepFreeze({
+    status: 'COMMAND_ACCEPTED',
+    operation: input.operation,
+    commandId: input.command.commandId,
+    caseId: input.persistedCase.caseId,
+    revision: input.persistedCase.revision,
+    applicationState: input.persistedCase.application.state,
+    emittedEventType: input.eventType,
+    emittedEventId: input.eventId,
+    idempotentReplay: input.idempotentReplay,
+    ...(input.snapshotId === undefined ? {} : { snapshotId: input.snapshotId }),
+  })
+}
+
+function sameAnswers(
+  left: Readonly<Record<string, string>>,
+  right: Readonly<Record<string, string>>,
+): boolean {
+  const leftEntries = Object.entries(left)
+  return (
+    leftEntries.length === Object.keys(right).length &&
+    leftEntries.every(([key, value]) => right[key] === value)
+  )
+}
+
+function existingIdempotentEvent(
+  persistedCase: PersistedCase,
+  idempotencyKey: SyntheticId,
+) {
+  return persistedCase.auditEvents.find((event) => event.idempotencyKey === idempotencyKey)
+}
+
+function eventRevision(persistedCase: PersistedCase, eventId: SyntheticId): number {
+  const eventIndex = persistedCase.auditEvents.findIndex((event) => event.eventId === eventId)
+  if (eventIndex < 0) {
+    throw new Error('Idempotent runtime evidence must belong to its containing Case.')
+  }
+  return eventIndex + 1
+}
+
+export function createDemoRuntime(dependencies: DemoRuntimeDependencies): DemoRuntime {
+  function inspectState(): RuntimeInspectResult {
+    const loaded = dependencies.store.load()
+    if (loaded.status === 'NO_STATE') {
+      return Object.freeze({ status: 'NO_STATE' })
+    }
+    if (loaded.status === 'VALID_STATE') {
+      return Object.freeze({ status: 'VALID_STATE', state: loaded.state })
+    }
+    return mapStorageLoadFailure(loaded)
+  }
+
+  function evaluateScenario(candidate: unknown): RuntimeEvaluationResult {
+    const parsed = scenarioInputSchema.safeParse(candidate)
+    if (!parsed.success) {
+      return invalidCommand('EvaluateScenario', parsed.error.issues.length)
+    }
+    if (!isCanonicalScenarioId(parsed.data.scenarioId)) {
+      return unknownScenarioPolicyRejection(parsed.data.scenarioId)
+    }
+
+    const evaluation = evaluateCanonicalScenario(parsed.data.scenarioId)
+    if (evaluation.scenarioSupport !== 'SUPPORTED_BY_DEMO') {
+      return evaluationPolicyRejection(evaluation)
+    }
+    return deepFreeze({ status: 'POLICY_EVALUATED', evaluation })
+  }
+
+  function createCase(candidate: unknown): RuntimeMutationResult {
+    const parsed = createCaseInputSchema.safeParse(candidate)
+    if (!parsed.success) {
+      return invalidCommand('CreateDraft', parsed.error.issues.length)
+    }
+
+    const loaded = loadForMutation(dependencies)
+    if (loaded.status !== 'READY') {
+      return loaded
+    }
+
+    const input = parsed.data
+    if (!isCanonicalScenarioId(input.scenarioId)) {
+      return unknownScenarioPolicyRejection(input.scenarioId)
+    }
+    const requestedPolicy =
+      input.policyQualifiedVersion ?? ACTIVE_POLICY_QUALIFIED_VERSION
+    if (requestedPolicy !== ACTIVE_POLICY_QUALIFIED_VERSION) {
+      return previewPolicyRejection(input.scenarioId, requestedPolicy)
+    }
+
+    const evaluation = evaluateCanonicalScenario(input.scenarioId)
+    if (
+      evaluation.scenarioSupport !== 'SUPPORTED_BY_DEMO' ||
+      evaluation.policy.qualifiedVersion !== ACTIVE_POLICY_QUALIFIED_VERSION
+    ) {
+      return evaluationPolicyRejection(evaluation)
+    }
+
+    const envelope = loaded.state ?? createCanonicalPersistenceEnvelope()
+    const canonicalSeed = getSeed(START_SEED_BY_SCENARIO[input.scenarioId])
+    const canonicalCase = canonicalSeed.envelope.cases[0]
+    if (canonicalCase === undefined) {
+      throw new Error('Canonical start seed did not contain its case.')
+    }
+    const expectedCaseId = canonicalCase.caseId
+    const scenarioCase = envelope.cases.find(
+      (persistedCase) => persistedCase.scenarioId === input.scenarioId,
+    )
+    const occupiedCanonicalId = envelope.cases.find(
+      (persistedCase) => persistedCase.caseId === expectedCaseId,
+    )
+    if (scenarioCase !== undefined) {
+      const compatible =
+        scenarioCase.caseId === canonicalCase.caseId &&
+        scenarioCase.application.applicationDraftId ===
+          canonicalCase.application.applicationDraftId &&
+        scenarioCase.policyPin.qualifiedVersion === evaluation.policy.qualifiedVersion &&
+        scenarioCase.policyPin.digest === evaluation.policy.digest
+      if (!compatible) {
+        return caseConflict('CreateDraft', expectedCaseId)
+      }
+      return deepFreeze({
+        status: 'EXISTING_CASE',
+        caseId: scenarioCase.caseId,
+        scenarioId: scenarioCase.scenarioId,
+        revision: scenarioCase.revision,
+        applicationState: scenarioCase.application.state,
+        activeCaseId: envelope.activeCaseId,
+        resumeRecommended: true,
+      })
+    }
+    if (occupiedCanonicalId !== undefined) {
+      return caseConflict('CreateDraft', expectedCaseId)
+    }
+
+    const command: CreateDraftCommand = deepFreeze({
+      commandId: dependencies.metadata.commandId(expectedCaseId, 'CreateDraft', 1),
+      type: 'CreateDraft',
+      caseId: expectedCaseId,
+      actor: 'APPLICANT',
+      syntheticTimestamp: canonicalCase.updatedAt,
+      idempotencyKey: input.idempotencyKey,
+      payload: { policyEvaluationId: evaluation.evaluationId },
+    })
+    const runtimeCase = createRuntimeCase(canonicalCase, command, evaluation)
+    const nextEnvelope = appendCase(envelope, runtimeCase)
+    if ('status' in nextEnvelope) {
+      return nextEnvelope
+    }
+    const saved = saveEnvelope(
+      dependencies,
+      nextEnvelope,
+      'CreateDraft',
+      runtimeCase.caseId,
+    )
+    if ('status' in saved) {
+      return saved
+    }
+    const event = runtimeCase.auditEvents[0]
+    if (event === undefined) {
+      throw new Error('Accepted case creation must contain DraftCreated evidence.')
+    }
+    return acceptedResult({
+      operation: 'CreateDraft',
+      command,
+      persistedCase: runtimeCase,
+      eventType: event.eventType,
+      eventId: event.eventId,
+      idempotentReplay: false,
+    })
+  }
+
+  function beginDraft(candidate: unknown): RuntimeMutationResult {
+    const parsed = beginDraftInputSchema.safeParse(candidate)
+    if (!parsed.success) {
+      return invalidCommand('BeginDraft', parsed.error.issues.length)
+    }
+    const loaded = loadForMutation(dependencies)
+    if (loaded.status !== 'READY') {
+      return loaded
+    }
+    const input = parsed.data
+    const persistedCase = loaded.state?.cases.find(({ caseId }) => caseId === input.caseId)
+    if (persistedCase === undefined) {
+      return Object.freeze({ status: 'CASE_NOT_FOUND', caseId: input.caseId })
+    }
+
+    const existingEvent = existingIdempotentEvent(persistedCase, input.idempotencyKey)
+    if (existingEvent !== undefined) {
+      if (existingEvent.eventType !== 'DraftWorkStarted') {
+        return invalidCommand(
+          'BeginDraft',
+          1,
+          'IDEMPOTENCY_CONFLICT',
+          persistedCase.caseId,
+        )
+      }
+      const replayCommand: BeginDraftCommand = deepFreeze({
+        commandId: dependencies.metadata.commandId(
+          persistedCase.caseId,
+          'BeginDraft',
+          eventRevision(persistedCase, existingEvent.eventId),
+        ),
+        type: 'BeginDraft',
+        caseId: persistedCase.caseId,
+        actor: 'APPLICANT',
+        syntheticTimestamp: existingEvent.syntheticTimestamp,
+        idempotencyKey: input.idempotencyKey,
+        payload: { applicationDraftId: persistedCase.application.applicationDraftId },
+      })
+      return acceptedResult({
+        operation: 'BeginDraft',
+        command: replayCommand,
+        persistedCase,
+        eventType: existingEvent.eventType,
+        eventId: existingEvent.eventId,
+        idempotentReplay: true,
+      })
+    }
+
+    const nextRevision = persistedCase.revision + 1
+    const command: BeginDraftCommand = deepFreeze({
+      commandId: dependencies.metadata.commandId(
+        persistedCase.caseId,
+        'BeginDraft',
+        nextRevision,
+      ),
+      type: 'BeginDraft',
+      caseId: persistedCase.caseId,
+      actor: 'APPLICANT',
+      syntheticTimestamp: dependencies.metadata.nextTimestamp(persistedCase.updatedAt),
+      idempotencyKey: input.idempotencyKey,
+      payload: { applicationDraftId: persistedCase.application.applicationDraftId },
+    })
+    const result = applyBeginDraft(persistedCase, command, dependencies.metadata)
+    if (!result.accepted) {
+      return deepFreeze({
+        status: 'COMMAND_REJECTED',
+        operation: 'BeginDraft',
+        reasonCode: result.rejection.reasonCode,
+        caseId: persistedCase.caseId,
+        diagnostic: {
+          currentState: result.rejection.currentState,
+          requestedState: result.rejection.requestedState,
+          allowedNextStates: result.rejection.allowedNextStates,
+        },
+      })
+    }
+
+    const envelope = loaded.state
+    if (envelope === null) {
+      throw new Error('A located Case must belong to a loaded persistence envelope.')
+    }
+    const nextEnvelope = replaceCase(envelope, result.mutation.persistedCase)
+    const saved = saveEnvelope(
+      dependencies,
+      nextEnvelope,
+      'BeginDraft',
+      persistedCase.caseId,
+    )
+    if ('status' in saved) {
+      return saved
+    }
+    return acceptedResult({
+      operation: 'BeginDraft',
+      command,
+      persistedCase: result.mutation.persistedCase,
+      eventType: result.mutation.event.eventType,
+      eventId: result.mutation.event.eventId,
+      idempotentReplay: false,
+    })
+  }
+
+  function saveDraftSnapshot(candidate: unknown): RuntimeMutationResult {
+    const parsed = saveSnapshotInputSchema.safeParse(candidate)
+    if (!parsed.success) {
+      return invalidCommand('SaveSnapshot', parsed.error.issues.length)
+    }
+    const answersValidation = controlledAnswerMapSchema.safeParse(parsed.data.answers)
+    if (!answersValidation.success || Object.keys(parsed.data.answers).length === 0) {
+      return invalidCommand(
+        'SaveSnapshot',
+        answersValidation.success ? 1 : answersValidation.error.issues.length,
+        'INVALID_DRAFT_ANSWER',
+        parsed.data.caseId,
+      )
+    }
+
+    const loaded = loadForMutation(dependencies)
+    if (loaded.status !== 'READY') {
+      return loaded
+    }
+    const input = parsed.data
+    const persistedCase = loaded.state?.cases.find(({ caseId }) => caseId === input.caseId)
+    if (persistedCase === undefined) {
+      return Object.freeze({ status: 'CASE_NOT_FOUND', caseId: input.caseId })
+    }
+
+    const evaluation = evaluateCanonicalScenario(persistedCase.scenarioId, 'RESUME')
+    if (
+      evaluation.scenarioSupport !== 'SUPPORTED_BY_DEMO' ||
+      evaluation.policy.qualifiedVersion !== persistedCase.policyPin.qualifiedVersion ||
+      evaluation.questionManifest === undefined
+    ) {
+      return evaluationPolicyRejection(evaluation)
+    }
+    const allowedQuestionIds = new Set(
+      evaluation.questionManifest.questions.map(({ id }) => id),
+    )
+    if (Object.keys(answersValidation.data).some((questionId) => !allowedQuestionIds.has(questionId))) {
+      return invalidCommand(
+        'SaveSnapshot',
+        1,
+        'INVALID_DRAFT_ANSWER',
+        persistedCase.caseId,
+      )
+    }
+
+    const existingEvent = existingIdempotentEvent(persistedCase, input.idempotencyKey)
+    if (existingEvent !== undefined) {
+      const snapshotId = existingEvent.payload.snapshotId
+      const snapshot =
+        typeof snapshotId === 'string'
+          ? persistedCase.application.draftSnapshots.find(
+              (candidateSnapshot) => candidateSnapshot.snapshotId === snapshotId,
+            )
+          : undefined
+      if (
+        existingEvent.eventType !== 'DraftSnapshotSaved' ||
+        snapshot === undefined ||
+        snapshot.currentStep !== input.currentStep ||
+        !sameAnswers(snapshot.answers, answersValidation.data)
+      ) {
+        return invalidCommand(
+          'SaveSnapshot',
+          1,
+          'IDEMPOTENCY_CONFLICT',
+          persistedCase.caseId,
+        )
+      }
+      const replayCommand: SaveSnapshotCommand = deepFreeze({
+        commandId: dependencies.metadata.commandId(
+          persistedCase.caseId,
+          'SaveSnapshot',
+          eventRevision(persistedCase, existingEvent.eventId),
+        ),
+        type: 'SaveSnapshot',
+        caseId: persistedCase.caseId,
+        actor: 'APPLICANT',
+        syntheticTimestamp: existingEvent.syntheticTimestamp,
+        idempotencyKey: input.idempotencyKey,
+        payload: { draftSnapshotId: snapshot.snapshotId, stepId: snapshot.currentStep },
+      })
+      return acceptedResult({
+        operation: 'SaveSnapshot',
+        command: replayCommand,
+        persistedCase,
+        eventType: existingEvent.eventType,
+        eventId: existingEvent.eventId,
+        idempotentReplay: true,
+        snapshotId: snapshot.snapshotId,
+      })
+    }
+
+    if (persistedCase.application.state !== 'IN_PROGRESS') {
+      return deepFreeze({
+        status: 'COMMAND_REJECTED',
+        operation: 'SaveSnapshot',
+        reasonCode: 'GUARD_FAILED',
+        caseId: persistedCase.caseId,
+        diagnostic: {
+          currentState: persistedCase.application.state,
+          requiredState: 'IN_PROGRESS',
+        },
+      })
+    }
+
+    const nextRevision = persistedCase.revision + 1
+    const snapshotId = dependencies.metadata.snapshotId(
+      persistedCase.caseId,
+      persistedCase.application.draftSnapshots.length + 1,
+    )
+    const command: SaveSnapshotCommand = deepFreeze({
+      commandId: dependencies.metadata.commandId(
+        persistedCase.caseId,
+        'SaveSnapshot',
+        nextRevision,
+      ),
+      type: 'SaveSnapshot',
+      caseId: persistedCase.caseId,
+      actor: 'APPLICANT',
+      syntheticTimestamp: dependencies.metadata.nextTimestamp(persistedCase.updatedAt),
+      idempotencyKey: input.idempotencyKey,
+      payload: { draftSnapshotId: snapshotId, stepId: input.currentStep },
+    })
+    const mutation = applySaveSnapshot(
+      persistedCase,
+      command,
+      answersValidation.data,
+      dependencies.metadata,
+    )
+    const envelope = loaded.state
+    if (envelope === null) {
+      throw new Error('A located Case must belong to a loaded persistence envelope.')
+    }
+    const nextEnvelope = replaceCase(envelope, mutation.persistedCase)
+    const saved = saveEnvelope(
+      dependencies,
+      nextEnvelope,
+      'SaveSnapshot',
+      persistedCase.caseId,
+    )
+    if ('status' in saved) {
+      return saved
+    }
+    return acceptedResult({
+      operation: 'SaveSnapshot',
+      command,
+      persistedCase: mutation.persistedCase,
+      eventType: mutation.event.eventType,
+      eventId: mutation.event.eventId,
+      idempotentReplay: false,
+      snapshotId,
+    })
+  }
+
+  function resumeCase(candidate: unknown = {}): RuntimeResumeResult {
+    const parsed = resumeCaseInputSchema.safeParse(candidate)
+    if (!parsed.success) {
+      return invalidCommand('ResumeCase', parsed.error.issues.length)
+    }
+    const loaded = loadForMutation(dependencies)
+    if (loaded.status !== 'READY') {
+      return loaded
+    }
+    const caseId = parsed.data.caseId ?? loaded.state?.activeCaseId ?? null
+    if (caseId === null) {
+      return Object.freeze({ status: 'CASE_NOT_FOUND', caseId: null })
+    }
+    const persistedCase = loaded.state?.cases.find((candidateCase) => candidateCase.caseId === caseId)
+    if (persistedCase === undefined) {
+      return Object.freeze({ status: 'CASE_NOT_FOUND', caseId })
+    }
+    const latestSnapshot = persistedCase.application.draftSnapshots.at(-1)
+    return deepFreeze({
+      status: 'CASE_RESUMED',
+      activeCaseId: loaded.state?.activeCaseId ?? null,
+      caseId: persistedCase.caseId,
+      scenarioId: persistedCase.scenarioId,
+      policyQualifiedVersion: persistedCase.policyPin.qualifiedVersion,
+      applicationState: persistedCase.application.state,
+      currentStep: latestSnapshot?.currentStep ?? null,
+      latestAnswers: latestSnapshot?.answers ?? {},
+      latestSnapshotId: latestSnapshot?.snapshotId ?? null,
+      resumable:
+        persistedCase.application.state === 'DRAFT_CREATED' ||
+        persistedCase.application.state === 'IN_PROGRESS',
+      revision: persistedCase.revision,
+    })
+  }
+
+  // The local mock registry is an injected boundary for later commands. A00→A02
+  // deliberately performs no integration call because none is relevant yet.
+  return Object.freeze({
+    inspectState,
+    evaluateScenario,
+    createCase,
+    beginDraft,
+    saveDraftSnapshot,
+    resumeCase,
+  })
+}
