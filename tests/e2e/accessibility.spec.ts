@@ -27,18 +27,36 @@ test('Medical A01 has no automatically detectable accessibility violations', asy
   await expectNoAxeViolations(page)
 })
 
-test('A02 ready and reload-resume states have no automatically detectable accessibility violations', async ({ page }) => {
+async function answerMedicalApplication(page: Page) {
+  await page.getByLabel(/Choose the synthetic policy cohort/).selectOption('SYN-POLICY-COHORT-A')
+  await page.getByLabel(/Choose the synthetic passport class/).selectOption('SYNTHETIC_STANDARD_PASSPORT')
+  await page.getByLabel(/Choose the fictional planned arrival date/).selectOption('2099-04-14')
+  await page.getByLabel(/Confirm the synthetic Medical treatment intent/).selectOption('SYNTHETIC_MEDICAL_TREATMENT')
+  await page.getByLabel(/Choose the fictional proposed admission date/).selectOption('2099-04-18')
+  await page.getByRole('radio', { name: 'Yes' }).check()
+}
+
+test('A02 and A03 states have no automatically detectable accessibility violations', async ({ page }) => {
   await openFreshApp(page)
   await page.getByText('Medical treatment', { exact: true }).click()
   await page.getByRole('button', { name: 'Continue with this demo' }).click()
   await expect(page.getByRole('heading', { name: 'Your synthetic application has been created' })).toBeVisible()
   await expectNoAxeViolations(page)
   await page.getByRole('button', { name: 'Start application' }).click()
-  await expect(page.getByRole('heading', { name: 'Your application is ready to continue' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Tell us about this trip' })).toBeVisible()
+  await expectNoAxeViolations(page)
+
+  await page.getByRole('button', { name: 'Continue to documents' }).click()
+  await expect(page.getByRole('heading', { name: 'Check your answers' })).toBeVisible()
+  await expectNoAxeViolations(page)
+
+  await answerMedicalApplication(page)
+  await page.getByRole('button', { name: 'Continue to documents' }).click()
+  await expect(page.getByRole('heading', { name: 'Application details saved' })).toBeVisible()
   await expectNoAxeViolations(page)
 
   await page.reload()
-  await expect(page.getByRole('heading', { name: 'Continue your application' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Application details saved' })).toBeVisible()
 
   await expectNoAxeViolations(page)
 })

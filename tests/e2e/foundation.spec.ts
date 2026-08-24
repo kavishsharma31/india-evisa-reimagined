@@ -56,7 +56,7 @@ test('completes A00 to A02 at 360x800 without console errors or horizontal overf
   await expectNoHorizontalOverflow()
 
   await page.getByRole('button', { name: 'Start application' }).click()
-  await expect(page.getByRole('heading', { name: 'Your application is ready to continue' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Tell us about this trip' })).toBeVisible()
   await expectNoHorizontalOverflow()
 
   expect(browserErrors).toEqual([])

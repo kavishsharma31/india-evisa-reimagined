@@ -27,7 +27,7 @@ async function createAndStartMedical(page: Page) {
   ).toBeVisible()
   await page.getByRole('button', { name: 'Start application' }).click()
   await expect(
-    page.getByRole('heading', { name: 'Your application is ready to continue' }),
+    page.getByRole('heading', { name: 'Tell us about this trip' }),
   ).toBeVisible()
 }
 
@@ -90,7 +90,7 @@ async function loadPersistedEvidence(page: Page): Promise<StorageEvidence> {
   }
 }
 
-test('Medical fresh-start reaches the A02 ready state without external requests or console errors', async ({ page }) => {
+test('Medical fresh-start reaches A03 without external requests or console errors', async ({ page }) => {
   const browserErrors: string[] = []
   const requestUrls: string[] = []
   page.on('console', (message) => {
@@ -114,7 +114,7 @@ test('Medical fresh-start reaches the A02 ready state without external requests 
   ).toBeVisible()
   await page.getByRole('button', { name: 'Start application' }).click()
   await expect(
-    page.getByRole('heading', { name: 'Your application is ready to continue' }),
+    page.getByRole('heading', { name: 'Tell us about this trip' }),
   ).toBeVisible()
 
   const state = await loadPersistedEvidence(page)
@@ -150,7 +150,7 @@ test('reload presents resume and preserves the same Medical case without duplica
   await expect(page.getByText('SYN-CASE-MED-001', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Resume application' }).click()
   await expect(
-    page.getByRole('heading', { name: 'Your application is ready to continue' }),
+    page.getByRole('heading', { name: 'Tell us about this trip' }),
   ).toBeVisible()
 
   const afterResume = await loadPersistedEvidence(page)

@@ -154,7 +154,7 @@ describe('applicant slice A02 and resume', () => {
     await user.click(screen.getByRole('button', { name: 'Start application' }))
 
     expect(
-      screen.getByRole('heading', { name: 'Your application is ready to continue' }),
+      screen.getByRole('heading', { name: 'Tell us about this trip' }),
     ).toBeInTheDocument()
     const state = requireValidState(store)
     expect(state.cases).toHaveLength(1)
@@ -184,7 +184,7 @@ describe('applicant slice A02 and resume', () => {
     expect(screen.getByRole('heading', { name: 'Continue your application' })).toBeInTheDocument()
     expect(screen.getByText('SYN-CASE-MED-001', { exact: true })).toBeInTheDocument()
     await secondUser.click(screen.getByRole('button', { name: 'Resume application' }))
-    expect(screen.getByRole('heading', { name: 'Your application is ready to continue' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Tell us about this trip' })).toBeInTheDocument()
     expect(storage.getItem(P0_STORAGE_KEY)).toBe(beforeReload)
     expect(requireValidState(reloadedStore).cases).toHaveLength(1)
     expect(requireValidState(reloadedStore).cases[0]?.auditEvents).toHaveLength(2)

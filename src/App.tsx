@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 
+import { AdaptiveApplication } from './app/AdaptiveApplication'
 import { createAppRuntime, type AppRuntimeServices } from './app/create-app-runtime'
 import type { SyntheticId } from './domain'
 import type { PolicyEvaluationResult, PurposeFamily } from './policy'
@@ -32,7 +33,7 @@ type Surface =
   | 'PURPOSE_GUIDANCE'
   | 'CASE_CREATED'
   | 'RESUME_CASE'
-  | 'APPLICATION_READY'
+  | 'ADAPTIVE_APPLICATION'
   | 'RESET_REQUIRED'
   | 'STORAGE_UNAVAILABLE'
 
@@ -49,6 +50,7 @@ type AppProps = Readonly<{
 type InitialView = Readonly<{
   surface: Surface
   resumedCase: ResumedCase | null
+  evaluation: PolicyEvaluationResult | null
 }>
 
 const PURPOSE_NAMES: Readonly<Record<PurposeFamily, string>> = Object.freeze({
@@ -87,24 +89,37 @@ function beginDraftIdempotencyKey(caseId: SyntheticId): SyntheticId {
 function inspectInitialView(services: AppRuntimeServices): InitialView {
   const inspected = services.runtime.inspectState()
   if (inspected.status === 'STORAGE_REQUIRES_RESET') {
-    return { surface: 'RESET_REQUIRED', resumedCase: null }
+    return { surface: 'RESET_REQUIRED', resumedCase: null, evaluation: null }
   }
   if (inspected.status === 'STORAGE_UNAVAILABLE') {
-    return { surface: 'STORAGE_UNAVAILABLE', resumedCase: null }
+    return { surface: 'STORAGE_UNAVAILABLE', resumedCase: null, evaluation: null }
   }
   if (inspected.status === 'VALID_STATE' && inspected.state.activeCaseId !== null) {
     const resumed = services.runtime.resumeCase()
     if (resumed.status === 'CASE_RESUMED' && resumed.resumable) {
-      return { surface: 'RESUME_CASE', resumedCase: resumed }
+      if (resumed.currentStep === 'DOCUMENTS' && isScenarioId(resumed.scenarioId)) {
+        const evaluated = services.runtime.evaluateScenario({ scenarioId: resumed.scenarioId })
+        if (
+          evaluated.status === 'POLICY_EVALUATED' &&
+          evaluated.evaluation.policy.qualifiedVersion === resumed.policyQualifiedVersion
+        ) {
+          return {
+            surface: 'ADAPTIVE_APPLICATION',
+            resumedCase: resumed,
+            evaluation: evaluated.evaluation,
+          }
+        }
+      }
+      return { surface: 'RESUME_CASE', resumedCase: resumed, evaluation: null }
     }
     if (resumed.status === 'STORAGE_REQUIRES_RESET') {
-      return { surface: 'RESET_REQUIRED', resumedCase: null }
+      return { surface: 'RESET_REQUIRED', resumedCase: null, evaluation: null }
     }
     if (resumed.status === 'STORAGE_UNAVAILABLE') {
-      return { surface: 'STORAGE_UNAVAILABLE', resumedCase: null }
+      return { surface: 'STORAGE_UNAVAILABLE', resumedCase: null, evaluation: null }
     }
   }
-  return { surface: 'SCENARIO_SELECTION', resumedCase: null }
+  return { surface: 'SCENARIO_SELECTION', resumedCase: null, evaluation: null }
 }
 
 function PrototypeNotice() {
@@ -369,43 +384,6 @@ function ResumeCase(props: {
   )
 }
 
-function ApplicationReady(props: {
-  createdCase: CreatedCase
-  retainedAnswers: number
-}) {
-  const scenario = scenarioDetails(props.createdCase.scenarioId)
-  return (
-    <section className={styles.readyPanel} aria-labelledby="ready-heading" aria-live="polite">
-      <div className={styles.outcomeMarker} aria-hidden="true">✓</div>
-      <p className={styles.eyebrow}>Application · Step 2 of 6</p>
-      <h2 id="ready-heading" tabIndex={-1}>
-        Your application is ready to continue
-      </h2>
-      <p>
-        The {scenario.name.toLowerCase()} draft is safely in progress for this synthetic demo.
-        {props.retainedAnswers > 0 ? ` ${props.retainedAnswers} saved answer${props.retainedAnswers === 1 ? '' : 's'} remain attached to this case.` : ''}
-      </p>
-      <div className={styles.nextSlice}>
-        <span className={styles.sectionNumber} aria-hidden="true">Next</span>
-        <div>
-          <h3>Application questions</h3>
-          <p>The next implementation slice will render the controlled questions. No A03 fields are included here.</p>
-        </div>
-      </div>
-      <dl className={styles.caseFacts}>
-        <div>
-          <dt>Synthetic case reference</dt>
-          <dd>{props.createdCase.caseId}</dd>
-        </div>
-        <div>
-          <dt>Demo policy retained</dt>
-          <dd>{props.createdCase.policyQualifiedVersion}</dd>
-        </div>
-      </dl>
-    </section>
-  )
-}
-
 function RecoveryPanel(props: {
   storageUnavailable: boolean
   error: string | null
@@ -437,10 +415,9 @@ function App({ services: providedServices }: AppProps) {
   const [initialView] = useState(() => inspectInitialView(services))
   const [surface, setSurface] = useState<Surface>(initialView.surface)
   const [selectedScenarioId, setSelectedScenarioId] = useState<ScenarioId | null>(null)
-  const [evaluation, setEvaluation] = useState<PolicyEvaluationResult | null>(null)
+  const [evaluation, setEvaluation] = useState<PolicyEvaluationResult | null>(initialView.evaluation)
   const [createdCase, setCreatedCase] = useState<CreatedCase | null>(null)
   const [resumedCase, setResumedCase] = useState<ResumedCase | null>(initialView.resumedCase)
-  const [retainedAnswers, setRetainedAnswers] = useState(0)
   const [error, setError] = useState<string | null>(null)
   useEffect(() => {
     const headingIdBySurface: Partial<Record<Surface, string>> = {
@@ -448,13 +425,20 @@ function App({ services: providedServices }: AppProps) {
       PURPOSE_GUIDANCE: 'guidance-heading',
       CASE_CREATED: 'case-created-heading',
       RESUME_CASE: 'resume-heading',
-      APPLICATION_READY: 'ready-heading',
+      ADAPTIVE_APPLICATION: 'application-heading',
       RESET_REQUIRED: 'recovery-heading',
       STORAGE_UNAVAILABLE: 'recovery-heading',
     }
     const headingId = headingIdBySurface[surface]
     if (headingId !== undefined) {
-      document.getElementById(headingId)?.focus()
+      const heading = document.getElementById(headingId)
+      if (surface === 'ADAPTIVE_APPLICATION') {
+        document.documentElement.scrollTop = 0
+        document.body.scrollTop = 0
+        heading?.focus({ preventScroll: true })
+        return
+      }
+      heading?.focus()
     }
   }, [surface])
 
@@ -527,8 +511,12 @@ function App({ services: providedServices }: AppProps) {
       idempotencyKey: beginDraftIdempotencyKey(createdCase.caseId),
     })
     if (result.status === 'COMMAND_ACCEPTED') {
-      setRetainedAnswers(0)
-      setSurface('APPLICATION_READY')
+      const resumed = services.runtime.resumeCase({ caseId: createdCase.caseId })
+      if (resumed.status === 'CASE_RESUMED') {
+        openAdaptiveApplication(resumed)
+        return
+      }
+      setError('The started draft could not be loaded safely. Your saved demo data was not changed.')
       return
     }
     if (result.status === 'STORAGE_REQUIRES_RESET') {
@@ -548,11 +536,7 @@ function App({ services: providedServices }: AppProps) {
       return
     }
     setError(null)
-    const readyCase: CreatedCase = {
-      caseId: resumedCase.caseId,
-      scenarioId: resumedCase.scenarioId,
-      policyQualifiedVersion: resumedCase.policyQualifiedVersion,
-    }
+    let caseToOpen = resumedCase
     if (resumedCase.applicationState === 'DRAFT_CREATED') {
       const result = services.runtime.beginDraft({
         caseId: resumedCase.caseId,
@@ -570,13 +554,65 @@ function App({ services: providedServices }: AppProps) {
         setError('The saved draft could not be started safely. No application state was changed.')
         return
       }
-    } else if (resumedCase.applicationState !== 'IN_PROGRESS') {
-      setError('This saved synthetic case is beyond the A00–A02 applicant slice.')
+      const refreshed = services.runtime.resumeCase({ caseId: resumedCase.caseId })
+      if (refreshed.status !== 'CASE_RESUMED') {
+        setError('The started draft could not be loaded safely. Your saved demo data was not changed.')
+        return
+      }
+      caseToOpen = refreshed
+    } else if (resumedCase.applicationState === 'IN_PROGRESS') {
+      const refreshed = services.runtime.resumeCase({ caseId: resumedCase.caseId })
+      if (refreshed.status === 'STORAGE_REQUIRES_RESET') {
+        setSurface('RESET_REQUIRED')
+        return
+      }
+      if (refreshed.status === 'STORAGE_UNAVAILABLE') {
+        setSurface('STORAGE_UNAVAILABLE')
+        return
+      }
+      if (refreshed.status !== 'CASE_RESUMED') {
+        setError('The saved draft could not be loaded safely. Your saved demo data was not changed.')
+        return
+      }
+      caseToOpen = refreshed
+    } else {
+      setError('This saved synthetic case is beyond the current applicant slice.')
       return
     }
-    setCreatedCase(readyCase)
-    setRetainedAnswers(Object.keys(resumedCase.latestAnswers).length)
-    setSurface('APPLICATION_READY')
+    openAdaptiveApplication(caseToOpen)
+  }
+
+  function openAdaptiveApplication(caseToOpen: ResumedCase) {
+    if (!isScenarioId(caseToOpen.scenarioId)) {
+      setError('The saved synthetic scenario is not supported by this applicant form.')
+      return
+    }
+    const evaluated = services.runtime.evaluateScenario({ scenarioId: caseToOpen.scenarioId })
+    if (
+      evaluated.status !== 'POLICY_EVALUATED' ||
+      evaluated.evaluation.policy.qualifiedVersion !== caseToOpen.policyQualifiedVersion ||
+      evaluated.evaluation.questionManifest === undefined
+    ) {
+      setError('The pinned demo policy could not safely provide this application form.')
+      return
+    }
+    setEvaluation(evaluated.evaluation)
+    setSelectedScenarioId(caseToOpen.scenarioId)
+    setCreatedCase({
+      caseId: caseToOpen.caseId,
+      scenarioId: caseToOpen.scenarioId,
+      policyQualifiedVersion: caseToOpen.policyQualifiedVersion,
+    })
+    setResumedCase(caseToOpen)
+    setSurface('ADAPTIVE_APPLICATION')
+  }
+
+  function backToSavedCase() {
+    if (resumedCase === null) {
+      return
+    }
+    setError(null)
+    setSurface('RESUME_CASE')
   }
 
   function resetDemoData() {
@@ -587,7 +623,6 @@ function App({ services: providedServices }: AppProps) {
       setEvaluation(null)
       setCreatedCase(null)
       setResumedCase(null)
-      setRetainedAnswers(0)
       setSurface('SCENARIO_SELECTION')
       return
     }
@@ -645,10 +680,13 @@ function App({ services: providedServices }: AppProps) {
             onResume={resumeApplication}
           />
         ) : null}
-        {surface === 'APPLICATION_READY' && createdCase ? (
-          <ApplicationReady
-            createdCase={createdCase}
-            retainedAnswers={retainedAnswers}
+        {surface === 'ADAPTIVE_APPLICATION' && resumedCase && evaluation && isScenarioId(resumedCase.scenarioId) ? (
+          <AdaptiveApplication
+            services={services}
+            resumedCase={resumedCase}
+            evaluation={evaluation}
+            purposeName={scenarioDetails(resumedCase.scenarioId).name}
+            onBack={backToSavedCase}
           />
         ) : null}
         {surface === 'RESET_REQUIRED' ? (
