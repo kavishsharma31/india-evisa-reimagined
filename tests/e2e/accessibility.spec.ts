@@ -56,7 +56,31 @@ test('A02 and A03 states have no automatically detectable accessibility violatio
   await expectNoAxeViolations(page)
 
   await page.reload()
-  await expect(page.getByRole('heading', { name: 'Application details saved' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Prepare your demo documents' })).toBeVisible()
+  await expectNoAxeViolations(page)
 
+  const passportCard = page.locator('article').filter({
+    has: page.getByRole('heading', { level: 3, name: 'Synthetic passport page' }),
+  })
+  await passportCard.getByRole('combobox', { name: 'Bundled demo file' }).selectOption(
+    'SYN-FIXTURE-PASSPORT-UNCLEAR-001',
+  )
+  await passportCard.getByRole('button', { name: 'Run technical check' }).click()
+  await expect(passportCard.getByText('Needs attention')).toBeVisible()
+  await expectNoAxeViolations(page)
+
+  await passportCard.getByRole('combobox', { name: 'Bundled demo file' }).selectOption(
+    'SYN-FIXTURE-PASSPORT-VALID-001',
+  )
+  await passportCard.getByRole('button', { name: 'Check replacement' }).click()
+  const portraitCard = page.locator('article').filter({
+    has: page.getByRole('heading', { level: 3, name: 'Synthetic portrait' }),
+  })
+  const hospitalCard = page.locator('article').filter({
+    has: page.getByRole('heading', { level: 3, name: 'Synthetic hospital letter' }),
+  })
+  await portraitCard.getByRole('button', { name: 'Run technical check' }).click()
+  await hospitalCard.getByRole('button', { name: 'Run technical check' }).click()
+  await expect(page.getByRole('heading', { name: 'Documents ready' })).toBeVisible()
   await expectNoAxeViolations(page)
 })

@@ -1,5 +1,6 @@
 import type {
   ApplicationState,
+  DocumentVersionState,
   DomainEventType,
   PolicyQualifiedVersion,
   ReasonCode,
@@ -20,6 +21,8 @@ export type RuntimeOperation =
   | 'BeginDraft'
   | 'SaveSnapshot'
   | 'ResumeCase'
+  | 'InspectDocuments'
+  | 'PrepareDocument'
 
 export type RuntimeCommandRejectionCode =
   | 'INVALID_COMMAND'
@@ -28,6 +31,8 @@ export type RuntimeCommandRejectionCode =
   | 'INVALID_DRAFT_ANSWER'
   | 'IDEMPOTENCY_CONFLICT'
   | 'CASE_CONFLICT'
+  | 'FIXTURE_NOT_COMPATIBLE'
+  | 'DOCUMENT_INSPECTION_UNAVAILABLE'
   | 'PERSISTENCE_VALIDATION_FAILED'
 
 export type RuntimeStorageRequiresReset = Readonly<{
@@ -56,6 +61,8 @@ export type RuntimeCommandRejected = Readonly<{
     requestedState?: ApplicationState
     requiredState?: ApplicationState
     allowedNextStates?: readonly ApplicationState[]
+    documentState?: DocumentVersionState
+    requirementId?: string
   }>
 }>
 
@@ -131,11 +138,91 @@ export type RuntimeResumeResult =
   | RuntimeCommandRejected
   | RuntimeStorageFailure
 
+export type RuntimeDocumentFixtureOption = Readonly<{
+  fixtureId: SyntheticId
+  label: string
+  watermark: 'SYNTHETIC — NOT VALID'
+  recoveryExample: boolean
+}>
+
+export type RuntimeDocumentVersionView = Readonly<{
+  documentVersionId: SyntheticId
+  sequence: number
+  fixtureId: SyntheticId
+  state: DocumentVersionState
+  inspectionReasonCode: string | null
+}>
+
+export type RuntimeDocumentRequirementView = Readonly<{
+  requirementId: string
+  documentType: string
+  guidance: string
+  status: 'NOT_CHECKED' | 'READY' | 'NEEDS_ATTENTION'
+  fixtureOptions: readonly RuntimeDocumentFixtureOption[]
+  currentVersion: RuntimeDocumentVersionView | null
+  versionHistory: readonly RuntimeDocumentVersionView[]
+}>
+
+export type RuntimeDocumentsInspected = Readonly<{
+  status: 'DOCUMENTS_INSPECTED'
+  caseId: SyntheticId
+  scenarioId: SyntheticId
+  policyQualifiedVersion: PolicyQualifiedVersion
+  revision: number
+  requiredCount: number
+  readyCount: number
+  allReady: boolean
+  requirements: readonly RuntimeDocumentRequirementView[]
+}>
+
+export type RuntimeDocumentInspectResult =
+  | RuntimeDocumentsInspected
+  | RuntimeCaseNotFound
+  | RuntimeCommandRejected
+  | RuntimePolicyRejected
+  | RuntimeStorageFailure
+
+export type RuntimeDocumentPrepared = Readonly<{
+  status: 'DOCUMENT_PREPARED'
+  operation: 'PrepareDocument'
+  caseId: SyntheticId
+  requirementId: string
+  fixtureId: SyntheticId
+  documentVersionId: SyntheticId
+  documentState: 'PREFLIGHT_PASSED' | 'PREFLIGHT_FAILED'
+  revision: number
+  emittedEventTypes: readonly DomainEventType[]
+  emittedEventIds: readonly SyntheticId[]
+  inspectionReasonCode: string
+}>
+
+export type RuntimeDocumentExisting = Readonly<{
+  status: 'DOCUMENT_EXISTING'
+  operation: 'PrepareDocument'
+  caseId: SyntheticId
+  requirementId: string
+  fixtureId: SyntheticId
+  documentVersionId: SyntheticId
+  documentState: DocumentVersionState
+  revision: number
+  idempotentReplay: true
+}>
+
+export type RuntimeDocumentMutationResult =
+  | RuntimeDocumentPrepared
+  | RuntimeDocumentExisting
+  | RuntimeCommandRejected
+  | RuntimeCaseNotFound
+  | RuntimePolicyRejected
+  | RuntimeStorageFailure
+
 export type RuntimeMetadataSource = Readonly<{
   nextTimestamp(previousTimestamp: SyntheticTimestamp): SyntheticTimestamp
   commandId(caseId: SyntheticId, operation: RuntimeOperation, revision: number): SyntheticId
   eventId(caseId: SyntheticId, eventType: DomainEventType, revision: number): SyntheticId
   snapshotId(caseId: SyntheticId, sequence: number): SyntheticId
+  documentAssetId(caseId: SyntheticId, requirementId: string): SyntheticId
+  documentVersionId(caseId: SyntheticId, fixtureId: SyntheticId, sequence: number): SyntheticId
 }>
 
 export type DemoRuntimeDependencies = Readonly<{
@@ -151,4 +238,6 @@ export type DemoRuntime = Readonly<{
   beginDraft(candidate: unknown): RuntimeMutationResult
   saveDraftSnapshot(candidate: unknown): RuntimeMutationResult
   resumeCase(candidate?: unknown): RuntimeResumeResult
+  inspectDocuments(candidate: unknown): RuntimeDocumentInspectResult
+  prepareDocumentFixture(candidate: unknown): RuntimeDocumentMutationResult
 }>

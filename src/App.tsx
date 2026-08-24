@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 
 import { AdaptiveApplication } from './app/AdaptiveApplication'
+import { DocumentPreparation } from './app/DocumentPreparation'
 import { createAppRuntime, type AppRuntimeServices } from './app/create-app-runtime'
 import type { SyntheticId } from './domain'
 import type { PolicyEvaluationResult, PurposeFamily } from './policy'
@@ -34,6 +35,7 @@ type Surface =
   | 'CASE_CREATED'
   | 'RESUME_CASE'
   | 'ADAPTIVE_APPLICATION'
+  | 'DOCUMENT_PREPARATION'
   | 'RESET_REQUIRED'
   | 'STORAGE_UNAVAILABLE'
 
@@ -104,7 +106,7 @@ function inspectInitialView(services: AppRuntimeServices): InitialView {
           evaluated.evaluation.policy.qualifiedVersion === resumed.policyQualifiedVersion
         ) {
           return {
-            surface: 'ADAPTIVE_APPLICATION',
+            surface: 'DOCUMENT_PREPARATION',
             resumedCase: resumed,
             evaluation: evaluated.evaluation,
           }
@@ -426,13 +428,14 @@ function App({ services: providedServices }: AppProps) {
       CASE_CREATED: 'case-created-heading',
       RESUME_CASE: 'resume-heading',
       ADAPTIVE_APPLICATION: 'application-heading',
+      DOCUMENT_PREPARATION: 'documents-heading',
       RESET_REQUIRED: 'recovery-heading',
       STORAGE_UNAVAILABLE: 'recovery-heading',
     }
     const headingId = headingIdBySurface[surface]
     if (headingId !== undefined) {
       const heading = document.getElementById(headingId)
-      if (surface === 'ADAPTIVE_APPLICATION') {
+      if (surface === 'ADAPTIVE_APPLICATION' || surface === 'DOCUMENT_PREPARATION') {
         document.documentElement.scrollTop = 0
         document.body.scrollTop = 0
         heading?.focus({ preventScroll: true })
@@ -615,6 +618,71 @@ function App({ services: providedServices }: AppProps) {
     setSurface('RESUME_CASE')
   }
 
+  function openDocumentPreparation() {
+    if (resumedCase === null) {
+      setError('The saved synthetic Case is not available for document preparation.')
+      return
+    }
+    const refreshed = services.runtime.resumeCase({ caseId: resumedCase.caseId })
+    if (refreshed.status === 'STORAGE_REQUIRES_RESET') {
+      setSurface('RESET_REQUIRED')
+      return
+    }
+    if (refreshed.status === 'STORAGE_UNAVAILABLE') {
+      setSurface('STORAGE_UNAVAILABLE')
+      return
+    }
+    if (
+      refreshed.status !== 'CASE_RESUMED' ||
+      refreshed.currentStep !== 'DOCUMENTS' ||
+      !isScenarioId(refreshed.scenarioId)
+    ) {
+      setError('Application details must be saved before demo documents can be prepared.')
+      return
+    }
+    const inspected = services.runtime.inspectDocuments({ caseId: refreshed.caseId })
+    if (inspected.status === 'STORAGE_REQUIRES_RESET') {
+      setSurface('RESET_REQUIRED')
+      return
+    }
+    if (inspected.status === 'STORAGE_UNAVAILABLE') {
+      setSurface('STORAGE_UNAVAILABLE')
+      return
+    }
+    if (inspected.status !== 'DOCUMENTS_INSPECTED') {
+      setError('The pinned demo policy could not safely provide the document checklist.')
+      return
+    }
+    setError(null)
+    setResumedCase(refreshed)
+    setSelectedScenarioId(refreshed.scenarioId)
+    setSurface('DOCUMENT_PREPARATION')
+  }
+
+  function backToApplicationDetails() {
+    if (resumedCase === null) {
+      return
+    }
+    const refreshed = services.runtime.resumeCase({ caseId: resumedCase.caseId })
+    if (refreshed.status === 'STORAGE_REQUIRES_RESET') {
+      setSurface('RESET_REQUIRED')
+      return
+    }
+    if (refreshed.status === 'STORAGE_UNAVAILABLE') {
+      setSurface('STORAGE_UNAVAILABLE')
+      return
+    }
+    if (refreshed.status === 'CASE_RESUMED') {
+      openAdaptiveApplication(refreshed)
+    }
+  }
+
+  function handleDocumentRecovery(
+    status: 'STORAGE_REQUIRES_RESET' | 'STORAGE_UNAVAILABLE',
+  ) {
+    setSurface(status === 'STORAGE_REQUIRES_RESET' ? 'RESET_REQUIRED' : 'STORAGE_UNAVAILABLE')
+  }
+
   function resetDemoData() {
     setError(null)
     const result = services.resetDemoData()
@@ -687,6 +755,16 @@ function App({ services: providedServices }: AppProps) {
             evaluation={evaluation}
             purposeName={scenarioDetails(resumedCase.scenarioId).name}
             onBack={backToSavedCase}
+            onPrepareDocuments={openDocumentPreparation}
+          />
+        ) : null}
+        {surface === 'DOCUMENT_PREPARATION' && resumedCase && isScenarioId(resumedCase.scenarioId) ? (
+          <DocumentPreparation
+            services={services}
+            caseId={resumedCase.caseId}
+            purposeName={scenarioDetails(resumedCase.scenarioId).name}
+            onBack={backToApplicationDetails}
+            onRecoveryRequired={handleDocumentRecovery}
           />
         ) : null}
         {surface === 'RESET_REQUIRED' ? (

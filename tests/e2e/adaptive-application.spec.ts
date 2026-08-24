@@ -164,7 +164,7 @@ test('Medical A03 autosaves controlled answers and ends at the Documents handoff
   await expect(page.getByRole('heading', { name: 'Application details saved' })).toBeVisible()
   await expectSharedApplicantShell(page)
   await expect(page.getByText('Documents', { exact: true })).toBeVisible()
-  await expect(page.getByText(/A04 and is not included/)).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Prepare documents' })).toBeVisible()
   const evidence = await loadApplicationEvidence(page)
   expect(evidence).toMatchObject({
     caseCount: 1,

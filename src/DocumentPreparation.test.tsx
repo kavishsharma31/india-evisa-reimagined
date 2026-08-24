@@ -1,0 +1,231 @@
+import { cleanup, render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { afterEach, describe, expect, it } from 'vitest'
+
+import App from './App'
+import { createAppRuntime, type AppRuntimeServices } from './app/create-app-runtime'
+import {
+  createPersistenceStore,
+  type PersistenceService,
+  type StoragePort,
+} from './persistence'
+
+afterEach(cleanup)
+
+class MemoryStorage implements StoragePort {
+  readonly #values = new Map<string, string>()
+
+  getItem(key: string): string | null {
+    return this.#values.get(key) ?? null
+  }
+
+  setItem(key: string, value: string): void {
+    this.#values.set(key, value)
+  }
+
+  removeItem(key: string): void {
+    this.#values.delete(key)
+  }
+}
+
+function requireCase(store: PersistenceService) {
+  const loaded = store.load()
+  if (loaded.status !== 'VALID_STATE' || loaded.state.cases[0] === undefined) {
+    throw new Error('Expected one valid persisted synthetic Case.')
+  }
+  return loaded.state.cases[0]
+}
+
+function requiredItem<Value>(values: readonly Value[], index: number): Value {
+  const value = values[index]
+  if (value === undefined) {
+    throw new Error(`Expected item at index ${index}.`)
+  }
+  return value
+}
+
+async function reachA04(
+  user: ReturnType<typeof userEvent.setup>,
+  scenario: 'Medical treatment' | 'Tourism' = 'Medical treatment',
+) {
+  await user.click(screen.getByRole('radio', { name: new RegExp(scenario, 'i') }))
+  await user.click(screen.getByRole('button', { name: 'Continue with this demo' }))
+  await user.click(screen.getByRole('button', { name: 'Start application' }))
+
+  const selects = screen.getAllByRole('combobox')
+  await user.selectOptions(requiredItem(selects, 0), 'SYN-POLICY-COHORT-A')
+  await user.selectOptions(requiredItem(selects, 1), 'SYNTHETIC_STANDARD_PASSPORT')
+  await user.selectOptions(
+    requiredItem(selects, 2),
+    scenario === 'Medical treatment' ? '2099-04-14' : '2099-05-10',
+  )
+  await user.selectOptions(
+    requiredItem(selects, 3),
+    scenario === 'Medical treatment' ? 'SYNTHETIC_MEDICAL_TREATMENT' : 'SYNTHETIC_TOURISM',
+  )
+  await user.selectOptions(
+    requiredItem(selects, 4),
+    scenario === 'Medical treatment' ? '2099-04-18' : '2099-05-17',
+  )
+  if (scenario === 'Medical treatment') {
+    await user.click(screen.getByRole('radio', { name: 'Yes' }))
+  }
+  await user.click(screen.getByRole('button', { name: 'Continue to documents' }))
+  await user.click(screen.getByRole('button', { name: 'Prepare documents' }))
+  expect(screen.getByRole('heading', { name: 'Prepare your demo documents' })).toBeInTheDocument()
+}
+
+function documentCard(name: string): HTMLElement {
+  const heading = screen.getByRole('heading', { level: 3, name })
+  const card = heading.closest('article')
+  if (card === null) {
+    throw new Error(`Expected a document card for ${name}.`)
+  }
+  return card
+}
+
+async function checkCurrentFixture(
+  user: ReturnType<typeof userEvent.setup>,
+  name: string,
+) {
+  await user.click(within(documentCard(name)).getByRole('button', { name: /Run technical check|Check replacement/ }))
+}
+
+describe('A04 document preparation', () => {
+  it('renders all Medical policy requirements and reaches the derived ready state', async () => {
+    const user = userEvent.setup()
+    const store = createPersistenceStore(new MemoryStorage())
+    render(<App services={createAppRuntime({ store })} />)
+    await reachA04(user)
+
+    expect(screen.getByRole('heading', { level: 3, name: 'Synthetic portrait' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 3, name: 'Synthetic passport page' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 3, name: 'Synthetic hospital letter' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Bundled demo hospital letter' })).toBeInTheDocument()
+    expect(screen.queryByText(/hospital letter V2/i)).not.toBeInTheDocument()
+
+    await checkCurrentFixture(user, 'Synthetic portrait')
+    await checkCurrentFixture(user, 'Synthetic passport page')
+    await checkCurrentFixture(user, 'Synthetic hospital letter')
+
+    expect(screen.getByRole('heading', { name: 'Documents ready' })).toBeInTheDocument()
+    expect(screen.getByText('All required demo documents passed the local technical check.')).toBeInTheDocument()
+    expect(screen.getByText('Review', { exact: true })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: /Review your application/i })).not.toBeInTheDocument()
+    expect(requireCase(store).application.state).toBe('IN_PROGRESS')
+  })
+
+  it('uses the same renderer for the two-document Tourist manifest', async () => {
+    const user = userEvent.setup()
+    const store = createPersistenceStore(new MemoryStorage())
+    render(<App services={createAppRuntime({ store })} />)
+    await reachA04(user, 'Tourism')
+
+    expect(screen.getAllByRole('heading', { level: 3 })).toHaveLength(2)
+    expect(screen.getByRole('heading', { level: 3, name: 'Synthetic portrait' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 3, name: 'Synthetic passport page' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { level: 3, name: 'Synthetic hospital letter' })).not.toBeInTheDocument()
+
+    await checkCurrentFixture(user, 'Synthetic portrait')
+    await checkCurrentFixture(user, 'Synthetic passport page')
+    expect(screen.getByRole('heading', { name: 'Documents ready' })).toBeInTheDocument()
+  })
+
+  it('shows the controlled passport defect and preserves the superseded version after correction', async () => {
+    const user = userEvent.setup()
+    const store = createPersistenceStore(new MemoryStorage())
+    render(<App services={createAppRuntime({ store })} />)
+    await reachA04(user)
+
+    const passportCard = documentCard('Synthetic passport page')
+    const selector = within(passportCard).getByRole('combobox', { name: 'Bundled demo file' })
+    await user.selectOptions(selector, 'SYN-FIXTURE-PASSPORT-UNCLEAR-001')
+    await checkCurrentFixture(user, 'Synthetic passport page')
+
+    expect(within(documentCard('Synthetic passport page')).getByText('Needs attention')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'This demo passport page is too unclear to check. Choose the clearer bundled file and try again.',
+      ),
+    ).toBeInTheDocument()
+
+    await user.selectOptions(selector, 'SYN-FIXTURE-PASSPORT-VALID-001')
+    await checkCurrentFixture(user, 'Synthetic passport page')
+    expect(within(documentCard('Synthetic passport page')).getByText('Ready')).toBeInTheDocument()
+
+    const passport = requireCase(store).documents.find(
+      ({ requirementId }) => requirementId === 'REQ-PASSPORT-PAGE-1',
+    )
+    expect(passport?.versions).toHaveLength(2)
+    expect(passport?.versions.map(({ state }) => state)).toEqual([
+      'SUPERSEDED',
+      'PREFLIGHT_PASSED',
+    ])
+  })
+
+  it('restores prepared state on reload without creating a duplicate version or event', async () => {
+    const user = userEvent.setup()
+    const storage = new MemoryStorage()
+    const store = createPersistenceStore(storage)
+    const firstRender = render(<App services={createAppRuntime({ store })} />)
+    await reachA04(user)
+    await checkCurrentFixture(user, 'Synthetic portrait')
+
+    const beforeReload = JSON.stringify(requireCase(store))
+    firstRender.unmount()
+    render(<App services={createAppRuntime({ store: createPersistenceStore(storage) })} />)
+
+    expect(screen.getByRole('heading', { name: 'Prepare your demo documents' })).toBeInTheDocument()
+    expect(within(documentCard('Synthetic portrait')).getByText('Ready')).toBeInTheDocument()
+    expect(JSON.stringify(requireCase(createPersistenceStore(storage)))).toBe(beforeReload)
+  })
+
+  it('does not offer another mutation for the already-current checked fixture', async () => {
+    const user = userEvent.setup()
+    const store = createPersistenceStore(new MemoryStorage())
+    render(<App services={createAppRuntime({ store })} />)
+    await reachA04(user)
+    await checkCurrentFixture(user, 'Synthetic portrait')
+
+    const prepared = requireCase(store)
+    const revision = prepared.revision
+    const eventCount = prepared.auditEvents.length
+    expect(
+      within(documentCard('Synthetic portrait')).getByRole('button', {
+        name: 'Technical check complete',
+      }),
+    ).toBeDisabled()
+    expect(requireCase(store).revision).toBe(revision)
+    expect(requireCase(store).auditEvents).toHaveLength(eventCount)
+  })
+
+  it('reports an unavailable local inspection without marking the document Ready', async () => {
+    const user = userEvent.setup()
+    const store = createPersistenceStore(new MemoryStorage())
+    const baseServices = createAppRuntime({ store })
+    const services: AppRuntimeServices = Object.freeze({
+      ...baseServices,
+      runtime: Object.freeze({
+        ...baseServices.runtime,
+        prepareDocumentFixture() {
+          return Object.freeze({
+            status: 'COMMAND_REJECTED' as const,
+            operation: 'PrepareDocument' as const,
+            reasonCode: 'DOCUMENT_INSPECTION_UNAVAILABLE' as const,
+            caseId: 'SYN-CASE-MED-001' as const,
+            diagnostic: Object.freeze({}),
+          })
+        },
+      }),
+    })
+    render(<App services={services} />)
+    await reachA04(user)
+
+    await checkCurrentFixture(user, 'Synthetic portrait')
+    expect(
+      screen.getByText('The local demo technical check is unavailable. Nothing was marked Ready.'),
+    ).toBeInTheDocument()
+    expect(within(documentCard('Synthetic portrait')).getByText('Not checked')).toBeInTheDocument()
+    expect(requireCase(store).documents).toEqual([])
+  })
+})

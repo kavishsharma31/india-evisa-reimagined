@@ -68,5 +68,15 @@ export function createDeterministicRuntimeMetadata(): RuntimeMetadataSource {
         `SYN-SNAPSHOT-${identifierBody(caseId)}-${sequenceSuffix(sequence)}`,
       )
     },
+    documentAssetId(caseId, requirementId) {
+      return syntheticIdSchema.parse(
+        `SYN-DOCASSET-${identifierBody(caseId)}-${requirementId.replace(/^REQ-/, '')}`,
+      )
+    },
+    documentVersionId(caseId, fixtureId, sequence) {
+      return syntheticIdSchema.parse(
+        `SYN-DOCVER-${identifierBody(caseId)}-${fixtureId.replace(/^SYN-FIXTURE-/, '')}-V${sequenceSuffix(sequence)}`,
+      )
+    },
   })
 }

@@ -17,6 +17,7 @@ type AdaptiveApplicationProps = Readonly<{
   evaluation: PolicyEvaluationResult
   purposeName: string
   onBack(): void
+  onPrepareDocuments(): void
 }>
 
 const ANSWER_LABELS: Readonly<Record<string, string>> = Object.freeze({
@@ -213,11 +214,16 @@ export function AdaptiveApplication(props: AdaptiveApplicationProps) {
         <div className={styles.nextStep}>
           <span>Next</span>
           <strong>Documents</strong>
-          <p>Document preparation begins in A04 and is not included in this slice.</p>
+          <p>Use bundled synthetic demo files to prepare the policy-required documents.</p>
         </div>
-        <button className={styles.secondaryButton} type="button" onClick={props.onBack}>
-          Back to saved case
-        </button>
+        <div className={styles.formActions}>
+          <button className={styles.primaryButton} type="button" onClick={props.onPrepareDocuments}>
+            Prepare documents <span aria-hidden="true">→</span>
+          </button>
+          <button className={styles.secondaryButton} type="button" onClick={props.onBack}>
+            Back to saved case
+          </button>
+        </div>
       </section>
     )
   }

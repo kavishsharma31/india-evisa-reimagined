@@ -195,7 +195,7 @@ describe('A03 adaptive application', () => {
     expect(afterReturn.application.draftSnapshots).toHaveLength(1)
   })
 
-  it('completes with a Documents snapshot and reloads directly to the A03 completion state', async () => {
+  it('completes with a Documents snapshot and reloads directly into A04', async () => {
     const user = userEvent.setup()
     const storage = new MemoryStorage()
     const store = createPersistenceStore(storage)
@@ -206,7 +206,7 @@ describe('A03 adaptive application', () => {
 
     expect(screen.getByRole('heading', { name: 'Application details saved' })).toBeInTheDocument()
     expect(screen.getByText('Documents', { exact: true })).toBeInTheDocument()
-    expect(screen.getByText(/A04 and is not included/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Prepare documents' })).toBeInTheDocument()
     const completedCase = requireCase(store)
     expect(completedCase.application.state).toBe('IN_PROGRESS')
     expect(completedCase.application.draftSnapshots.at(-1)?.currentStep).toBe('DOCUMENTS')
@@ -217,7 +217,7 @@ describe('A03 adaptive application', () => {
     firstView.unmount()
 
     render(<App services={createAppRuntime({ store: createPersistenceStore(storage) })} />)
-    expect(screen.getByRole('heading', { name: 'Application details saved' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Prepare your demo documents' })).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Tell us about this trip' })).not.toBeInTheDocument()
   })
 

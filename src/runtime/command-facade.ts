@@ -30,12 +30,19 @@ import {
   type CreateDraftCommand,
   type SaveSnapshotCommand,
 } from './case-runtime'
+import {
+  a04DocumentFixtures,
+  applyDocumentPreparation,
+  buildDocumentPreparationView,
+} from './document-runtime'
 import type {
   DemoRuntime,
   DemoRuntimeDependencies,
   RuntimeCommandAccepted,
   RuntimeCommandRejected,
   RuntimeEvaluationResult,
+  RuntimeDocumentInspectResult,
+  RuntimeDocumentMutationResult,
   RuntimeInspectResult,
   RuntimeMutationResult,
   RuntimePolicyRejected,
@@ -63,6 +70,19 @@ const saveSnapshotInputSchema = z
   })
   .strict()
 const resumeCaseInputSchema = z.object({ caseId: syntheticIdSchema.optional() }).strict()
+const inspectDocumentsInputSchema = z.object({ caseId: syntheticIdSchema }).strict()
+const prepareDocumentInputSchema = z
+  .object({
+    caseId: syntheticIdSchema,
+    requirementId: z.enum([
+      'REQ-PORTRAIT-1',
+      'REQ-PASSPORT-PAGE-1',
+      'REQ-HOSPITAL-LETTER-1',
+    ]),
+    fixtureId: syntheticIdSchema,
+    idempotencyKey: syntheticIdSchema,
+  })
+  .strict()
 
 type CanonicalScenarioId = PersistedCase['scenarioId']
 
@@ -241,7 +261,7 @@ function appendCase(
 function saveEnvelope(
   dependencies: DemoRuntimeDependencies,
   envelope: PersistenceEnvelope,
-  operation: 'CreateDraft' | 'BeginDraft' | 'SaveSnapshot',
+  operation: 'CreateDraft' | 'BeginDraft' | 'SaveSnapshot' | 'PrepareDocument',
   caseId: SyntheticId,
 ): PersistenceEnvelope | RuntimeCommandRejected | RuntimeStorageFailure {
   const validation = persistenceEnvelopeSchema.safeParse(envelope)
@@ -316,6 +336,36 @@ function eventRevision(persistedCase: PersistedCase, eventId: SyntheticId): numb
     throw new Error('Idempotent runtime evidence must belong to its containing Case.')
   }
   return eventIndex + 1
+}
+
+function evaluatePinnedDocumentPolicy(
+  persistedCase: PersistedCase,
+): PolicyEvaluationResult | RuntimePolicyRejected {
+  const evaluation = evaluateCanonicalScenario(persistedCase.scenarioId, 'RESUME')
+  if (
+    evaluation.scenarioSupport !== 'SUPPORTED_BY_DEMO' ||
+    evaluation.policy.qualifiedVersion !== persistedCase.policyPin.qualifiedVersion ||
+    evaluation.documentManifest === undefined
+  ) {
+    return evaluationPolicyRejection(evaluation)
+  }
+  return evaluation
+}
+
+function documentRequestReference(
+  caseId: SyntheticId,
+  requirementId: string,
+  fixtureId: SyntheticId,
+): SyntheticId {
+  return syntheticIdSchema.parse(
+    `SYN-DOCUMENT-REQUEST-${caseId.slice('SYN-'.length)}-${requirementId.replace(/^REQ-/, '')}-${fixtureId.slice('SYN-FIXTURE-'.length)}`,
+  )
+}
+
+function documentCorrelationId(caseId: SyntheticId, requirementId: string): SyntheticId {
+  return syntheticIdSchema.parse(
+    `SYN-CORRELATION-DOCUMENT-${caseId.slice('SYN-'.length)}-${requirementId.replace(/^REQ-/, '')}`,
+  )
 }
 
 export function createDemoRuntime(dependencies: DemoRuntimeDependencies): DemoRuntime {
@@ -738,8 +788,210 @@ export function createDemoRuntime(dependencies: DemoRuntimeDependencies): DemoRu
     })
   }
 
-  // The local mock registry is an injected boundary for later commands. A00→A02
-  // deliberately performs no integration call because none is relevant yet.
+  function inspectDocuments(candidate: unknown): RuntimeDocumentInspectResult {
+    const parsed = inspectDocumentsInputSchema.safeParse(candidate)
+    if (!parsed.success) {
+      return invalidCommand('InspectDocuments', parsed.error.issues.length)
+    }
+    const loaded = loadForMutation(dependencies)
+    if (loaded.status !== 'READY') {
+      return loaded
+    }
+    const persistedCase = loaded.state?.cases.find(
+      ({ caseId }) => caseId === parsed.data.caseId,
+    )
+    if (persistedCase === undefined) {
+      return Object.freeze({ status: 'CASE_NOT_FOUND', caseId: parsed.data.caseId })
+    }
+    const latestSnapshot = persistedCase.application.draftSnapshots.at(-1)
+    if (
+      persistedCase.application.state !== 'IN_PROGRESS' ||
+      latestSnapshot?.currentStep !== 'DOCUMENTS'
+    ) {
+      return deepFreeze({
+        status: 'COMMAND_REJECTED',
+        operation: 'InspectDocuments',
+        reasonCode: 'GUARD_FAILED',
+        caseId: persistedCase.caseId,
+        diagnostic: {
+          currentState: persistedCase.application.state,
+          requiredState: 'IN_PROGRESS',
+        },
+      })
+    }
+    const evaluation = evaluatePinnedDocumentPolicy(persistedCase)
+    if ('status' in evaluation) {
+      return evaluation
+    }
+    return buildDocumentPreparationView(persistedCase, evaluation)
+  }
+
+  function prepareDocumentFixture(candidate: unknown): RuntimeDocumentMutationResult {
+    const parsed = prepareDocumentInputSchema.safeParse(candidate)
+    if (!parsed.success) {
+      return invalidCommand('PrepareDocument', parsed.error.issues.length)
+    }
+    const loaded = loadForMutation(dependencies)
+    if (loaded.status !== 'READY') {
+      return loaded
+    }
+    const input = parsed.data
+    const persistedCase = loaded.state?.cases.find(({ caseId }) => caseId === input.caseId)
+    if (persistedCase === undefined) {
+      return Object.freeze({ status: 'CASE_NOT_FOUND', caseId: input.caseId })
+    }
+    const latestSnapshot = persistedCase.application.draftSnapshots.at(-1)
+    if (
+      persistedCase.application.state !== 'IN_PROGRESS' ||
+      latestSnapshot?.currentStep !== 'DOCUMENTS'
+    ) {
+      return deepFreeze({
+        status: 'COMMAND_REJECTED',
+        operation: 'PrepareDocument',
+        reasonCode: 'GUARD_FAILED',
+        caseId: persistedCase.caseId,
+        diagnostic: {
+          currentState: persistedCase.application.state,
+          requiredState: 'IN_PROGRESS',
+          requirementId: input.requirementId,
+        },
+      })
+    }
+
+    const evaluation = evaluatePinnedDocumentPolicy(persistedCase)
+    if ('status' in evaluation) {
+      return evaluation
+    }
+    const requirement = evaluation.documentManifest?.requirements.find(
+      ({ id }) => id === input.requirementId,
+    )
+    const fixture = a04DocumentFixtures.find(({ fixtureId }) => fixtureId === input.fixtureId)
+    if (
+      requirement === undefined ||
+      fixture === undefined ||
+      fixture.requirementId !== requirement.id ||
+      fixture.documentType !== requirement.documentType ||
+      !requirement.acceptedFixtureCategories.includes(fixture.fixtureCategory)
+    ) {
+      return invalidCommand(
+        'PrepareDocument',
+        1,
+        'FIXTURE_NOT_COMPATIBLE',
+        persistedCase.caseId,
+      )
+    }
+
+    const preparation = buildDocumentPreparationView(persistedCase, evaluation)
+    const requirementView = preparation.requirements.find(
+      ({ requirementId }) => requirementId === input.requirementId,
+    )
+    const latestVersion = requirementView?.versionHistory.at(-1)
+    if (
+      latestVersion !== undefined &&
+      latestVersion.fixtureId === fixture.fixtureId &&
+      latestVersion.state !== 'CREATED'
+    ) {
+      return deepFreeze({
+        status: 'DOCUMENT_EXISTING',
+        operation: 'PrepareDocument',
+        caseId: persistedCase.caseId,
+        requirementId: input.requirementId,
+        fixtureId: fixture.fixtureId,
+        documentVersionId: latestVersion.documentVersionId,
+        documentState: latestVersion.state,
+        revision: persistedCase.revision,
+        idempotentReplay: true,
+      })
+    }
+
+    if (existingIdempotentEvent(persistedCase, input.idempotencyKey) !== undefined) {
+      return invalidCommand(
+        'PrepareDocument',
+        1,
+        'IDEMPOTENCY_CONFLICT',
+        persistedCase.caseId,
+      )
+    }
+
+    const inspection = dependencies.adapters.documentInspection.execute({
+      requestReference: documentRequestReference(
+        persistedCase.caseId,
+        input.requirementId,
+        fixture.fixtureId,
+      ),
+      correlationId: documentCorrelationId(persistedCase.caseId, input.requirementId),
+      caseId: persistedCase.caseId,
+      fixtureId: fixture.fixtureId,
+      expectedDocumentType: fixture.documentType,
+      scenario: fixture.expectedInspectionScenario,
+    })
+    if (
+      inspection.status !== 'MOCK_OUTCOME' ||
+      (inspection.outcome !== 'PREFLIGHT_PASSED' &&
+        inspection.outcome !== 'PREFLIGHT_FAILED')
+    ) {
+      return invalidCommand(
+        'PrepareDocument',
+        1,
+        'DOCUMENT_INSPECTION_UNAVAILABLE',
+        persistedCase.caseId,
+      )
+    }
+
+    const mutation = applyDocumentPreparation({
+      persistedCase,
+      fixture,
+      outcome: {
+        state: inspection.outcome,
+        reasonCode: inspection.reasonCode,
+      },
+      idempotencyKey: input.idempotencyKey,
+      metadata: dependencies.metadata,
+    })
+    if (!mutation.accepted) {
+      return deepFreeze({
+        status: 'COMMAND_REJECTED',
+        operation: 'PrepareDocument',
+        reasonCode: mutation.reasonCode,
+        caseId: persistedCase.caseId,
+        diagnostic: {
+          ...(mutation.documentState === undefined
+            ? {}
+            : { documentState: mutation.documentState }),
+          requirementId: input.requirementId,
+        },
+      })
+    }
+    const envelope = loaded.state
+    if (envelope === null) {
+      throw new Error('A located Case must belong to a loaded persistence envelope.')
+    }
+    const nextEnvelope = replaceCase(envelope, mutation.persistedCase)
+    const saved = saveEnvelope(
+      dependencies,
+      nextEnvelope,
+      'PrepareDocument',
+      persistedCase.caseId,
+    )
+    if ('status' in saved) {
+      return saved
+    }
+
+    return deepFreeze({
+      status: 'DOCUMENT_PREPARED',
+      operation: 'PrepareDocument',
+      caseId: persistedCase.caseId,
+      requirementId: input.requirementId,
+      fixtureId: fixture.fixtureId,
+      documentVersionId: mutation.documentVersionId,
+      documentState: inspection.outcome,
+      revision: mutation.persistedCase.revision,
+      emittedEventTypes: mutation.events.map(({ eventType }) => eventType),
+      emittedEventIds: mutation.events.map(({ eventId }) => eventId),
+      inspectionReasonCode: inspection.reasonCode,
+    })
+  }
+
   return Object.freeze({
     inspectState,
     evaluateScenario,
@@ -747,5 +999,7 @@ export function createDemoRuntime(dependencies: DemoRuntimeDependencies): DemoRu
     beginDraft,
     saveDraftSnapshot,
     resumeCase,
+    inspectDocuments,
+    prepareDocumentFixture,
   })
 }
