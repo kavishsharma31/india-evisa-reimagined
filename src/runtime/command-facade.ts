@@ -46,6 +46,11 @@ import {
   paymentCorrelationId,
   paymentIdempotencyKey,
 } from './payment-runtime'
+import {
+  applyScrutinyEntry,
+  buildStatusSummary,
+  scrutinyEntryIdempotencyKey,
+} from './status-runtime'
 import type {
   DemoRuntime,
   DemoRuntimeDependencies,
@@ -63,6 +68,8 @@ import type {
   RuntimePaymentInspectResult,
   RuntimePaymentMutationResult,
   RuntimeStorageFailure,
+  RuntimeStatusInspectResult,
+  RuntimeScrutinyMutationResult,
 } from './contracts'
 
 const scenarioInputSchema = z.object({ scenarioId: syntheticIdSchema }).strict()
@@ -103,6 +110,7 @@ const reviewMutationInputSchema = z
   .object({ caseId: syntheticIdSchema, idempotencyKey: syntheticIdSchema })
   .strict()
 const paymentInputSchema = z.object({ caseId: syntheticIdSchema }).strict()
+const statusInputSchema = z.object({ caseId: syntheticIdSchema }).strict()
 
 type CanonicalScenarioId = PersistedCase['scenarioId']
 
@@ -289,7 +297,8 @@ function saveEnvelope(
     | 'PrepareReview'
     | 'SubmitApplication'
     | 'StartMockPayment'
-    | 'CheckMockPaymentStatus',
+    | 'CheckMockPaymentStatus'
+    | 'BeginScrutiny',
   caseId: SyntheticId,
 ): PersistenceEnvelope | RuntimeCommandRejected | RuntimeStorageFailure {
   const validation = persistenceEnvelopeSchema.safeParse(envelope)
@@ -1646,6 +1655,123 @@ export function createDemoRuntime(dependencies: DemoRuntimeDependencies): DemoRu
     })
   }
 
+  function inspectStatus(candidate: unknown): RuntimeStatusInspectResult {
+    const parsed = statusInputSchema.safeParse(candidate)
+    if (!parsed.success) {
+      return invalidCommand('InspectStatus', parsed.error.issues.length)
+    }
+    const loaded = loadForMutation(dependencies)
+    if (loaded.status !== 'READY') {
+      return loaded
+    }
+    const persistedCase = loaded.state?.cases.find(
+      ({ caseId }) => caseId === parsed.data.caseId,
+    )
+    if (persistedCase === undefined) {
+      return Object.freeze({ status: 'CASE_NOT_FOUND', caseId: parsed.data.caseId })
+    }
+    const evaluation = evaluatePinnedDocumentPolicy(persistedCase)
+    if ('status' in evaluation) {
+      return evaluation
+    }
+    const projection = buildStatusSummary(persistedCase, evaluation)
+    if (!projection.accepted) {
+      return deepFreeze({
+        status: 'COMMAND_REJECTED',
+        operation: 'InspectStatus',
+        reasonCode: 'STATUS_PREREQUISITES_NOT_MET',
+        caseId: persistedCase.caseId,
+        diagnostic: {
+          currentState: persistedCase.application.state,
+          paymentState: persistedCase.payment.state,
+          scrutinyState: persistedCase.scrutiny.state,
+        },
+      })
+    }
+    return projection.summary
+  }
+
+  function beginScrutiny(candidate: unknown): RuntimeScrutinyMutationResult {
+    const parsed = statusInputSchema.safeParse(candidate)
+    if (!parsed.success) {
+      return invalidCommand('BeginScrutiny', parsed.error.issues.length)
+    }
+    const loaded = loadForMutation(dependencies)
+    if (loaded.status !== 'READY') {
+      return loaded
+    }
+    const persistedCase = loaded.state?.cases.find(
+      ({ caseId }) => caseId === parsed.data.caseId,
+    )
+    if (persistedCase === undefined) {
+      return Object.freeze({ status: 'CASE_NOT_FOUND', caseId: parsed.data.caseId })
+    }
+    const evaluation = evaluatePinnedDocumentPolicy(persistedCase)
+    if ('status' in evaluation) {
+      return evaluation
+    }
+    if (persistedCase.scrutiny.state !== 'NOT_STARTED') {
+      return deepFreeze({
+        status: 'SCRUTINY_EXISTING',
+        operation: 'BeginScrutiny',
+        caseId: persistedCase.caseId,
+        revision: persistedCase.revision,
+        scrutinyState: persistedCase.scrutiny.state,
+        idempotentReplay: true,
+      })
+    }
+    const requiredRequirementIds = evaluation.documentManifest?.requirements
+      .filter(({ required }) => required)
+      .map(({ id }) => id)
+    if (requiredRequirementIds === undefined) {
+      return invalidCommand(
+        'BeginScrutiny',
+        1,
+        'STATUS_PREREQUISITES_NOT_MET',
+        persistedCase.caseId,
+      )
+    }
+    const mutation = applyScrutinyEntry({
+      persistedCase,
+      requiredRequirementIds,
+      idempotencyKey: scrutinyEntryIdempotencyKey(persistedCase.caseId),
+      metadata: dependencies.metadata,
+    })
+    if (!mutation.accepted) {
+      return invalidCommand(
+        'BeginScrutiny',
+        1,
+        mutation.reasonCode === 'GUARD_FAILED'
+          ? 'STATUS_PREREQUISITES_NOT_MET'
+          : mutation.reasonCode,
+        persistedCase.caseId,
+      )
+    }
+    const envelope = loaded.state
+    if (envelope === null) {
+      throw new Error('A located Case must belong to a loaded persistence envelope.')
+    }
+    const saved = saveEnvelope(
+      dependencies,
+      replaceCase(envelope, mutation.persistedCase),
+      'BeginScrutiny',
+      persistedCase.caseId,
+    )
+    if ('status' in saved) {
+      return saved
+    }
+    return deepFreeze({
+      status: 'SCRUTINY_STARTED',
+      operation: 'BeginScrutiny',
+      caseId: persistedCase.caseId,
+      revision: mutation.persistedCase.revision,
+      scrutinyState: 'IN_REVIEW',
+      reviewedDocumentVersionIds: mutation.persistedCase.scrutiny.submittedDocumentVersionIds,
+      emittedEventTypes: mutation.events.map(({ eventType }) => eventType),
+      emittedEventIds: mutation.events.map(({ eventId }) => eventId),
+    })
+  }
+
   return Object.freeze({
     inspectState,
     evaluateScenario,
@@ -1661,5 +1787,7 @@ export function createDemoRuntime(dependencies: DemoRuntimeDependencies): DemoRu
     inspectPayment,
     startMockPayment,
     checkMockPaymentStatus,
+    inspectStatus,
+    beginScrutiny,
   })
 }

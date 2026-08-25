@@ -87,6 +87,7 @@ function renderPayment(input: {
       services={services}
       caseId={caseId}
       onBackToSubmittedApplication={() => undefined}
+      onContinueToStatus={() => undefined}
       onRecoveryRequired={() => undefined}
     />,
   )

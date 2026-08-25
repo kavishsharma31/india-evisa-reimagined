@@ -5,6 +5,8 @@ import type {
   PaymentState,
   PolicyQualifiedVersion,
   ReasonCode,
+  ScrutinyState,
+  EtaState,
   SyntheticId,
   SyntheticTimestamp,
 } from '../domain'
@@ -30,6 +32,8 @@ export type RuntimeOperation =
   | 'InspectPayment'
   | 'StartMockPayment'
   | 'CheckMockPaymentStatus'
+  | 'InspectStatus'
+  | 'BeginScrutiny'
 
 export type RuntimeCommandRejectionCode =
   | 'INVALID_COMMAND'
@@ -44,6 +48,7 @@ export type RuntimeCommandRejectionCode =
   | 'PAYMENT_PREREQUISITES_NOT_MET'
   | 'PAYMENT_ADAPTER_REJECTED'
   | 'PAYMENT_EVIDENCE_MISMATCH'
+  | 'STATUS_PREREQUISITES_NOT_MET'
   | 'PERSISTENCE_VALIDATION_FAILED'
 
 export type RuntimeStorageRequiresReset = Readonly<{
@@ -77,6 +82,7 @@ export type RuntimeCommandRejected = Readonly<{
     missingQuestionIds?: readonly string[]
     missingRequirementIds?: readonly string[]
     paymentState?: PaymentState
+    scrutinyState?: ScrutinyState
   }>
 }>
 
@@ -369,6 +375,67 @@ export type RuntimePaymentMutationResult =
   | RuntimePolicyRejected
   | RuntimeStorageFailure
 
+export type RuntimeStatusJourneyFact = Readonly<{
+  id: 'APPLICATION' | 'PAYMENT' | 'DOCUMENTS' | 'ETA'
+  label: string
+  value: string
+  state: 'COMPLETE' | 'CURRENT' | 'WAITING'
+}>
+
+export type RuntimeStatusSummary = Readonly<{
+  status: 'STATUS_INSPECTED'
+  caseId: SyntheticId
+  scenarioId: SyntheticId
+  purposeFamily: NonNullable<PolicyEvaluationResult['suggestedPurposeFamily']>
+  policyQualifiedVersion: PolicyQualifiedVersion
+  revision: number
+  applicationState: 'LOCKED'
+  paymentState: 'CONFIRMED'
+  scrutinyState: ScrutinyState
+  etaState: EtaState
+  headline: string
+  explanation: string
+  applicantActionRequired: boolean
+  nextAction: 'BEGIN_SCRUTINY' | null
+  waitMessage: string | null
+  journeyFacts: readonly RuntimeStatusJourneyFact[]
+}>
+
+export type RuntimeStatusInspectResult =
+  | RuntimeStatusSummary
+  | RuntimeCaseNotFound
+  | RuntimeCommandRejected
+  | RuntimePolicyRejected
+  | RuntimeStorageFailure
+
+export type RuntimeScrutinyStarted = Readonly<{
+  status: 'SCRUTINY_STARTED'
+  operation: 'BeginScrutiny'
+  caseId: SyntheticId
+  revision: number
+  scrutinyState: 'IN_REVIEW'
+  reviewedDocumentVersionIds: readonly SyntheticId[]
+  emittedEventTypes: readonly DomainEventType[]
+  emittedEventIds: readonly SyntheticId[]
+}>
+
+export type RuntimeScrutinyExisting = Readonly<{
+  status: 'SCRUTINY_EXISTING'
+  operation: 'BeginScrutiny'
+  caseId: SyntheticId
+  revision: number
+  scrutinyState: ScrutinyState
+  idempotentReplay: true
+}>
+
+export type RuntimeScrutinyMutationResult =
+  | RuntimeScrutinyStarted
+  | RuntimeScrutinyExisting
+  | RuntimeCaseNotFound
+  | RuntimeCommandRejected
+  | RuntimePolicyRejected
+  | RuntimeStorageFailure
+
 export type RuntimeMetadataSource = Readonly<{
   nextTimestamp(previousTimestamp: SyntheticTimestamp): SyntheticTimestamp
   commandId(caseId: SyntheticId, operation: RuntimeOperation, revision: number): SyntheticId
@@ -401,4 +468,6 @@ export type DemoRuntime = Readonly<{
   inspectPayment(candidate: unknown): RuntimePaymentInspectResult
   startMockPayment(candidate: unknown): RuntimePaymentMutationResult
   checkMockPaymentStatus(candidate: unknown): RuntimePaymentMutationResult
+  inspectStatus(candidate: unknown): RuntimeStatusInspectResult
+  beginScrutiny(candidate: unknown): RuntimeScrutinyMutationResult
 }>

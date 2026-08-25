@@ -4,6 +4,7 @@ import { AdaptiveApplication } from './app/AdaptiveApplication'
 import { DocumentPreparation } from './app/DocumentPreparation'
 import { ReviewApplication } from './app/ReviewApplication'
 import { PaymentApplication } from './app/PaymentApplication'
+import { StatusApplication } from './app/StatusApplication'
 import { DOCUMENT_NAMES, PURPOSE_NAMES } from './app/applicant-labels'
 import { createAppRuntime, type AppRuntimeServices } from './app/create-app-runtime'
 import type { SyntheticId } from './domain'
@@ -41,6 +42,7 @@ type Surface =
   | 'DOCUMENT_PREPARATION'
   | 'REVIEW_APPLICATION'
   | 'PAYMENT_APPLICATION'
+  | 'STATUS_APPLICATION'
   | 'RESET_REQUIRED'
   | 'STORAGE_UNAVAILABLE'
 
@@ -61,6 +63,7 @@ type InitialView = Readonly<{
 }>
 
 const PAYMENT_FRAGMENT = '#payment'
+const STATUS_FRAGMENT = '#status'
 
 function paymentSurfaceRequested(): boolean {
   return typeof window !== 'undefined' && window.location.hash === PAYMENT_FRAGMENT
@@ -72,6 +75,16 @@ function setPaymentFragment(active: boolean): void {
   }
   const nextLocation = active
     ? `${window.location.pathname}${window.location.search}${PAYMENT_FRAGMENT}`
+    : `${window.location.pathname}${window.location.search}`
+  window.history.replaceState(null, '', nextLocation)
+}
+
+function setStatusFragment(active: boolean): void {
+  if (typeof window === 'undefined') {
+    return
+  }
+  const nextLocation = active
+    ? `${window.location.pathname}${window.location.search}${STATUS_FRAGMENT}`
     : `${window.location.pathname}${window.location.search}`
   window.history.replaceState(null, '', nextLocation)
 }
@@ -112,6 +125,17 @@ function inspectInitialView(services: AppRuntimeServices): InitialView {
       const persistedCase = inspected.state.cases.find(
         ({ caseId }) => caseId === resumed.caseId,
       )
+      if (
+        resumed.applicationState === 'LOCKED' &&
+        persistedCase?.payment.state === 'CONFIRMED' &&
+        persistedCase.scrutiny.state !== 'NOT_STARTED' &&
+        isScenarioId(resumed.scenarioId)
+      ) {
+        const status = services.runtime.inspectStatus({ caseId: resumed.caseId })
+        if (status.status === 'STATUS_INSPECTED') {
+          return { surface: 'STATUS_APPLICATION', resumedCase: resumed, evaluation: null }
+        }
+      }
       if (
         resumed.applicationState === 'LOCKED' &&
         (paymentSurfaceRequested() ||
@@ -476,6 +500,7 @@ function App({ services: providedServices }: AppProps) {
       DOCUMENT_PREPARATION: 'documents-heading',
       REVIEW_APPLICATION: 'review-heading',
       PAYMENT_APPLICATION: 'payment-heading',
+      STATUS_APPLICATION: 'status-heading',
       RESET_REQUIRED: 'recovery-heading',
       STORAGE_UNAVAILABLE: 'recovery-heading',
     }
@@ -487,6 +512,7 @@ function App({ services: providedServices }: AppProps) {
         surface === 'DOCUMENT_PREPARATION' ||
         surface === 'REVIEW_APPLICATION' ||
         surface === 'PAYMENT_APPLICATION'
+        || surface === 'STATUS_APPLICATION'
       ) {
         document.documentElement.scrollTop = 0
         document.body.scrollTop = 0
@@ -816,6 +842,36 @@ function App({ services: providedServices }: AppProps) {
     setSurface('REVIEW_APPLICATION')
   }
 
+  function openStatusApplication() {
+    if (resumedCase === null) {
+      setError('The confirmed synthetic Case is not available for status review.')
+      return
+    }
+    const started = services.runtime.beginScrutiny({ caseId: resumedCase.caseId })
+    if (started.status === 'STORAGE_REQUIRES_RESET' || started.status === 'STORAGE_UNAVAILABLE') {
+      handleDocumentRecovery(started.status)
+      return
+    }
+    if (started.status !== 'SCRUTINY_STARTED' && started.status !== 'SCRUTINY_EXISTING') {
+      setError('Synthetic review could not begin safely. The saved Case was not changed.')
+      return
+    }
+    const inspected = services.runtime.inspectStatus({ caseId: resumedCase.caseId })
+    if (inspected.status !== 'STATUS_INSPECTED') {
+      setError('The authoritative synthetic status could not be read safely.')
+      return
+    }
+    const refreshed = services.runtime.resumeCase({ caseId: resumedCase.caseId })
+    if (refreshed.status !== 'CASE_RESUMED') {
+      setError('The synthetic Case could not be reloaded safely for status.')
+      return
+    }
+    setError(null)
+    setResumedCase(refreshed)
+    setStatusFragment(true)
+    setSurface('STATUS_APPLICATION')
+  }
+
   function handleDocumentRecovery(
     status: 'STORAGE_REQUIRES_RESET' | 'STORAGE_UNAVAILABLE',
   ) {
@@ -827,6 +883,7 @@ function App({ services: providedServices }: AppProps) {
     const result = services.resetDemoData()
     if (result.status === 'RESET') {
       setPaymentFragment(false)
+      setStatusFragment(false)
       setSelectedScenarioId(null)
       setEvaluation(null)
       setCreatedCase(null)
@@ -924,6 +981,14 @@ function App({ services: providedServices }: AppProps) {
             services={services}
             caseId={resumedCase.caseId}
             onBackToSubmittedApplication={backToSubmittedApplication}
+            onContinueToStatus={openStatusApplication}
+            onRecoveryRequired={handleDocumentRecovery}
+          />
+        ) : null}
+        {surface === 'STATUS_APPLICATION' && resumedCase ? (
+          <StatusApplication
+            services={services}
+            caseId={resumedCase.caseId}
             onRecoveryRequired={handleDocumentRecovery}
           />
         ) : null}

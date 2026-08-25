@@ -10,6 +10,7 @@ type PaymentApplicationProps = Readonly<{
   services: AppRuntimeServices
   caseId: SyntheticId
   onBackToSubmittedApplication(): void
+  onContinueToStatus(): void
   onRecoveryRequired(status: 'STORAGE_REQUIRES_RESET' | 'STORAGE_UNAVAILABLE'): void
 }>
 
@@ -179,6 +180,9 @@ export function PaymentApplication(props: PaymentApplicationProps) {
             <strong>Status</strong>
             <p>Your synthetic application can now move to the status and review stage.</p>
           </div>
+          <button className={styles.primaryButton} type="button" onClick={props.onContinueToStatus}>
+            Continue to status <span aria-hidden="true">→</span>
+          </button>
         </section>
       ) : null}
     </section>
