@@ -2,6 +2,7 @@ import type {
   ApplicationState,
   DocumentVersionState,
   DomainEventType,
+  PaymentState,
   PolicyQualifiedVersion,
   ReasonCode,
   SyntheticId,
@@ -26,6 +27,9 @@ export type RuntimeOperation =
   | 'InspectReview'
   | 'PrepareReview'
   | 'SubmitApplication'
+  | 'InspectPayment'
+  | 'StartMockPayment'
+  | 'CheckMockPaymentStatus'
 
 export type RuntimeCommandRejectionCode =
   | 'INVALID_COMMAND'
@@ -37,6 +41,9 @@ export type RuntimeCommandRejectionCode =
   | 'FIXTURE_NOT_COMPATIBLE'
   | 'DOCUMENT_INSPECTION_UNAVAILABLE'
   | 'REVIEW_PREREQUISITES_NOT_MET'
+  | 'PAYMENT_PREREQUISITES_NOT_MET'
+  | 'PAYMENT_ADAPTER_REJECTED'
+  | 'PAYMENT_EVIDENCE_MISMATCH'
   | 'PERSISTENCE_VALIDATION_FAILED'
 
 export type RuntimeStorageRequiresReset = Readonly<{
@@ -69,6 +76,7 @@ export type RuntimeCommandRejected = Readonly<{
     requirementId?: string
     missingQuestionIds?: readonly string[]
     missingRequirementIds?: readonly string[]
+    paymentState?: PaymentState
   }>
 }>
 
@@ -296,6 +304,71 @@ export type RuntimeReviewMutationResult =
   | RuntimePolicyRejected
   | RuntimeStorageFailure
 
+export type RuntimePaymentSummary = Readonly<{
+  status: 'PAYMENT_INSPECTED'
+  caseId: SyntheticId
+  scenarioId: SyntheticId
+  purposeFamily: NonNullable<PolicyEvaluationResult['suggestedPurposeFamily']>
+  policyQualifiedVersion: PolicyQualifiedVersion
+  applicationState: 'LOCKED'
+  revision: number
+  paymentState: PaymentState
+  mockPaymentAttemptId: SyntheticId | null
+  syntheticReference: SyntheticId | null
+  syntheticFee: NonNullable<PolicyEvaluationResult['syntheticFee']>
+}>
+
+export type RuntimePaymentInspectResult =
+  | RuntimePaymentSummary
+  | RuntimeCaseNotFound
+  | RuntimeCommandRejected
+  | RuntimePolicyRejected
+  | RuntimeStorageFailure
+
+export type RuntimePaymentReconciliationRequired = Readonly<{
+  status: 'PAYMENT_RECONCILIATION_REQUIRED'
+  operation: 'StartMockPayment'
+  caseId: SyntheticId
+  revision: number
+  paymentState: 'RECONCILIATION_REQUIRED'
+  mockPaymentAttemptId: SyntheticId
+  syntheticReference: SyntheticId
+  emittedEventTypes: readonly DomainEventType[]
+  emittedEventIds: readonly SyntheticId[]
+}>
+
+export type RuntimePaymentConfirmed = Readonly<{
+  status: 'PAYMENT_CONFIRMED'
+  operation: 'CheckMockPaymentStatus'
+  caseId: SyntheticId
+  revision: number
+  paymentState: 'CONFIRMED'
+  mockPaymentAttemptId: SyntheticId
+  syntheticReference: SyntheticId
+  emittedEventType: 'PaymentReconciledConfirmed'
+  emittedEventId: SyntheticId
+}>
+
+export type RuntimePaymentExisting = Readonly<{
+  status: 'PAYMENT_EXISTING'
+  operation: 'StartMockPayment' | 'CheckMockPaymentStatus'
+  caseId: SyntheticId
+  revision: number
+  paymentState: PaymentState
+  mockPaymentAttemptId: SyntheticId
+  syntheticReference: SyntheticId
+  idempotentReplay: true
+}>
+
+export type RuntimePaymentMutationResult =
+  | RuntimePaymentReconciliationRequired
+  | RuntimePaymentConfirmed
+  | RuntimePaymentExisting
+  | RuntimeCaseNotFound
+  | RuntimeCommandRejected
+  | RuntimePolicyRejected
+  | RuntimeStorageFailure
+
 export type RuntimeMetadataSource = Readonly<{
   nextTimestamp(previousTimestamp: SyntheticTimestamp): SyntheticTimestamp
   commandId(caseId: SyntheticId, operation: RuntimeOperation, revision: number): SyntheticId
@@ -303,6 +376,8 @@ export type RuntimeMetadataSource = Readonly<{
   snapshotId(caseId: SyntheticId, sequence: number): SyntheticId
   documentAssetId(caseId: SyntheticId, requirementId: string): SyntheticId
   documentVersionId(caseId: SyntheticId, fixtureId: SyntheticId, sequence: number): SyntheticId
+  paymentAttemptId(caseId: SyntheticId): SyntheticId
+  paymentReference(caseId: SyntheticId): SyntheticId
 }>
 
 export type DemoRuntimeDependencies = Readonly<{
@@ -323,4 +398,7 @@ export type DemoRuntime = Readonly<{
   inspectReview(candidate: unknown): RuntimeReviewInspectResult
   prepareReview(candidate: unknown): RuntimeReviewMutationResult
   submitApplication(candidate: unknown): RuntimeReviewMutationResult
+  inspectPayment(candidate: unknown): RuntimePaymentInspectResult
+  startMockPayment(candidate: unknown): RuntimePaymentMutationResult
+  checkMockPaymentStatus(candidate: unknown): RuntimePaymentMutationResult
 }>

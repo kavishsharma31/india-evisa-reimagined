@@ -78,5 +78,15 @@ export function createDeterministicRuntimeMetadata(): RuntimeMetadataSource {
         `SYN-DOCVER-${identifierBody(caseId)}-${fixtureId.replace(/^SYN-FIXTURE-/, '')}-V${sequenceSuffix(sequence)}`,
       )
     },
+    paymentAttemptId(caseId) {
+      return syntheticIdSchema.parse(
+        `SYN-PAYMENT-ATTEMPT-${identifierBody(caseId).replace(/^CASE-/, '')}`,
+      )
+    },
+    paymentReference(caseId) {
+      return syntheticIdSchema.parse(
+        `SYN-PAYMENT-REFERENCE-${identifierBody(caseId).replace(/^CASE-/, '')}`,
+      )
+    },
   })
 }

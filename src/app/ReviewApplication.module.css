@@ -392,6 +392,33 @@
   line-height: 1.5;
 }
 
+.nextStepButton {
+  min-height: 2.75rem;
+  margin-top: 0.9rem;
+  padding: 0.68rem 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  border: 1px solid var(--accent-strong);
+  border-radius: 0.45rem;
+  background: var(--accent-strong);
+  color: #fff;
+  font: inherit;
+  font-weight: 720;
+  cursor: pointer;
+}
+
+.nextStepButton:hover {
+  border-color: var(--accent-deep);
+  background: var(--accent-deep);
+}
+
+.nextStepButton:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
 @media (max-width: 43.75rem) {
   .reviewPanel,
   .summaryList,
@@ -467,7 +494,8 @@
   }
 
   .editButton,
-  .submitButton {
+  .submitButton,
+  .nextStepButton {
     width: 100%;
   }
 

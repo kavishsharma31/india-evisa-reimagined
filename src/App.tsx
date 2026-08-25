@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { AdaptiveApplication } from './app/AdaptiveApplication'
 import { DocumentPreparation } from './app/DocumentPreparation'
 import { ReviewApplication } from './app/ReviewApplication'
+import { PaymentApplication } from './app/PaymentApplication'
 import { DOCUMENT_NAMES, PURPOSE_NAMES } from './app/applicant-labels'
 import { createAppRuntime, type AppRuntimeServices } from './app/create-app-runtime'
 import type { SyntheticId } from './domain'
@@ -39,6 +40,7 @@ type Surface =
   | 'ADAPTIVE_APPLICATION'
   | 'DOCUMENT_PREPARATION'
   | 'REVIEW_APPLICATION'
+  | 'PAYMENT_APPLICATION'
   | 'RESET_REQUIRED'
   | 'STORAGE_UNAVAILABLE'
 
@@ -57,6 +59,22 @@ type InitialView = Readonly<{
   resumedCase: ResumedCase | null
   evaluation: PolicyEvaluationResult | null
 }>
+
+const PAYMENT_FRAGMENT = '#payment'
+
+function paymentSurfaceRequested(): boolean {
+  return typeof window !== 'undefined' && window.location.hash === PAYMENT_FRAGMENT
+}
+
+function setPaymentFragment(active: boolean): void {
+  if (typeof window === 'undefined') {
+    return
+  }
+  const nextLocation = active
+    ? `${window.location.pathname}${window.location.search}${PAYMENT_FRAGMENT}`
+    : `${window.location.pathname}${window.location.search}`
+  window.history.replaceState(null, '', nextLocation)
+}
 
 function scenarioDetails(scenarioId: ScenarioId) {
   const scenario = SCENARIOS.find(({ id }) => id === scenarioId)
@@ -91,6 +109,24 @@ function inspectInitialView(services: AppRuntimeServices): InitialView {
   if (inspected.status === 'VALID_STATE' && inspected.state.activeCaseId !== null) {
     const resumed = services.runtime.resumeCase()
     if (resumed.status === 'CASE_RESUMED') {
+      const persistedCase = inspected.state.cases.find(
+        ({ caseId }) => caseId === resumed.caseId,
+      )
+      if (
+        resumed.applicationState === 'LOCKED' &&
+        (paymentSurfaceRequested() ||
+          (persistedCase !== undefined && persistedCase.payment.state !== 'NOT_STARTED')) &&
+        isScenarioId(resumed.scenarioId)
+      ) {
+        const payment = services.runtime.inspectPayment({ caseId: resumed.caseId })
+        if (payment.status === 'PAYMENT_INSPECTED') {
+          return {
+            surface: 'PAYMENT_APPLICATION',
+            resumedCase: resumed,
+            evaluation: null,
+          }
+        }
+      }
       if (
         (resumed.applicationState === 'LOCKED' || resumed.currentStep === 'REVIEW') &&
         isScenarioId(resumed.scenarioId)
@@ -439,6 +475,7 @@ function App({ services: providedServices }: AppProps) {
       ADAPTIVE_APPLICATION: 'application-heading',
       DOCUMENT_PREPARATION: 'documents-heading',
       REVIEW_APPLICATION: 'review-heading',
+      PAYMENT_APPLICATION: 'payment-heading',
       RESET_REQUIRED: 'recovery-heading',
       STORAGE_UNAVAILABLE: 'recovery-heading',
     }
@@ -448,7 +485,8 @@ function App({ services: providedServices }: AppProps) {
       if (
         surface === 'ADAPTIVE_APPLICATION' ||
         surface === 'DOCUMENT_PREPARATION' ||
-        surface === 'REVIEW_APPLICATION'
+        surface === 'REVIEW_APPLICATION' ||
+        surface === 'PAYMENT_APPLICATION'
       ) {
         document.documentElement.scrollTop = 0
         document.body.scrollTop = 0
@@ -747,6 +785,37 @@ function App({ services: providedServices }: AppProps) {
     }
   }
 
+  function openPaymentApplication() {
+    if (resumedCase === null) {
+      setError('The submitted synthetic Case is not available for mock payment.')
+      return
+    }
+    const inspected = services.runtime.inspectPayment({ caseId: resumedCase.caseId })
+    if (inspected.status === 'STORAGE_REQUIRES_RESET' || inspected.status === 'STORAGE_UNAVAILABLE') {
+      handleDocumentRecovery(inspected.status)
+      return
+    }
+    if (inspected.status !== 'PAYMENT_INSPECTED') {
+      setError('The submitted synthetic Case is not ready for the local payment simulation.')
+      return
+    }
+    const refreshed = services.runtime.resumeCase({ caseId: resumedCase.caseId })
+    if (refreshed.status !== 'CASE_RESUMED') {
+      setError('The submitted synthetic Case could not be reloaded safely for payment.')
+      return
+    }
+    setError(null)
+    setResumedCase(refreshed)
+    setPaymentFragment(true)
+    setSurface('PAYMENT_APPLICATION')
+  }
+
+  function backToSubmittedApplication() {
+    setError(null)
+    setPaymentFragment(false)
+    setSurface('REVIEW_APPLICATION')
+  }
+
   function handleDocumentRecovery(
     status: 'STORAGE_REQUIRES_RESET' | 'STORAGE_UNAVAILABLE',
   ) {
@@ -757,6 +826,7 @@ function App({ services: providedServices }: AppProps) {
     setError(null)
     const result = services.resetDemoData()
     if (result.status === 'RESET') {
+      setPaymentFragment(false)
       setSelectedScenarioId(null)
       setEvaluation(null)
       setCreatedCase(null)
@@ -845,6 +915,15 @@ function App({ services: providedServices }: AppProps) {
             caseId={resumedCase.caseId}
             onEditApplication={backToApplicationDetails}
             onEditDocuments={() => openDocumentPreparation(true)}
+            onContinueToPayment={openPaymentApplication}
+            onRecoveryRequired={handleDocumentRecovery}
+          />
+        ) : null}
+        {surface === 'PAYMENT_APPLICATION' && resumedCase ? (
+          <PaymentApplication
+            services={services}
+            caseId={resumedCase.caseId}
+            onBackToSubmittedApplication={backToSubmittedApplication}
             onRecoveryRequired={handleDocumentRecovery}
           />
         ) : null}

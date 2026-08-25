@@ -1,0 +1,324 @@
+.paymentPage {
+  width: min(100%, 50rem);
+  min-width: 0;
+  margin: 0 auto;
+}
+
+.paymentPage h2 {
+  margin: 0;
+  color: var(--ink-strong);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: clamp(2rem, 6vw, 3.2rem);
+  font-weight: 600;
+  line-height: 1.08;
+  letter-spacing: -0.035em;
+}
+
+.paymentPage h2:focus,
+.paymentPage h3:focus {
+  outline: none;
+}
+
+.eyebrow,
+.sectionLabel {
+  margin: 0;
+  color: var(--accent-strong);
+  font-size: 0.72rem;
+  font-weight: 780;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.eyebrow {
+  margin-bottom: 0.75rem;
+}
+
+.pageHeader > p:not(.eyebrow, .caseReference) {
+  max-width: 42rem;
+  margin: 1rem 0 0;
+  color: var(--ink-muted);
+  line-height: 1.65;
+}
+
+.caseReference,
+.paymentReference {
+  color: var(--ink-light);
+  font-size: 0.78rem;
+  overflow-wrap: anywhere;
+}
+
+.caseReference {
+  margin: 0.8rem 0 0;
+}
+
+.summaryPanel,
+.actionPanel,
+.uncertainPanel,
+.confirmedPanel {
+  width: 100%;
+  min-width: 0;
+  margin-top: 1rem;
+  padding: clamp(1.1rem, 3vw, 1.5rem);
+  box-sizing: border-box;
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.8rem;
+  background: var(--surface-raised);
+}
+
+.summaryPanel {
+  margin-top: 2rem;
+}
+
+.summaryPanel h3,
+.actionPanel h3,
+.uncertainPanel h3,
+.confirmedPanel h3 {
+  margin: 0.3rem 0 0;
+  color: var(--ink-strong);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 1.35rem;
+  line-height: 1.25;
+}
+
+.summaryFacts,
+.confirmedFacts {
+  margin: 1rem 0 0;
+  padding: 0;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.summaryFacts div,
+.confirmedFacts div {
+  padding: 0.75rem 0;
+  display: grid;
+  grid-template-columns: minmax(8rem, 0.8fr) minmax(0, 1.2fr);
+  gap: 1rem;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.summaryFacts dt,
+.summaryFacts dd,
+.confirmedFacts dt,
+.confirmedFacts dd {
+  margin: 0;
+}
+
+.summaryFacts dt,
+.confirmedFacts dt {
+  color: var(--ink-light);
+  font-size: 0.82rem;
+}
+
+.summaryFacts dd,
+.confirmedFacts dd {
+  color: var(--ink-strong);
+  font-size: 0.88rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.nonPayable {
+  margin-top: 1rem;
+  padding: 0.42rem 0.62rem;
+  display: inline-block;
+  border: 1px solid var(--border-strong);
+  border-radius: 0.35rem;
+  color: var(--accent-strong);
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+}
+
+.actionPanel > p:not(.sectionLabel),
+.uncertainPanel > p:not(.sectionLabel, .duplicateGuidance, .paymentReference, .inlineError),
+.confirmedPanel > p:not(.sectionLabel) {
+  margin: 0.55rem 0 0;
+  color: var(--ink-muted);
+  line-height: 1.55;
+}
+
+.uncertainPanel {
+  border-color: #cba661;
+  border-top-width: 4px;
+  background: #fffdf7;
+}
+
+.statusMarker,
+.completionMarker {
+  width: 2.5rem;
+  height: 2.5rem;
+  margin-bottom: 1rem;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-weight: 850;
+}
+
+.statusMarker {
+  background: #f4e6c4;
+  color: #755515;
+}
+
+.duplicateGuidance {
+  margin: 1rem 0 0;
+  padding: 0.85rem 1rem;
+  border-left: 3px solid #9b711b;
+  background: #f8eed8;
+  color: #5f4717;
+  font-weight: 720;
+  line-height: 1.5;
+}
+
+.paymentReference {
+  margin: 0.85rem 0 0;
+}
+
+.confirmedPanel {
+  box-shadow: 0 0.8rem 2.4rem rgb(32 50 55 / 7%);
+}
+
+.completionMarker {
+  background: var(--success-soft);
+  color: var(--success-strong);
+}
+
+.nextStep {
+  margin-top: 1.4rem;
+  padding: 1rem;
+  border: 1px dashed var(--border-strong);
+  border-radius: 0.6rem;
+  background: var(--surface-page);
+}
+
+.nextStep span {
+  display: block;
+  color: var(--accent-strong);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.nextStep strong {
+  display: block;
+  margin-top: 0.2rem;
+  color: var(--ink-strong);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 1.25rem;
+}
+
+.nextStep p {
+  margin: 0.35rem 0 0;
+  color: var(--ink-muted);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.primaryButton,
+.secondaryButton {
+  min-height: 3rem;
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.8rem;
+  box-sizing: border-box;
+  border-radius: 0.45rem;
+  font: inherit;
+  font-weight: 720;
+  cursor: pointer;
+}
+
+.primaryButton {
+  border: 1px solid var(--accent-strong);
+  background: var(--accent-strong);
+  color: #fff;
+}
+
+.secondaryButton {
+  margin-left: 0.65rem;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-raised);
+  color: var(--accent-strong);
+}
+
+.primaryButton:hover {
+  border-color: var(--accent-deep);
+  background: var(--accent-deep);
+}
+
+.secondaryButton:hover {
+  border-color: var(--accent-strong);
+  text-decoration: underline;
+  text-underline-offset: 0.18rem;
+}
+
+.primaryButton:focus-visible,
+.secondaryButton:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+.inlineError {
+  margin: 0.9rem 0 0;
+  padding: 0.85rem 1rem;
+  border-left: 3px solid var(--error-strong);
+  background: var(--error-soft);
+  color: var(--error-strong);
+  font-size: 0.88rem;
+  font-weight: 630;
+  line-height: 1.5;
+}
+
+.statusAnnouncement {
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  position: absolute;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 43.75rem) {
+  .paymentPage,
+  .summaryPanel,
+  .actionPanel,
+  .uncertainPanel,
+  .confirmedPanel {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+  }
+
+  .primaryButton,
+  .secondaryButton {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .secondaryButton {
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 36rem) {
+  .paymentPage h2 {
+    font-size: clamp(1.8rem, 10vw, 2.35rem);
+  }
+
+  .summaryFacts div,
+  .confirmedFacts div {
+    grid-template-columns: 1fr;
+    gap: 0.25rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+  }
+}

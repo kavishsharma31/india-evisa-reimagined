@@ -16,6 +16,7 @@ type ReviewApplicationProps = Readonly<{
   caseId: SyntheticId
   onEditApplication(): void
   onEditDocuments(): void
+  onContinueToPayment(): void
   onRecoveryRequired(status: 'STORAGE_REQUIRES_RESET' | 'STORAGE_UNAVAILABLE'): void
 }>
 
@@ -115,6 +116,9 @@ export function ReviewApplication(props: ReviewApplicationProps) {
           <span>Next</span>
           <strong>Payment</strong>
           <p>The next step will use a local simulated payment. No money or payment details are involved.</p>
+          <button className={styles.nextStepButton} type="button" onClick={props.onContinueToPayment}>
+            Continue to payment <span aria-hidden="true">→</span>
+          </button>
         </div>
       </section>
     )

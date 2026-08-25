@@ -39,6 +39,13 @@ import {
   applyReviewSubmission,
   buildReviewSummary,
 } from './review-runtime'
+import {
+  applyAmbiguousPaymentStart,
+  applyPaymentReconciliation,
+  buildPaymentSummary,
+  paymentCorrelationId,
+  paymentIdempotencyKey,
+} from './payment-runtime'
 import type {
   DemoRuntime,
   DemoRuntimeDependencies,
@@ -53,6 +60,8 @@ import type {
   RuntimeResumeResult,
   RuntimeReviewInspectResult,
   RuntimeReviewMutationResult,
+  RuntimePaymentInspectResult,
+  RuntimePaymentMutationResult,
   RuntimeStorageFailure,
 } from './contracts'
 
@@ -93,6 +102,7 @@ const reviewInputSchema = z.object({ caseId: syntheticIdSchema }).strict()
 const reviewMutationInputSchema = z
   .object({ caseId: syntheticIdSchema, idempotencyKey: syntheticIdSchema })
   .strict()
+const paymentInputSchema = z.object({ caseId: syntheticIdSchema }).strict()
 
 type CanonicalScenarioId = PersistedCase['scenarioId']
 
@@ -277,7 +287,9 @@ function saveEnvelope(
     | 'SaveSnapshot'
     | 'PrepareDocument'
     | 'PrepareReview'
-    | 'SubmitApplication',
+    | 'SubmitApplication'
+    | 'StartMockPayment'
+    | 'CheckMockPaymentStatus',
   caseId: SyntheticId,
 ): PersistenceEnvelope | RuntimeCommandRejected | RuntimeStorageFailure {
   const validation = persistenceEnvelopeSchema.safeParse(envelope)
@@ -366,6 +378,70 @@ function evaluatePinnedDocumentPolicy(
     return evaluationPolicyRejection(evaluation)
   }
   return evaluation
+}
+
+function evaluatePinnedPaymentPolicy(
+  persistedCase: PersistedCase,
+): PolicyEvaluationResult | RuntimePolicyRejected {
+  const evaluation = evaluateCanonicalScenario(persistedCase.scenarioId, 'RESUME')
+  if (
+    evaluation.scenarioSupport !== 'SUPPORTED_BY_DEMO' ||
+    evaluation.policy.qualifiedVersion !== persistedCase.policyPin.qualifiedVersion ||
+    evaluation.syntheticFee === undefined
+  ) {
+    return evaluationPolicyRejection(evaluation)
+  }
+  return evaluation
+}
+
+function paymentExisting(
+  operation: 'StartMockPayment' | 'CheckMockPaymentStatus',
+  persistedCase: PersistedCase,
+): RuntimePaymentMutationResult {
+  const attemptId = persistedCase.payment.mockPaymentAttemptId
+  const syntheticReference = persistedCase.payment.syntheticReference
+  if (attemptId === null || syntheticReference === null) {
+    return invalidCommand(
+      operation,
+      1,
+      'PERSISTENCE_VALIDATION_FAILED',
+      persistedCase.caseId,
+    )
+  }
+  return deepFreeze({
+    status: 'PAYMENT_EXISTING',
+    operation,
+    caseId: persistedCase.caseId,
+    revision: persistedCase.revision,
+    paymentState: persistedCase.payment.state,
+    mockPaymentAttemptId: attemptId,
+    syntheticReference,
+    idempotentReplay: true,
+  })
+}
+
+function paymentEvidenceMatches(input: {
+  metadata: Readonly<{
+    caseId: SyntheticId
+    applicationId: SyntheticId
+    amount: 41 | 73
+    unit: 'SYNTHETIC_DEMO_CREDITS'
+    idempotencyKey: SyntheticId
+    syntheticPaymentReference: SyntheticId
+  }>
+  persistedCase: PersistedCase
+  amount: 41 | 73
+  idempotencyKey: SyntheticId
+  syntheticReference: SyntheticId
+}): boolean {
+  return (
+    input.metadata.caseId === input.persistedCase.caseId &&
+    input.metadata.applicationId === input.persistedCase.application.applicationDraftId &&
+    input.metadata.amount === input.amount &&
+    input.metadata.unit === 'SYNTHETIC_DEMO_CREDITS' &&
+    input.metadata.idempotencyKey === input.idempotencyKey &&
+    input.metadata.syntheticPaymentReference === input.syntheticReference
+  )
 }
 
 function reviewPrerequisiteRejection(
@@ -1270,6 +1346,306 @@ export function createDemoRuntime(dependencies: DemoRuntimeDependencies): DemoRu
     })
   }
 
+  function inspectPayment(candidate: unknown): RuntimePaymentInspectResult {
+    const parsed = paymentInputSchema.safeParse(candidate)
+    if (!parsed.success) {
+      return invalidCommand('InspectPayment', parsed.error.issues.length)
+    }
+    const loaded = loadForMutation(dependencies)
+    if (loaded.status !== 'READY') {
+      return loaded
+    }
+    const persistedCase = loaded.state?.cases.find(
+      ({ caseId }) => caseId === parsed.data.caseId,
+    )
+    if (persistedCase === undefined) {
+      return Object.freeze({ status: 'CASE_NOT_FOUND', caseId: parsed.data.caseId })
+    }
+    const evaluation = evaluatePinnedPaymentPolicy(persistedCase)
+    if ('status' in evaluation) {
+      return evaluation
+    }
+    const projection = buildPaymentSummary(persistedCase, evaluation)
+    if (!projection.accepted) {
+      return deepFreeze({
+        status: 'COMMAND_REJECTED',
+        operation: 'InspectPayment',
+        reasonCode: 'PAYMENT_PREREQUISITES_NOT_MET',
+        caseId: persistedCase.caseId,
+        diagnostic: {
+          currentState: persistedCase.application.state,
+          requiredState: 'LOCKED',
+          paymentState: persistedCase.payment.state,
+        },
+      })
+    }
+    return projection.summary
+  }
+
+  function startMockPayment(candidate: unknown): RuntimePaymentMutationResult {
+    const parsed = paymentInputSchema.safeParse(candidate)
+    if (!parsed.success) {
+      return invalidCommand('StartMockPayment', parsed.error.issues.length)
+    }
+    const loaded = loadForMutation(dependencies)
+    if (loaded.status !== 'READY') {
+      return loaded
+    }
+    const persistedCase = loaded.state?.cases.find(
+      ({ caseId }) => caseId === parsed.data.caseId,
+    )
+    if (persistedCase === undefined) {
+      return Object.freeze({ status: 'CASE_NOT_FOUND', caseId: parsed.data.caseId })
+    }
+    const evaluation = evaluatePinnedPaymentPolicy(persistedCase)
+    if ('status' in evaluation) {
+      return evaluation
+    }
+    const projection = buildPaymentSummary(persistedCase, evaluation)
+    if (!projection.accepted) {
+      return invalidCommand(
+        'StartMockPayment',
+        1,
+        'PAYMENT_PREREQUISITES_NOT_MET',
+        persistedCase.caseId,
+      )
+    }
+    if (persistedCase.payment.state !== 'NOT_STARTED') {
+      return paymentExisting('StartMockPayment', persistedCase)
+    }
+
+    const amount = evaluation.syntheticFee?.amount
+    if (amount !== 41 && amount !== 73) {
+      return invalidCommand(
+        'StartMockPayment',
+        1,
+        'PAYMENT_PREREQUISITES_NOT_MET',
+        persistedCase.caseId,
+      )
+    }
+    const attemptId = dependencies.metadata.paymentAttemptId(persistedCase.caseId)
+    const syntheticReference = dependencies.metadata.paymentReference(persistedCase.caseId)
+    const idempotencyKey = paymentIdempotencyKey(persistedCase.caseId, 'START')
+    const evidence = dependencies.adapters.payment.execute({
+      requestReference: syntheticReference,
+      correlationId: paymentCorrelationId(persistedCase.caseId),
+      caseId: persistedCase.caseId,
+      applicationId: persistedCase.application.applicationDraftId,
+      amount,
+      unit: 'SYNTHETIC_DEMO_CREDITS',
+      idempotencyKey,
+      scenario: 'PAYMENT_AMBIGUOUS_RECONCILIATION',
+    })
+    if (
+      evidence.status !== 'MOCK_OUTCOME' ||
+      evidence.outcome !== 'RECONCILIATION_REQUIRED'
+    ) {
+      return invalidCommand(
+        'StartMockPayment',
+        1,
+        'PAYMENT_ADAPTER_REJECTED',
+        persistedCase.caseId,
+      )
+    }
+    if (
+      !paymentEvidenceMatches({
+        metadata: evidence.metadata,
+        persistedCase,
+        amount,
+        idempotencyKey,
+        syntheticReference,
+      })
+    ) {
+      return invalidCommand(
+        'StartMockPayment',
+        1,
+        'PAYMENT_EVIDENCE_MISMATCH',
+        persistedCase.caseId,
+      )
+    }
+
+    const mutation = applyAmbiguousPaymentStart({
+      persistedCase,
+      amount,
+      attemptId,
+      syntheticReference,
+      idempotencyKey,
+      adapterReasonCode: evidence.reasonCode,
+      metadata: dependencies.metadata,
+    })
+    if (!mutation.accepted) {
+      return invalidCommand(
+        'StartMockPayment',
+        1,
+        mutation.reasonCode,
+        persistedCase.caseId,
+      )
+    }
+    const envelope = loaded.state
+    if (envelope === null) {
+      throw new Error('A located Case must belong to a loaded persistence envelope.')
+    }
+    const saved = saveEnvelope(
+      dependencies,
+      replaceCase(envelope, mutation.persistedCase),
+      'StartMockPayment',
+      persistedCase.caseId,
+    )
+    if ('status' in saved) {
+      return saved
+    }
+    return deepFreeze({
+      status: 'PAYMENT_RECONCILIATION_REQUIRED',
+      operation: 'StartMockPayment',
+      caseId: persistedCase.caseId,
+      revision: mutation.persistedCase.revision,
+      paymentState: 'RECONCILIATION_REQUIRED',
+      mockPaymentAttemptId: attemptId,
+      syntheticReference,
+      emittedEventTypes: mutation.events.map(({ eventType }) => eventType),
+      emittedEventIds: mutation.events.map(({ eventId }) => eventId),
+    })
+  }
+
+  function checkMockPaymentStatus(candidate: unknown): RuntimePaymentMutationResult {
+    const parsed = paymentInputSchema.safeParse(candidate)
+    if (!parsed.success) {
+      return invalidCommand('CheckMockPaymentStatus', parsed.error.issues.length)
+    }
+    const loaded = loadForMutation(dependencies)
+    if (loaded.status !== 'READY') {
+      return loaded
+    }
+    const persistedCase = loaded.state?.cases.find(
+      ({ caseId }) => caseId === parsed.data.caseId,
+    )
+    if (persistedCase === undefined) {
+      return Object.freeze({ status: 'CASE_NOT_FOUND', caseId: parsed.data.caseId })
+    }
+    const evaluation = evaluatePinnedPaymentPolicy(persistedCase)
+    if ('status' in evaluation) {
+      return evaluation
+    }
+    const projection = buildPaymentSummary(persistedCase, evaluation)
+    if (!projection.accepted) {
+      return invalidCommand(
+        'CheckMockPaymentStatus',
+        1,
+        'PAYMENT_PREREQUISITES_NOT_MET',
+        persistedCase.caseId,
+      )
+    }
+    if (persistedCase.payment.state === 'CONFIRMED') {
+      return paymentExisting('CheckMockPaymentStatus', persistedCase)
+    }
+    if (persistedCase.payment.state !== 'RECONCILIATION_REQUIRED') {
+      return invalidCommand(
+        'CheckMockPaymentStatus',
+        1,
+        'GUARD_FAILED',
+        persistedCase.caseId,
+      )
+    }
+    const attemptId = persistedCase.payment.mockPaymentAttemptId
+    const syntheticReference = persistedCase.payment.syntheticReference
+    const amount = evaluation.syntheticFee?.amount
+    if (
+      attemptId === null ||
+      syntheticReference === null ||
+      (amount !== 41 && amount !== 73)
+    ) {
+      return invalidCommand(
+        'CheckMockPaymentStatus',
+        1,
+        'PERSISTENCE_VALIDATION_FAILED',
+        persistedCase.caseId,
+      )
+    }
+    const idempotencyKey = paymentIdempotencyKey(persistedCase.caseId, 'RECONCILE')
+    const evidence = dependencies.adapters.payment.execute({
+      requestReference: syntheticReference,
+      correlationId: paymentCorrelationId(persistedCase.caseId),
+      caseId: persistedCase.caseId,
+      applicationId: persistedCase.application.applicationDraftId,
+      amount,
+      unit: 'SYNTHETIC_DEMO_CREDITS',
+      idempotencyKey,
+      scenario: 'PAYMENT_RECONCILIATION_CONFIRMED',
+    })
+    if (
+      evidence.status !== 'MOCK_OUTCOME' ||
+      evidence.outcome !== 'RECONCILIATION_CONFIRMED'
+    ) {
+      return invalidCommand(
+        'CheckMockPaymentStatus',
+        1,
+        'PAYMENT_ADAPTER_REJECTED',
+        persistedCase.caseId,
+      )
+    }
+    if (
+      !paymentEvidenceMatches({
+        metadata: evidence.metadata,
+        persistedCase,
+        amount,
+        idempotencyKey,
+        syntheticReference,
+      })
+    ) {
+      return invalidCommand(
+        'CheckMockPaymentStatus',
+        1,
+        'PAYMENT_EVIDENCE_MISMATCH',
+        persistedCase.caseId,
+      )
+    }
+
+    const mutation = applyPaymentReconciliation({
+      persistedCase,
+      attemptId,
+      syntheticReference,
+      idempotencyKey,
+      adapterReasonCode: evidence.reasonCode,
+      metadata: dependencies.metadata,
+    })
+    if (!mutation.accepted) {
+      return invalidCommand(
+        'CheckMockPaymentStatus',
+        1,
+        mutation.reasonCode,
+        persistedCase.caseId,
+      )
+    }
+    const envelope = loaded.state
+    if (envelope === null) {
+      throw new Error('A located Case must belong to a loaded persistence envelope.')
+    }
+    const saved = saveEnvelope(
+      dependencies,
+      replaceCase(envelope, mutation.persistedCase),
+      'CheckMockPaymentStatus',
+      persistedCase.caseId,
+    )
+    if ('status' in saved) {
+      return saved
+    }
+    const event = mutation.events[0]
+    if (event === undefined || event.eventType !== 'PaymentReconciledConfirmed') {
+      throw new Error('Payment reconciliation must produce its approved confirmation event.')
+    }
+    return deepFreeze({
+      status: 'PAYMENT_CONFIRMED',
+      operation: 'CheckMockPaymentStatus',
+      caseId: persistedCase.caseId,
+      revision: mutation.persistedCase.revision,
+      paymentState: 'CONFIRMED',
+      mockPaymentAttemptId: attemptId,
+      syntheticReference,
+      emittedEventType: event.eventType,
+      emittedEventId: event.eventId,
+    })
+  }
+
   return Object.freeze({
     inspectState,
     evaluateScenario,
@@ -1282,5 +1658,8 @@ export function createDemoRuntime(dependencies: DemoRuntimeDependencies): DemoRu
     inspectReview,
     prepareReview,
     submitApplication,
+    inspectPayment,
+    startMockPayment,
+    checkMockPaymentStatus,
   })
 }
