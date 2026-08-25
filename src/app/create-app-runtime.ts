@@ -1,8 +1,10 @@
 import { createLocalMockAdapters, type LocalMockAdapters } from '../mocks'
+import { getSeed, type RecoverySeedId } from '../fixtures'
 import {
   createLocalStoragePersistence,
   type PersistenceService,
   type ResetPersistenceResult,
+  type SavePersistenceResult,
 } from '../persistence'
 import {
   createDemoRuntime,
@@ -13,6 +15,7 @@ import {
 
 export type AppRuntimeServices = Readonly<{
   runtime: DemoRuntime
+  loadDemoSeed(seedId: RecoverySeedId): SavePersistenceResult
   resetDemoData(): ResetPersistenceResult
 }>
 
@@ -34,6 +37,9 @@ export function createAppRuntime(
 
   return Object.freeze({
     runtime,
+    loadDemoSeed(seedId) {
+      return store.save(getSeed(seedId).envelope)
+    },
     resetDemoData() {
       return store.reset()
     },

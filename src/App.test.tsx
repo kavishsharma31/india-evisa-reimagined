@@ -7,8 +7,10 @@ import {
   createAppRuntime,
   type AppRuntimeServices,
 } from './app/create-app-runtime'
+import { getSeed, RECOVERY_SEED_IDS } from './fixtures'
 import {
   P0_STORAGE_KEY,
+  createCanonicalPersistenceEnvelope,
   createPersistenceStore,
   type PersistenceService,
   type StoragePort,
@@ -17,7 +19,10 @@ import {
 const PROTOTYPE_NOTICE =
   'UNOFFICIAL HACKATHON PROTOTYPE — SYNTHETIC DATA ONLY — CANNOT SUBMIT A VISA APPLICATION'
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  window.history.replaceState(null, '', '/')
+})
 
 class MemoryStorage implements StoragePort {
   readonly #values = new Map<string, string>()
@@ -270,5 +275,77 @@ describe('applicant slice A02 and resume', () => {
     ).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Reset demo data' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Continue with this demo' })).not.toBeInTheDocument()
+  })
+})
+
+describe('D01 deterministic demo controls', () => {
+  it('keeps controls out of the applicant URL and exposes exactly seven canonical seeds in demo mode', () => {
+    const { services } = createTestServices()
+    const applicantView = render(<App services={services} />)
+
+    expect(screen.queryByRole('heading', { name: 'Demo controls' })).not.toBeInTheDocument()
+    applicantView.unmount()
+
+    window.history.replaceState(null, '', '/?demo=1')
+    render(<App services={services} />)
+
+    expect(screen.getByRole('heading', { name: 'Demo controls' })).toBeInTheDocument()
+    expect(screen.getByText('Demo-only controls', { exact: true })).toBeInTheDocument()
+    const seedOptions = screen
+      .getAllByRole('option')
+      .map((option) => option.getAttribute('value'))
+      .filter((value): value is string => value?.startsWith('SEED-') === true)
+    expect(seedOptions).toEqual(RECOVERY_SEED_IDS)
+  })
+
+  it('loads, switches, and reloads authoritative seeds without duplicates or unrelated-storage writes', async () => {
+    const user = userEvent.setup()
+    const storage = new MemoryStorage()
+    storage.setItem('unrelated:preference', 'keep-me')
+    const store = createPersistenceStore(storage)
+    window.history.replaceState(null, '', '/?demo=1')
+    const firstView = render(<App services={createAppRuntime({ store })} />)
+    const seedSelect = screen.getByRole('combobox', { name: 'Canonical seed' })
+
+    await user.selectOptions(seedSelect, 'SEED-MEDICAL-REUPLOAD-REQUESTED')
+
+    expect(screen.getByRole('heading', { name: 'Action required' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Replace hospital letter' })).toBeInTheDocument()
+    expect(requireValidState(store)).toEqual(getSeed('SEED-MEDICAL-REUPLOAD-REQUESTED').envelope)
+    const canonicalReuploadBytes = storage.getItem(P0_STORAGE_KEY)
+
+    await user.selectOptions(seedSelect, 'SEED-MEDICAL-AMBIGUOUS-PAYMENT')
+    expect(screen.getByRole('heading', { name: 'Complete the demo payment' })).toBeInTheDocument()
+    expect(requireValidState(store).cases).toHaveLength(1)
+    await user.selectOptions(seedSelect, 'SEED-MEDICAL-REUPLOAD-REQUESTED')
+    expect(storage.getItem(P0_STORAGE_KEY)).toBe(canonicalReuploadBytes)
+    expect(storage.getItem('unrelated:preference')).toBe('keep-me')
+
+    firstView.unmount()
+    render(<App services={createAppRuntime({ store: createPersistenceStore(storage) })} />)
+
+    expect(screen.getByRole('heading', { name: 'Action required' })).toBeInTheDocument()
+    expect(storage.getItem(P0_STORAGE_KEY)).toBe(canonicalReuploadBytes)
+  })
+
+  it('uses canonical reset behavior and leaves unrelated storage untouched', async () => {
+    const user = userEvent.setup()
+    const storage = new MemoryStorage()
+    storage.setItem('unrelated:preference', 'keep-me')
+    const store = createPersistenceStore(storage)
+    window.history.replaceState(null, '', '/?demo=1')
+    render(<App services={createAppRuntime({ store })} />)
+
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: 'Canonical seed' }),
+      'SEED-MEDICAL-STATUS-RECOVERY',
+    )
+    await user.click(screen.getByRole('button', { name: 'Reset demo' }))
+
+    expect(
+      screen.getByRole('heading', { name: 'What are you travelling to India for?' }),
+    ).toBeInTheDocument()
+    expect(requireValidState(store)).toEqual(createCanonicalPersistenceEnvelope())
+    expect(storage.getItem('unrelated:preference')).toBe('keep-me')
   })
 })

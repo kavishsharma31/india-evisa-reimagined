@@ -6,9 +6,11 @@ import { ReviewApplication } from './app/ReviewApplication'
 import { PaymentApplication } from './app/PaymentApplication'
 import { StatusApplication } from './app/StatusApplication'
 import { DocumentCorrection } from './app/DocumentCorrection'
+import { DemoControls } from './app/DemoControls'
 import { DOCUMENT_NAMES, PURPOSE_NAMES } from './app/applicant-labels'
 import { createAppRuntime, type AppRuntimeServices } from './app/create-app-runtime'
 import type { SyntheticId } from './domain'
+import type { RecoverySeedId } from './fixtures'
 import type { PolicyEvaluationResult } from './policy'
 import type { RuntimeResumeResult } from './runtime'
 import styles from './App.module.css'
@@ -67,6 +69,13 @@ type InitialView = Readonly<{
 const PAYMENT_FRAGMENT = '#payment'
 const STATUS_FRAGMENT = '#status'
 const CORRECTION_FRAGMENT = '#correction'
+
+function demoControlsRequested(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).get('demo') === '1'
+  )
+}
 
 function paymentSurfaceRequested(): boolean {
   return typeof window !== 'undefined' && window.location.hash === PAYMENT_FRAGMENT
@@ -513,6 +522,7 @@ function RecoveryPanel(props: {
 function App({ services: providedServices }: AppProps) {
   const [services] = useState(() => providedServices ?? createAppRuntime())
   const [initialView] = useState(() => inspectInitialView(services))
+  const [demoControlsEnabled] = useState(demoControlsRequested)
   const [surface, setSurface] = useState<Surface>(initialView.surface)
   const [selectedScenarioId, setSelectedScenarioId] = useState<ScenarioId | null>(null)
   const [evaluation, setEvaluation] = useState<PolicyEvaluationResult | null>(initialView.evaluation)
@@ -520,6 +530,8 @@ function App({ services: providedServices }: AppProps) {
   const [resumedCase, setResumedCase] = useState<ResumedCase | null>(initialView.resumedCase)
   const [error, setError] = useState<string | null>(null)
   const [documentEditMode, setDocumentEditMode] = useState(false)
+  const [applicantSurfaceKey, setApplicantSurfaceKey] = useState(0)
+  const [demoControlFeedback, setDemoControlFeedback] = useState<string | null>(null)
   useEffect(() => {
     const headingIdBySurface: Partial<Record<Surface, string>> = {
       SCENARIO_SELECTION: 'scenario-heading',
@@ -553,7 +565,30 @@ function App({ services: providedServices }: AppProps) {
       }
       heading?.focus()
     }
-  }, [surface])
+  }, [surface, applicantSurfaceKey])
+
+  function refreshApplicantSurface() {
+    const refreshedView = inspectInitialView(services)
+    setSelectedScenarioId(null)
+    setEvaluation(refreshedView.evaluation)
+    setCreatedCase(null)
+    setResumedCase(refreshedView.resumedCase)
+    setError(null)
+    setDocumentEditMode(false)
+    setApplicantSurfaceKey((current) => current + 1)
+    setSurface(refreshedView.surface)
+  }
+
+  function loadDemoSeed(seedId: RecoverySeedId) {
+    const result = services.loadDemoSeed(seedId)
+    if (result.status === 'SAVED') {
+      setCorrectionFragment(false)
+      refreshApplicantSurface()
+      setDemoControlFeedback(`Loaded ${seedId}.`)
+      return
+    }
+    setDemoControlFeedback('The canonical seed could not be saved to local demo storage.')
+  }
 
   function chooseScenario(scenarioId: ScenarioId) {
     setError(null)
@@ -947,6 +982,9 @@ function App({ services: providedServices }: AppProps) {
       setEvaluation(null)
       setCreatedCase(null)
       setResumedCase(null)
+      setDocumentEditMode(false)
+      setApplicantSurfaceKey((current) => current + 1)
+      setDemoControlFeedback('Reset to the canonical clean demo state.')
       setSurface('SCENARIO_SELECTION')
       return
     }
@@ -968,7 +1006,15 @@ function App({ services: providedServices }: AppProps) {
         </div>
       </header>
 
-      <main className={styles.mainContent}>
+      {demoControlsEnabled ? (
+        <DemoControls
+          feedback={demoControlFeedback}
+          onLoadSeed={loadDemoSeed}
+          onReset={resetDemoData}
+        />
+      ) : null}
+
+      <main className={styles.mainContent} key={applicantSurfaceKey}>
         {surface === 'LOADING' ? (
           <section className={styles.loadingPanel} aria-live="polite">
             <h2>Checking saved demo progress</h2>
