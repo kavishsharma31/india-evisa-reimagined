@@ -6,6 +6,7 @@ import {
   canonicalScenarios,
   createPolicyEvaluationRequest,
   getSeed,
+  hospitalLetterV2Fixture,
 } from '../fixtures'
 import {
   ACTIVE_POLICY_QUALIFIED_VERSION,
@@ -30,6 +31,16 @@ import {
   type CreateDraftCommand,
   type SaveSnapshotCommand,
 } from './case-runtime'
+import {
+  applyCorrectionSubmission,
+  applyMedicalCorrectionRequest,
+  buildCorrectionSummary,
+  correctionPreparationIdempotencyKey,
+  correctionSubmissionIdempotencyKey,
+  HOSPITAL_V2_FIXTURE_ID,
+  MEDICAL_CORRECTION_REASON,
+  medicalCorrectionIdempotencyKey,
+} from './correction-runtime'
 import {
   a04DocumentFixtures,
   applyDocumentPreparation,
@@ -56,6 +67,9 @@ import type {
   DemoRuntimeDependencies,
   RuntimeCommandAccepted,
   RuntimeCommandRejected,
+  RuntimeCorrectionInspectResult,
+  RuntimeCorrectionMutationResult,
+  RuntimeNotificationEvidence,
   RuntimeEvaluationResult,
   RuntimeDocumentInspectResult,
   RuntimeDocumentMutationResult,
@@ -111,6 +125,12 @@ const reviewMutationInputSchema = z
   .strict()
 const paymentInputSchema = z.object({ caseId: syntheticIdSchema }).strict()
 const statusInputSchema = z.object({ caseId: syntheticIdSchema }).strict()
+const prepareCorrectionInputSchema = z
+  .object({
+    caseId: syntheticIdSchema,
+    fixtureId: z.literal(HOSPITAL_V2_FIXTURE_ID),
+  })
+  .strict()
 
 type CanonicalScenarioId = PersistedCase['scenarioId']
 
@@ -298,7 +318,10 @@ function saveEnvelope(
     | 'SubmitApplication'
     | 'StartMockPayment'
     | 'CheckMockPaymentStatus'
-    | 'BeginScrutiny',
+    | 'BeginScrutiny'
+    | 'RequestMedicalCorrection'
+    | 'PrepareCorrection'
+    | 'SubmitCorrection',
   caseId: SyntheticId,
 ): PersistenceEnvelope | RuntimeCommandRejected | RuntimeStorageFailure {
   const validation = persistenceEnvelopeSchema.safeParse(envelope)
@@ -323,6 +346,43 @@ function saveEnvelope(
     saved.diagnostic.issueCount,
     'PERSISTENCE_VALIDATION_FAILED',
     caseId,
+  )
+}
+
+function simulateCorrectionNotification(
+  dependencies: DemoRuntimeDependencies,
+  caseId: SyntheticId,
+): readonly RuntimeNotificationEvidence[] {
+  const correlationId = syntheticIdSchema.parse(
+    `SYN-CORRELATION-${caseId.slice('SYN-'.length)}-ACTION-REQUIRED`,
+  )
+  const scenarios = [
+    ['NOTIFICATION_QUEUED', 'QUEUED', 'QUEUED'],
+    ['NOTIFICATION_DELIVERY_FAILED', 'DELIVERY-FAILED', 'DELIVERY_SIMULATION_FAILED'],
+    ['NOTIFICATION_RETRY_QUEUED', 'RETRY-QUEUED', 'RETRY_QUEUED'],
+    ['NOTIFICATION_RETRY_DELIVERED', 'RETRY-DELIVERED', 'RETRY_DELIVERED_SIMULATED'],
+  ] as const
+
+  return deepFreeze(
+    scenarios.flatMap(([scenario, suffix, expectedOutcome]) => {
+      const result = dependencies.adapters.notification.execute({
+        requestReference: syntheticIdSchema.parse(
+          `SYN-NOTIFICATION-${caseId.slice('SYN-'.length)}-${suffix}`,
+        ),
+        correlationId,
+        caseId,
+        template: 'ACTION_REQUIRED',
+        recipient: 'demo-applicant@example.com',
+        scenario,
+      })
+      return result.status === 'MOCK_OUTCOME' && result.outcome === expectedOutcome
+        ? [{
+            outcome: expectedOutcome,
+            reasonCode: result.reasonCode,
+            persisted: false as const,
+          }]
+        : []
+    }),
   )
 }
 
@@ -1772,6 +1832,322 @@ export function createDemoRuntime(dependencies: DemoRuntimeDependencies): DemoRu
     })
   }
 
+  function requestMedicalCorrection(candidate: unknown): RuntimeCorrectionMutationResult {
+    const parsed = statusInputSchema.safeParse(candidate)
+    if (!parsed.success) {
+      return invalidCommand('RequestMedicalCorrection', parsed.error.issues.length)
+    }
+    const loaded = loadForMutation(dependencies)
+    if (loaded.status !== 'READY') {
+      return loaded
+    }
+    const persistedCase = loaded.state?.cases.find(
+      ({ caseId }) => caseId === parsed.data.caseId,
+    )
+    if (persistedCase === undefined) {
+      return Object.freeze({ status: 'CASE_NOT_FOUND', caseId: parsed.data.caseId })
+    }
+    const correctionAlreadyRequested = persistedCase.auditEvents.some(
+      (event) =>
+        event.eventType === 'ScrutinyActionRequired' &&
+        event.payload.outcomeCode === MEDICAL_CORRECTION_REASON,
+    )
+    if (correctionAlreadyRequested) {
+      return deepFreeze({
+        status: 'CORRECTION_REQUEST_EXISTING',
+        operation: 'RequestMedicalCorrection',
+        caseId: persistedCase.caseId,
+        revision: persistedCase.revision,
+        scrutinyState: persistedCase.scrutiny.state,
+        idempotentReplay: true,
+      })
+    }
+    const evaluation = evaluatePinnedDocumentPolicy(persistedCase)
+    if ('status' in evaluation) {
+      return evaluation
+    }
+    if (
+      persistedCase.scenarioId !== 'SYN-MEDICAL-001' ||
+      !evaluation.documentManifest?.requirements.some(
+        ({ id, required }) => id === 'REQ-HOSPITAL-LETTER-1' && required,
+      )
+    ) {
+      return invalidCommand(
+        'RequestMedicalCorrection',
+        1,
+        'CORRECTION_PREREQUISITES_NOT_MET',
+        persistedCase.caseId,
+      )
+    }
+    const mutation = applyMedicalCorrectionRequest({
+      persistedCase,
+      idempotencyKey: medicalCorrectionIdempotencyKey(persistedCase.caseId),
+      metadata: dependencies.metadata,
+    })
+    if (!mutation.accepted) {
+      return invalidCommand(
+        'RequestMedicalCorrection',
+        1,
+        mutation.reasonCode === 'GUARD_FAILED'
+          ? 'CORRECTION_PREREQUISITES_NOT_MET'
+          : mutation.reasonCode,
+        persistedCase.caseId,
+      )
+    }
+    const envelope = loaded.state
+    if (envelope === null) {
+      throw new Error('A located Case must belong to a loaded persistence envelope.')
+    }
+    const saved = saveEnvelope(
+      dependencies,
+      replaceCase(envelope, mutation.persistedCase),
+      'RequestMedicalCorrection',
+      persistedCase.caseId,
+    )
+    if ('status' in saved) {
+      return saved
+    }
+    return deepFreeze({
+      status: 'CORRECTION_REQUESTED',
+      operation: 'RequestMedicalCorrection',
+      caseId: persistedCase.caseId,
+      revision: mutation.persistedCase.revision,
+      scrutinyState: 'ACTION_REQUIRED',
+      documentState: 'REUPLOAD_REQUESTED',
+      documentVersionId: mutation.documentVersionId,
+      reasonCode: MEDICAL_CORRECTION_REASON,
+      emittedEventTypes: ['ScrutinyActionRequired', 'DocumentReuploadRequested'],
+      emittedEventIds: mutation.events.map(({ eventId }) => eventId),
+      notificationEvidence: simulateCorrectionNotification(
+        dependencies,
+        persistedCase.caseId,
+      ),
+    })
+  }
+
+  function inspectCorrection(candidate: unknown): RuntimeCorrectionInspectResult {
+    const parsed = statusInputSchema.safeParse(candidate)
+    if (!parsed.success) {
+      return invalidCommand('InspectCorrection', parsed.error.issues.length)
+    }
+    const loaded = loadForMutation(dependencies)
+    if (loaded.status !== 'READY') {
+      return loaded
+    }
+    const persistedCase = loaded.state?.cases.find(
+      ({ caseId }) => caseId === parsed.data.caseId,
+    )
+    if (persistedCase === undefined) {
+      return Object.freeze({ status: 'CASE_NOT_FOUND', caseId: parsed.data.caseId })
+    }
+    const evaluation = evaluatePinnedDocumentPolicy(persistedCase)
+    if ('status' in evaluation) {
+      return evaluation
+    }
+    const projection = buildCorrectionSummary(persistedCase, evaluation)
+    if (!projection.accepted) {
+      return invalidCommand(
+        'InspectCorrection',
+        1,
+        'CORRECTION_PREREQUISITES_NOT_MET',
+        persistedCase.caseId,
+      )
+    }
+    return projection.summary
+  }
+
+  function prepareCorrection(candidate: unknown): RuntimeCorrectionMutationResult {
+    const parsed = prepareCorrectionInputSchema.safeParse(candidate)
+    if (!parsed.success) {
+      return invalidCommand('PrepareCorrection', parsed.error.issues.length)
+    }
+    const loaded = loadForMutation(dependencies)
+    if (loaded.status !== 'READY') {
+      return loaded
+    }
+    const persistedCase = loaded.state?.cases.find(
+      ({ caseId }) => caseId === parsed.data.caseId,
+    )
+    if (persistedCase === undefined) {
+      return Object.freeze({ status: 'CASE_NOT_FOUND', caseId: parsed.data.caseId })
+    }
+    const evaluation = evaluatePinnedDocumentPolicy(persistedCase)
+    if ('status' in evaluation) {
+      return evaluation
+    }
+    const correction = buildCorrectionSummary(persistedCase, evaluation)
+    if (!correction.accepted) {
+      return invalidCommand(
+        'PrepareCorrection',
+        1,
+        'CORRECTION_PREREQUISITES_NOT_MET',
+        persistedCase.caseId,
+      )
+    }
+    if (correction.summary.stage === 'REPLACEMENT_READY') {
+      return deepFreeze({
+        status: 'CORRECTION_EXISTING',
+        operation: 'PrepareCorrection',
+        caseId: persistedCase.caseId,
+        revision: persistedCase.revision,
+        scrutinyState: persistedCase.scrutiny.state,
+        idempotentReplay: true,
+      })
+    }
+
+    const inspection = dependencies.adapters.documentInspection.execute({
+      requestReference: syntheticIdSchema.parse(
+        `SYN-INSPECTION-${persistedCase.caseId.slice('SYN-'.length)}-HOSPITAL-V2`,
+      ),
+      correlationId: syntheticIdSchema.parse(
+        `SYN-CORRELATION-${persistedCase.caseId.slice('SYN-'.length)}-CORRECTION-V2`,
+      ),
+      caseId: persistedCase.caseId,
+      fixtureId: parsed.data.fixtureId,
+      expectedDocumentType: 'SYNTHETIC_HOSPITAL_LETTER',
+      scenario: 'DOCUMENT_PASS',
+    })
+    if (
+      inspection.status !== 'MOCK_OUTCOME' ||
+      inspection.outcome !== 'PREFLIGHT_PASSED' ||
+      inspection.metadata.fixtureId !== parsed.data.fixtureId
+    ) {
+      return invalidCommand(
+        'PrepareCorrection',
+        1,
+        inspection.status === 'REJECTED'
+          ? 'CORRECTION_PREREQUISITES_NOT_MET'
+          : 'DOCUMENT_INSPECTION_UNAVAILABLE',
+        persistedCase.caseId,
+      )
+    }
+    const mutation = applyDocumentPreparation({
+      persistedCase,
+      fixture: hospitalLetterV2Fixture,
+      outcome: {
+        state: 'PREFLIGHT_PASSED',
+        reasonCode: inspection.reasonCode,
+      },
+      idempotencyKey: correctionPreparationIdempotencyKey(persistedCase.caseId),
+      metadata: dependencies.metadata,
+    })
+    if (!mutation.accepted) {
+      return invalidCommand(
+        'PrepareCorrection',
+        1,
+        mutation.reasonCode,
+        persistedCase.caseId,
+      )
+    }
+    const envelope = loaded.state
+    if (envelope === null) {
+      throw new Error('A located Case must belong to a loaded persistence envelope.')
+    }
+    const saved = saveEnvelope(
+      dependencies,
+      replaceCase(envelope, mutation.persistedCase),
+      'PrepareCorrection',
+      persistedCase.caseId,
+    )
+    if ('status' in saved) {
+      return saved
+    }
+    return deepFreeze({
+      status: 'CORRECTION_REPLACEMENT_READY',
+      operation: 'PrepareCorrection',
+      caseId: persistedCase.caseId,
+      revision: mutation.persistedCase.revision,
+      scrutinyState: 'ACTION_REQUIRED',
+      documentVersionId: mutation.documentVersionId,
+      documentState: 'PREFLIGHT_PASSED',
+      supersededVersionId: correction.summary.currentVersion.documentVersionId,
+      emittedEventTypes: mutation.events.map(({ eventType }) => eventType),
+      emittedEventIds: mutation.events.map(({ eventId }) => eventId),
+    })
+  }
+
+  function submitCorrection(candidate: unknown): RuntimeCorrectionMutationResult {
+    const parsed = statusInputSchema.safeParse(candidate)
+    if (!parsed.success) {
+      return invalidCommand('SubmitCorrection', parsed.error.issues.length)
+    }
+    const loaded = loadForMutation(dependencies)
+    if (loaded.status !== 'READY') {
+      return loaded
+    }
+    const persistedCase = loaded.state?.cases.find(
+      ({ caseId }) => caseId === parsed.data.caseId,
+    )
+    if (persistedCase === undefined) {
+      return Object.freeze({ status: 'CASE_NOT_FOUND', caseId: parsed.data.caseId })
+    }
+    const hospital = persistedCase.documents.find(
+      ({ requirementId }) => requirementId === 'REQ-HOSPITAL-LETTER-1',
+    )
+    const activeVersion = hospital?.versions.find(
+      ({ documentVersionId }) => documentVersionId === hospital.activeVersionId,
+    )
+    const correctionAlreadySubmitted =
+      persistedCase.scrutiny.state === 'IN_REVIEW' &&
+      activeVersion?.state === 'UNDER_REVIEW' &&
+      activeVersion.documentVersionId.includes('HOSPITAL-LETTER-V2-001') &&
+      persistedCase.auditEvents.some(({ eventType }) => eventType === 'ScrutinyResumed')
+    if (correctionAlreadySubmitted) {
+      return deepFreeze({
+        status: 'CORRECTION_EXISTING',
+        operation: 'SubmitCorrection',
+        caseId: persistedCase.caseId,
+        revision: persistedCase.revision,
+        scrutinyState: persistedCase.scrutiny.state,
+        idempotentReplay: true,
+      })
+    }
+    const mutation = applyCorrectionSubmission({
+      persistedCase,
+      idempotencyKey: correctionSubmissionIdempotencyKey(persistedCase.caseId),
+      metadata: dependencies.metadata,
+    })
+    if (!mutation.accepted) {
+      return invalidCommand(
+        'SubmitCorrection',
+        1,
+        mutation.reasonCode === 'GUARD_FAILED'
+          ? 'CORRECTION_PREREQUISITES_NOT_MET'
+          : mutation.reasonCode,
+        persistedCase.caseId,
+      )
+    }
+    const envelope = loaded.state
+    if (envelope === null) {
+      throw new Error('A located Case must belong to a loaded persistence envelope.')
+    }
+    const saved = saveEnvelope(
+      dependencies,
+      replaceCase(envelope, mutation.persistedCase),
+      'SubmitCorrection',
+      persistedCase.caseId,
+    )
+    if ('status' in saved) {
+      return saved
+    }
+    return deepFreeze({
+      status: 'CORRECTION_SUBMITTED',
+      operation: 'SubmitCorrection',
+      caseId: persistedCase.caseId,
+      revision: mutation.persistedCase.revision,
+      scrutinyState: 'IN_REVIEW',
+      documentVersionId: mutation.documentVersionId,
+      documentState: 'UNDER_REVIEW',
+      emittedEventTypes: [
+        'DocumentVersionSubmitted',
+        'ScrutinyResubmitted',
+        'ScrutinyResumed',
+        'DocumentReviewStarted',
+      ],
+      emittedEventIds: mutation.events.map(({ eventId }) => eventId),
+    })
+  }
+
   return Object.freeze({
     inspectState,
     evaluateScenario,
@@ -1789,5 +2165,9 @@ export function createDemoRuntime(dependencies: DemoRuntimeDependencies): DemoRu
     checkMockPaymentStatus,
     inspectStatus,
     beginScrutiny,
+    requestMedicalCorrection,
+    inspectCorrection,
+    prepareCorrection,
+    submitCorrection,
   })
 }

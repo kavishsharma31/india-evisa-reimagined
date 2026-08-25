@@ -5,6 +5,7 @@ import { DocumentPreparation } from './app/DocumentPreparation'
 import { ReviewApplication } from './app/ReviewApplication'
 import { PaymentApplication } from './app/PaymentApplication'
 import { StatusApplication } from './app/StatusApplication'
+import { DocumentCorrection } from './app/DocumentCorrection'
 import { DOCUMENT_NAMES, PURPOSE_NAMES } from './app/applicant-labels'
 import { createAppRuntime, type AppRuntimeServices } from './app/create-app-runtime'
 import type { SyntheticId } from './domain'
@@ -43,6 +44,7 @@ type Surface =
   | 'REVIEW_APPLICATION'
   | 'PAYMENT_APPLICATION'
   | 'STATUS_APPLICATION'
+  | 'DOCUMENT_CORRECTION'
   | 'RESET_REQUIRED'
   | 'STORAGE_UNAVAILABLE'
 
@@ -64,6 +66,7 @@ type InitialView = Readonly<{
 
 const PAYMENT_FRAGMENT = '#payment'
 const STATUS_FRAGMENT = '#status'
+const CORRECTION_FRAGMENT = '#correction'
 
 function paymentSurfaceRequested(): boolean {
   return typeof window !== 'undefined' && window.location.hash === PAYMENT_FRAGMENT
@@ -85,6 +88,20 @@ function setStatusFragment(active: boolean): void {
   }
   const nextLocation = active
     ? `${window.location.pathname}${window.location.search}${STATUS_FRAGMENT}`
+    : `${window.location.pathname}${window.location.search}`
+  window.history.replaceState(null, '', nextLocation)
+}
+
+function correctionSurfaceRequested(): boolean {
+  return typeof window !== 'undefined' && window.location.hash === CORRECTION_FRAGMENT
+}
+
+function setCorrectionFragment(active: boolean): void {
+  if (typeof window === 'undefined') {
+    return
+  }
+  const nextLocation = active
+    ? `${window.location.pathname}${window.location.search}${CORRECTION_FRAGMENT}`
     : `${window.location.pathname}${window.location.search}`
   window.history.replaceState(null, '', nextLocation)
 }
@@ -131,6 +148,19 @@ function inspectInitialView(services: AppRuntimeServices): InitialView {
         persistedCase.scrutiny.state !== 'NOT_STARTED' &&
         isScenarioId(resumed.scenarioId)
       ) {
+        if (
+          persistedCase.scrutiny.state === 'ACTION_REQUIRED' &&
+          correctionSurfaceRequested()
+        ) {
+          const correction = services.runtime.inspectCorrection({ caseId: resumed.caseId })
+          if (correction.status === 'CORRECTION_INSPECTED') {
+            return {
+              surface: 'DOCUMENT_CORRECTION',
+              resumedCase: resumed,
+              evaluation: null,
+            }
+          }
+        }
         const status = services.runtime.inspectStatus({ caseId: resumed.caseId })
         if (status.status === 'STATUS_INSPECTED') {
           return { surface: 'STATUS_APPLICATION', resumedCase: resumed, evaluation: null }
@@ -501,6 +531,7 @@ function App({ services: providedServices }: AppProps) {
       REVIEW_APPLICATION: 'review-heading',
       PAYMENT_APPLICATION: 'payment-heading',
       STATUS_APPLICATION: 'status-heading',
+      DOCUMENT_CORRECTION: 'correction-heading',
       RESET_REQUIRED: 'recovery-heading',
       STORAGE_UNAVAILABLE: 'recovery-heading',
     }
@@ -513,6 +544,7 @@ function App({ services: providedServices }: AppProps) {
         surface === 'REVIEW_APPLICATION' ||
         surface === 'PAYMENT_APPLICATION'
         || surface === 'STATUS_APPLICATION'
+        || surface === 'DOCUMENT_CORRECTION'
       ) {
         document.documentElement.scrollTop = 0
         document.body.scrollTop = 0
@@ -872,6 +904,32 @@ function App({ services: providedServices }: AppProps) {
     setSurface('STATUS_APPLICATION')
   }
 
+  function openDocumentCorrection() {
+    if (resumedCase === null) {
+      setError('The synthetic correction is not available for this Case.')
+      return
+    }
+    const inspected = services.runtime.inspectCorrection({ caseId: resumedCase.caseId })
+    if (inspected.status === 'STORAGE_REQUIRES_RESET' || inspected.status === 'STORAGE_UNAVAILABLE') {
+      handleDocumentRecovery(inspected.status)
+      return
+    }
+    if (inspected.status !== 'CORRECTION_INSPECTED') {
+      setError('The hospital-letter correction could not be opened safely.')
+      return
+    }
+    setError(null)
+    setCorrectionFragment(true)
+    setSurface('DOCUMENT_CORRECTION')
+  }
+
+  function returnToStatusFromCorrection() {
+    setError(null)
+    setCorrectionFragment(false)
+    setStatusFragment(true)
+    setSurface('STATUS_APPLICATION')
+  }
+
   function handleDocumentRecovery(
     status: 'STORAGE_REQUIRES_RESET' | 'STORAGE_UNAVAILABLE',
   ) {
@@ -884,6 +942,7 @@ function App({ services: providedServices }: AppProps) {
     if (result.status === 'RESET') {
       setPaymentFragment(false)
       setStatusFragment(false)
+      setCorrectionFragment(false)
       setSelectedScenarioId(null)
       setEvaluation(null)
       setCreatedCase(null)
@@ -989,6 +1048,16 @@ function App({ services: providedServices }: AppProps) {
           <StatusApplication
             services={services}
             caseId={resumedCase.caseId}
+            onOpenCorrection={openDocumentCorrection}
+            onRecoveryRequired={handleDocumentRecovery}
+          />
+        ) : null}
+        {surface === 'DOCUMENT_CORRECTION' && resumedCase ? (
+          <DocumentCorrection
+            services={services}
+            caseId={resumedCase.caseId}
+            onBackToStatus={returnToStatusFromCorrection}
+            onCorrectionSubmitted={returnToStatusFromCorrection}
             onRecoveryRequired={handleDocumentRecovery}
           />
         ) : null}

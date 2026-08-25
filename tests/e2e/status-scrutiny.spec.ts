@@ -139,7 +139,7 @@ test('Medical A07 enters one legal scrutiny review and projects an explicit no-a
   await expect(page.getByText('Your synthetic application is being reviewed.')).toBeVisible()
   await expect(page.getByText('Nothing needed from you')).toBeVisible()
   await expect(page.getByText('No action is needed now. Synthetic scrutiny is continuing.')).toBeVisible()
-  await expect(page.getByRole('button')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Replace hospital letter' })).toHaveCount(0)
   const evidence = await loadStatusEvidence(page)
   expect(evidence.applicationState).toBe('LOCKED')
   expect(evidence.paymentState).toBe('CONFIRMED')

@@ -1,5 +1,6 @@
 import { cleanup, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import userEvent from '@testing-library/user-event'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { StatusApplication } from './app/StatusApplication'
 import { createAppRuntime } from './app/create-app-runtime'
@@ -76,6 +77,7 @@ function renderStatus(scenarioId: 'SYN-MEDICAL-001' | 'SYN-TOURIST-001') {
     <StatusApplication
       services={prepared.services}
       caseId={prepared.caseId}
+      onOpenCorrection={() => undefined}
       onRecoveryRequired={() => undefined}
     />,
   )
@@ -95,7 +97,7 @@ describe('A07 unified applicant status', () => {
     expect(screen.getByText('Payment confirmed')).toBeInTheDocument()
     expect(screen.getByText('Documents under review')).toBeInTheDocument()
     expect(screen.getByText('ETA not ready')).toBeInTheDocument()
-    expect(screen.queryByRole('button')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Replace hospital letter' })).not.toBeInTheDocument()
   })
 
   it('reuses the same status component for Tourist', () => {
@@ -115,12 +117,49 @@ describe('A07 unified applicant status', () => {
       <StatusApplication
         services={services}
         caseId="SYN-CASE-MED-001"
+        onOpenCorrection={() => undefined}
         onRecoveryRequired={() => undefined}
       />,
     )
 
     expect(screen.getByRole('heading', { name: 'Under review' })).toBeInTheDocument()
     expect(screen.getByText('Nothing needed from you')).toBeInTheDocument()
-    expect(screen.queryByRole('button')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Replace hospital letter' })).not.toBeInTheDocument()
+  })
+
+  it('projects the canonical re-upload seed as one specific applicant action', async () => {
+    const store = createPersistenceStore(new MemoryStorage())
+    expect(store.save(getSeed('SEED-MEDICAL-REUPLOAD-REQUESTED').envelope).status).toBe('SAVED')
+    const services = createAppRuntime({ store })
+    const onOpenCorrection = vi.fn()
+    render(
+      <StatusApplication
+        services={services}
+        caseId="SYN-CASE-MED-001"
+        onOpenCorrection={onOpenCorrection}
+        onRecoveryRequired={() => undefined}
+      />,
+    )
+
+    expect(screen.getByRole('heading', { name: 'Action required' })).toBeInTheDocument()
+    expect(screen.getByText('Your synthetic hospital letter needs one correction.')).toBeInTheDocument()
+    expect(screen.getByText(/admission date on the demo hospital letter/)).toBeInTheDocument()
+    expect(screen.queryByText('DOC_HOSPITAL_ADMISSION_DATE_UNCLEAR_SYNTHETIC')).not.toBeInTheDocument()
+    const action = screen.getByRole('button', { name: 'Replace hospital letter' })
+    expect(screen.getAllByRole('button')).toHaveLength(1)
+    await userEvent.click(action)
+    expect(onOpenCorrection).toHaveBeenCalledOnce()
+  })
+
+  it('uses the low-priority demo control to record the deterministic Medical review outcome', async () => {
+    renderStatus('SYN-MEDICAL-001')
+    await userEvent.click(screen.getByText('Demo review control'))
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Simulate hospital-letter review outcome' }),
+    )
+
+    expect(screen.getByRole('heading', { name: 'Action required' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Replace hospital letter' })).toBeInTheDocument()
+    expect(screen.getByText(/Simulated delivery failed/)).toBeInTheDocument()
   })
 })

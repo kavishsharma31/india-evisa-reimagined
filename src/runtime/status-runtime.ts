@@ -14,6 +14,7 @@ import {
   type PersistedDomainEvent,
 } from '../persistence'
 import type { RuntimeMetadataSource, RuntimeStatusSummary } from './contracts'
+import { documentFixtureForVersionId } from './document-runtime'
 
 type ScrutinyEntryCommand = Extract<
   DomainCommand,
@@ -45,37 +46,47 @@ export function scrutinyEntryIdempotencyKey(caseId: SyntheticId): SyntheticId {
   )
 }
 
-function statusContent(scrutinyState: PersistedCase['scrutiny']['state']): Readonly<{
+function statusContent(input: {
+  scrutinyState: PersistedCase['scrutiny']['state']
+  replacementReady: boolean
+}): Readonly<{
   headline: string
   explanation: string
   applicantActionRequired: boolean
-  nextAction: 'BEGIN_SCRUTINY' | null
+  nextAction: 'BEGIN_SCRUTINY' | 'REPLACE_HOSPITAL_LETTER' | null
+  actionGuidance: string | null
   waitMessage: string | null
 }> {
-  if (scrutinyState === 'NOT_STARTED') {
+  if (input.scrutinyState === 'NOT_STARTED') {
     return Object.freeze({
       headline: 'Ready for review',
       explanation: 'Your confirmed synthetic application can enter local review.',
       applicantActionRequired: false,
       nextAction: 'BEGIN_SCRUTINY',
+      actionGuidance: null,
       waitMessage: null,
     })
   }
-  if (scrutinyState === 'ACTION_REQUIRED') {
+  if (input.scrutinyState === 'ACTION_REQUIRED') {
     return Object.freeze({
-      headline: 'Action needed',
-      explanation: 'Synthetic review has requested a controlled demo correction.',
+      headline: 'Action required',
+      explanation: input.replacementReady
+        ? 'Your corrected synthetic hospital letter is ready to submit.'
+        : 'Your synthetic hospital letter needs one correction.',
       applicantActionRequired: true,
-      nextAction: null,
+      nextAction: 'REPLACE_HOSPITAL_LETTER',
+      actionGuidance:
+        'The admission date on the demo hospital letter could not be confirmed during synthetic review.',
       waitMessage: null,
     })
   }
-  if (scrutinyState === 'APPROVED') {
+  if (input.scrutinyState === 'APPROVED') {
     return Object.freeze({
       headline: 'Synthetic review complete',
       explanation: 'The local synthetic review has completed. This is not a visa decision.',
       applicantActionRequired: false,
       nextAction: null,
+      actionGuidance: null,
       waitMessage: 'No action is needed now.',
     })
   }
@@ -84,6 +95,7 @@ function statusContent(scrutinyState: PersistedCase['scrutiny']['state']): Reado
     explanation: 'Your synthetic application is being reviewed.',
     applicantActionRequired: false,
     nextAction: null,
+    actionGuidance: null,
     waitMessage: 'No action is needed now. Synthetic scrutiny is continuing.',
   })
 }
@@ -124,15 +136,37 @@ export function buildStatusSummary(
   const documentsSubmitted = currentVersions.every(
     (version) => version?.state === 'SUBMITTED',
   )
+  const hospitalVersion = currentVersions.find((_version, index) =>
+    requiredDocuments[index]?.id === 'REQ-HOSPITAL-LETTER-1'
+  )
+  const actionRequiredDocumentsValid =
+    persistedCase.scrutiny.state === 'ACTION_REQUIRED' &&
+    hospitalVersion !== undefined &&
+    (hospitalVersion.state === 'REUPLOAD_REQUESTED' ||
+      hospitalVersion.state === 'PREFLIGHT_PASSED') &&
+    currentVersions.every((version) =>
+      version === hospitalVersion ? true : version?.state === 'UNDER_REVIEW',
+    )
   if (
     persistedCase.scrutiny.state === 'NOT_STARTED'
       ? !documentsSubmitted
-      : !documentsUnderReview
+      : persistedCase.scrutiny.state === 'ACTION_REQUIRED'
+        ? !actionRequiredDocumentsValid
+        : !documentsUnderReview
   ) {
     return deepFreeze({ accepted: false, reasonCode: 'GUARD_FAILED' })
   }
 
-  const content = statusContent(persistedCase.scrutiny.state)
+  const content = statusContent({
+    scrutinyState: persistedCase.scrutiny.state,
+    replacementReady: hospitalVersion?.state === 'PREFLIGHT_PASSED',
+  })
+  const canRequestMedicalCorrection =
+    persistedCase.scenarioId === 'SYN-MEDICAL-001' &&
+    persistedCase.scrutiny.state === 'IN_REVIEW' &&
+    hospitalVersion?.state === 'UNDER_REVIEW' &&
+    documentFixtureForVersionId(hospitalVersion.documentVersionId)?.fixtureId ===
+      'SYN-FIXTURE-HOSPITAL-LETTER-V1-001'
   return deepFreeze({
     accepted: true,
     summary: {
@@ -150,6 +184,10 @@ export function buildStatusSummary(
       explanation: content.explanation,
       applicantActionRequired: content.applicantActionRequired,
       nextAction: content.nextAction,
+      actionGuidance: content.actionGuidance,
+      demoReviewAction: canRequestMedicalCorrection
+        ? 'REQUEST_MEDICAL_CORRECTION'
+        : null,
       waitMessage: content.waitMessage,
       journeyFacts: [
         { id: 'APPLICATION', label: 'Application', value: 'Application submitted', state: 'COMPLETE' },
@@ -157,7 +195,11 @@ export function buildStatusSummary(
         {
           id: 'DOCUMENTS',
           label: 'Documents',
-          value: documentsUnderReview ? 'Documents under review' : 'Documents submitted',
+          value: actionRequiredDocumentsValid
+            ? 'Hospital letter correction required'
+            : documentsUnderReview
+              ? 'Documents under review'
+              : 'Documents submitted',
           state: 'CURRENT',
         },
         {

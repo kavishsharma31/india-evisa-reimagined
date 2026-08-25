@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 
 import type { SyntheticId } from '../domain'
 import type { RuntimeStatusSummary } from '../runtime'
@@ -9,10 +9,13 @@ import styles from './StatusApplication.module.css'
 type StatusApplicationProps = Readonly<{
   services: AppRuntimeServices
   caseId: SyntheticId
+  onOpenCorrection(): void
   onRecoveryRequired(status: 'STORAGE_REQUIRES_RESET' | 'STORAGE_UNAVAILABLE'): void
 }>
 
 export function StatusApplication(props: StatusApplicationProps) {
+  const [, setRefreshIndex] = useState(0)
+  const [actionMessage, setActionMessage] = useState<string | null>(null)
   const inspected = props.services.runtime.inspectStatus({ caseId: props.caseId })
   const status: RuntimeStatusSummary | null =
     inspected.status === 'STATUS_INSPECTED' ? inspected : null
@@ -25,6 +28,28 @@ export function StatusApplication(props: StatusApplicationProps) {
       props.onRecoveryRequired(inspected.status)
     }
   }, [inspected.status, props])
+
+  function requestCorrection() {
+    setActionMessage(null)
+    const result = props.services.runtime.requestMedicalCorrection({ caseId: props.caseId })
+    if (result.status === 'STORAGE_REQUIRES_RESET' || result.status === 'STORAGE_UNAVAILABLE') {
+      props.onRecoveryRequired(result.status)
+      return
+    }
+    if (
+      result.status === 'CORRECTION_REQUESTED' ||
+      result.status === 'CORRECTION_REQUEST_EXISTING'
+    ) {
+      if (result.status === 'CORRECTION_REQUESTED') {
+        setActionMessage(
+          'Simulated delivery failed. Your synthetic case status is unchanged. A local retry then delivered the demo notice.',
+        )
+      }
+      setRefreshIndex((current) => current + 1)
+      return
+    }
+    setActionMessage('The synthetic review outcome could not be recorded safely.')
+  }
 
   if (status === null) {
     return (
@@ -50,6 +75,12 @@ export function StatusApplication(props: StatusApplicationProps) {
         <p className={styles.sectionLabel}>Current status</p>
         <h3 id="projected-status-heading">{status.headline}</h3>
         <p>{status.explanation}</p>
+        {status.actionGuidance ? <p className={styles.actionGuidance}>{status.actionGuidance}</p> : null}
+        {status.nextAction === 'REPLACE_HOSPITAL_LETTER' ? (
+          <button className={styles.primaryAction} type="button" onClick={props.onOpenCorrection}>
+            Replace hospital letter
+          </button>
+        ) : null}
         {status.waitMessage ? (
           <div className={styles.noActionPanel} role="status">
             <strong>Nothing needed from you</strong>
@@ -57,6 +88,27 @@ export function StatusApplication(props: StatusApplicationProps) {
           </div>
         ) : null}
       </section>
+
+      {actionMessage ? (
+        <p
+          className={actionMessage.startsWith('Simulated') ? styles.notificationEvidence : styles.inlineError}
+          role={actionMessage.startsWith('Simulated') ? 'status' : 'alert'}
+        >
+          {actionMessage}
+        </p>
+      ) : null}
+
+      {status.demoReviewAction === 'REQUEST_MEDICAL_CORRECTION' ? (
+        <details className={styles.demoControl}>
+          <summary>Demo review control</summary>
+          <p>
+            Exercise the one approved fictional hospital-letter correction. This is not a reviewer interface.
+          </p>
+          <button type="button" onClick={requestCorrection}>
+            Simulate hospital-letter review outcome
+          </button>
+        </details>
+      ) : null}
 
       <section className={styles.journeySection} aria-labelledby="journey-heading">
         <div className={styles.sectionHeading}>

@@ -34,6 +34,10 @@ export type RuntimeOperation =
   | 'CheckMockPaymentStatus'
   | 'InspectStatus'
   | 'BeginScrutiny'
+  | 'RequestMedicalCorrection'
+  | 'InspectCorrection'
+  | 'PrepareCorrection'
+  | 'SubmitCorrection'
 
 export type RuntimeCommandRejectionCode =
   | 'INVALID_COMMAND'
@@ -49,6 +53,8 @@ export type RuntimeCommandRejectionCode =
   | 'PAYMENT_ADAPTER_REJECTED'
   | 'PAYMENT_EVIDENCE_MISMATCH'
   | 'STATUS_PREREQUISITES_NOT_MET'
+  | 'CORRECTION_PREREQUISITES_NOT_MET'
+  | 'NOTIFICATION_ADAPTER_REJECTED'
   | 'PERSISTENCE_VALIDATION_FAILED'
 
 export type RuntimeStorageRequiresReset = Readonly<{
@@ -396,7 +402,9 @@ export type RuntimeStatusSummary = Readonly<{
   headline: string
   explanation: string
   applicantActionRequired: boolean
-  nextAction: 'BEGIN_SCRUTINY' | null
+  nextAction: 'BEGIN_SCRUTINY' | 'REPLACE_HOSPITAL_LETTER' | null
+  actionGuidance: string | null
+  demoReviewAction: 'REQUEST_MEDICAL_CORRECTION' | null
   waitMessage: string | null
   journeyFacts: readonly RuntimeStatusJourneyFact[]
 }>
@@ -436,6 +444,121 @@ export type RuntimeScrutinyMutationResult =
   | RuntimePolicyRejected
   | RuntimeStorageFailure
 
+export type RuntimeNotificationEvidence = Readonly<{
+  outcome:
+    | 'QUEUED'
+    | 'DELIVERY_SIMULATION_FAILED'
+    | 'RETRY_QUEUED'
+    | 'RETRY_DELIVERED_SIMULATED'
+  reasonCode: string
+  persisted: false
+}>
+
+export type RuntimeCorrectionRequestAccepted = Readonly<{
+  status: 'CORRECTION_REQUESTED'
+  operation: 'RequestMedicalCorrection'
+  caseId: SyntheticId
+  revision: number
+  scrutinyState: 'ACTION_REQUIRED'
+  documentState: 'REUPLOAD_REQUESTED'
+  documentVersionId: SyntheticId
+  reasonCode: 'DOC_HOSPITAL_ADMISSION_DATE_UNCLEAR_SYNTHETIC'
+  emittedEventTypes: readonly ['ScrutinyActionRequired', 'DocumentReuploadRequested']
+  emittedEventIds: readonly SyntheticId[]
+  notificationEvidence: readonly RuntimeNotificationEvidence[]
+}>
+
+export type RuntimeCorrectionRequestExisting = Readonly<{
+  status: 'CORRECTION_REQUEST_EXISTING'
+  operation: 'RequestMedicalCorrection'
+  caseId: SyntheticId
+  revision: number
+  scrutinyState: ScrutinyState
+  idempotentReplay: true
+}>
+
+export type RuntimeCorrectionVersionView = Readonly<{
+  documentVersionId: SyntheticId
+  fixtureId: SyntheticId
+  label: string
+  state: DocumentVersionState
+}>
+
+export type RuntimeCorrectionSummary = Readonly<{
+  status: 'CORRECTION_INSPECTED'
+  caseId: SyntheticId
+  scenarioId: 'SYN-MEDICAL-001'
+  policyQualifiedVersion: PolicyQualifiedVersion
+  revision: number
+  scrutinyState: 'ACTION_REQUIRED'
+  stage: 'REPLACEMENT_REQUIRED' | 'REPLACEMENT_READY'
+  reasonCode: 'DOC_HOSPITAL_ADMISSION_DATE_UNCLEAR_SYNTHETIC'
+  currentVersion: RuntimeCorrectionVersionView
+  versionHistory: readonly RuntimeCorrectionVersionView[]
+  replacementOption: Readonly<{
+    fixtureId: 'SYN-FIXTURE-HOSPITAL-LETTER-V2-001'
+    label: string
+    watermark: 'SYNTHETIC — NOT VALID'
+  }>
+}>
+
+export type RuntimeCorrectionInspectResult =
+  | RuntimeCorrectionSummary
+  | RuntimeCaseNotFound
+  | RuntimeCommandRejected
+  | RuntimePolicyRejected
+  | RuntimeStorageFailure
+
+export type RuntimeCorrectionPrepared = Readonly<{
+  status: 'CORRECTION_REPLACEMENT_READY'
+  operation: 'PrepareCorrection'
+  caseId: SyntheticId
+  revision: number
+  scrutinyState: 'ACTION_REQUIRED'
+  documentVersionId: SyntheticId
+  documentState: 'PREFLIGHT_PASSED'
+  supersededVersionId: SyntheticId
+  emittedEventTypes: readonly DomainEventType[]
+  emittedEventIds: readonly SyntheticId[]
+}>
+
+export type RuntimeCorrectionSubmitted = Readonly<{
+  status: 'CORRECTION_SUBMITTED'
+  operation: 'SubmitCorrection'
+  caseId: SyntheticId
+  revision: number
+  scrutinyState: 'IN_REVIEW'
+  documentVersionId: SyntheticId
+  documentState: 'UNDER_REVIEW'
+  emittedEventTypes: readonly [
+    'DocumentVersionSubmitted',
+    'ScrutinyResubmitted',
+    'ScrutinyResumed',
+    'DocumentReviewStarted',
+  ]
+  emittedEventIds: readonly SyntheticId[]
+}>
+
+export type RuntimeCorrectionExisting = Readonly<{
+  status: 'CORRECTION_EXISTING'
+  operation: 'PrepareCorrection' | 'SubmitCorrection'
+  caseId: SyntheticId
+  revision: number
+  scrutinyState: ScrutinyState
+  idempotentReplay: true
+}>
+
+export type RuntimeCorrectionMutationResult =
+  | RuntimeCorrectionRequestAccepted
+  | RuntimeCorrectionRequestExisting
+  | RuntimeCorrectionPrepared
+  | RuntimeCorrectionSubmitted
+  | RuntimeCorrectionExisting
+  | RuntimeCaseNotFound
+  | RuntimeCommandRejected
+  | RuntimePolicyRejected
+  | RuntimeStorageFailure
+
 export type RuntimeMetadataSource = Readonly<{
   nextTimestamp(previousTimestamp: SyntheticTimestamp): SyntheticTimestamp
   commandId(caseId: SyntheticId, operation: RuntimeOperation, revision: number): SyntheticId
@@ -470,4 +593,8 @@ export type DemoRuntime = Readonly<{
   checkMockPaymentStatus(candidate: unknown): RuntimePaymentMutationResult
   inspectStatus(candidate: unknown): RuntimeStatusInspectResult
   beginScrutiny(candidate: unknown): RuntimeScrutinyMutationResult
+  requestMedicalCorrection(candidate: unknown): RuntimeCorrectionMutationResult
+  inspectCorrection(candidate: unknown): RuntimeCorrectionInspectResult
+  prepareCorrection(candidate: unknown): RuntimeCorrectionMutationResult
+  submitCorrection(candidate: unknown): RuntimeCorrectionMutationResult
 }>

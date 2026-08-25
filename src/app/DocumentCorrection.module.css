@@ -1,0 +1,251 @@
+.correctionPage {
+  width: min(100%, 50rem);
+  min-width: 0;
+  margin: 0 auto;
+}
+
+.correctionPage h2 {
+  margin: 0;
+  color: var(--ink-strong);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: clamp(2rem, 6vw, 3.2rem);
+  font-weight: 600;
+  line-height: 1.08;
+  letter-spacing: -0.035em;
+}
+
+.correctionPage h2:focus {
+  outline: none;
+}
+
+.eyebrow,
+.sectionLabel {
+  margin: 0;
+  color: var(--accent-strong);
+  font-size: 0.72rem;
+  font-weight: 780;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.eyebrow {
+  margin-bottom: 0.75rem;
+}
+
+.backButton {
+  min-height: 2.75rem;
+  margin: -0.75rem 0 1.25rem;
+  padding: 0.4rem 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent-strong);
+  font: inherit;
+  font-weight: 680;
+  cursor: pointer;
+}
+
+.pageHeader > p:not(.eyebrow, .caseReference) {
+  max-width: 42rem;
+  margin: 1rem 0 0;
+  color: var(--ink-muted);
+  line-height: 1.65;
+}
+
+.caseReference {
+  margin: 0.8rem 0 0;
+  color: var(--ink-light);
+  font-size: 0.78rem;
+  overflow-wrap: anywhere;
+}
+
+.reasonPanel,
+.versionCard,
+.prototypeContext {
+  width: 100%;
+  min-width: 0;
+  margin-top: 1rem;
+  padding: clamp(1.1rem, 3vw, 1.5rem);
+  box-sizing: border-box;
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.8rem;
+  background: var(--surface-raised);
+}
+
+.reasonPanel {
+  margin-top: 2rem;
+  border-left: 4px solid var(--error-strong);
+}
+
+.reasonPanel h3,
+.versionCard h3 {
+  margin: 0.3rem 0 0;
+  color: var(--ink-strong);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 1.35rem;
+  line-height: 1.25;
+}
+
+.reasonPanel p:not(.sectionLabel) {
+  margin: 0.65rem 0 0;
+  color: var(--ink-muted);
+  line-height: 1.55;
+}
+
+.versionHeading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.versionHeading > span {
+  flex: none;
+  padding: 0.32rem 0.58rem;
+  border: 1px solid #d8a7ab;
+  border-radius: 999px;
+  background: var(--error-soft);
+  color: var(--error-strong);
+  font-size: 0.72rem;
+  font-weight: 760;
+}
+
+.versionHeading > span[data-state='PREFLIGHT_PASSED'] {
+  border-color: #9ac8b1;
+  background: var(--success-soft);
+  color: var(--success-strong);
+}
+
+.replacementChoice,
+.readyPanel {
+  margin-top: 1.25rem;
+  padding: 1rem;
+  border: 1px solid var(--accent-border);
+  border-radius: 0.6rem;
+  background: var(--accent-faint);
+}
+
+.replacementChoice strong,
+.readyPanel strong {
+  display: block;
+  margin-top: 0.35rem;
+  color: var(--ink-strong);
+  font-size: 1rem;
+}
+
+.replacementChoice p:not(.sectionLabel),
+.readyPanel p {
+  margin: 0.4rem 0 0;
+  color: var(--ink-muted);
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.primaryButton,
+.secondaryButton {
+  min-height: 3rem;
+  margin-top: 1rem;
+  padding: 0.7rem 1rem;
+  border-radius: 0.45rem;
+  font: inherit;
+  font-weight: 720;
+  cursor: pointer;
+}
+
+.primaryButton {
+  border: 1px solid var(--accent-strong);
+  background: var(--accent-strong);
+  color: #fff;
+}
+
+.secondaryButton {
+  border: 1px solid var(--border-strong);
+  background: var(--surface-raised);
+  color: var(--ink-strong);
+}
+
+.primaryButton:hover:not(:disabled) {
+  border-color: var(--accent-deep);
+  background: var(--accent-deep);
+}
+
+.primaryButton:disabled {
+  opacity: 0.66;
+  cursor: default;
+}
+
+.primaryButton:focus-visible,
+.secondaryButton:focus-visible,
+.backButton:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+.historyNote,
+.successMessage,
+.inlineError {
+  margin: 1rem 0 0;
+  padding-left: 0.75rem;
+  border-left: 3px solid var(--border-strong);
+  color: var(--ink-muted);
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.successMessage {
+  border-left-color: var(--success-strong);
+}
+
+.inlineError {
+  border-left-color: var(--error-strong);
+  color: var(--error-strong);
+}
+
+.prototypeContext {
+  border-style: dashed;
+  background: var(--surface-page);
+  color: var(--ink-muted);
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+.prototypeContext strong {
+  color: var(--ink-strong);
+}
+
+.prototypeContext p {
+  margin: 0.35rem 0 0;
+}
+
+@media (max-width: 43.75rem) {
+  .correctionPage,
+  .reasonPanel,
+  .versionCard,
+  .prototypeContext {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+  }
+
+  .primaryButton,
+  .secondaryButton {
+    width: 100%;
+  }
+}
+
+@media (max-width: 36rem) {
+  .correctionPage h2 {
+    font-size: clamp(1.8rem, 10vw, 2.35rem);
+  }
+
+  .versionHeading {
+    flex-direction: column;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+  }
+}
