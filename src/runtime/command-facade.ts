@@ -24,6 +24,10 @@ import {
   type PersistenceEnvelope,
 } from '../persistence'
 import {
+  applySyntheticReviewCompletion,
+  syntheticReviewCompletionIdempotencyKey,
+} from './approval-runtime'
+import {
   applyBeginDraft,
   applySaveSnapshot,
   createRuntimeCase,
@@ -84,6 +88,7 @@ import type {
   RuntimeStorageFailure,
   RuntimeStatusInspectResult,
   RuntimeScrutinyMutationResult,
+  RuntimeSyntheticReviewMutationResult,
 } from './contracts'
 
 const scenarioInputSchema = z.object({ scenarioId: syntheticIdSchema }).strict()
@@ -321,7 +326,8 @@ function saveEnvelope(
     | 'BeginScrutiny'
     | 'RequestMedicalCorrection'
     | 'PrepareCorrection'
-    | 'SubmitCorrection',
+    | 'SubmitCorrection'
+    | 'CompleteSyntheticReview',
   caseId: SyntheticId,
 ): PersistenceEnvelope | RuntimeCommandRejected | RuntimeStorageFailure {
   const validation = persistenceEnvelopeSchema.safeParse(envelope)
@@ -2148,6 +2154,109 @@ export function createDemoRuntime(dependencies: DemoRuntimeDependencies): DemoRu
     })
   }
 
+  function completeSyntheticReview(
+    candidate: unknown,
+  ): RuntimeSyntheticReviewMutationResult {
+    const parsed = statusInputSchema.safeParse(candidate)
+    if (!parsed.success) {
+      return invalidCommand('CompleteSyntheticReview', parsed.error.issues.length)
+    }
+    const loaded = loadForMutation(dependencies)
+    if (loaded.status !== 'READY') {
+      return loaded
+    }
+    const persistedCase = loaded.state?.cases.find(
+      ({ caseId }) => caseId === parsed.data.caseId,
+    )
+    if (persistedCase === undefined) {
+      return Object.freeze({ status: 'CASE_NOT_FOUND', caseId: parsed.data.caseId })
+    }
+    const evaluation = evaluatePinnedDocumentPolicy(persistedCase)
+    if ('status' in evaluation) {
+      return evaluation
+    }
+    const requiredRequirementIds = evaluation.documentManifest?.requirements
+      .filter(({ required }) => required)
+      .map(({ id }) => id)
+    if (requiredRequirementIds === undefined) {
+      return invalidCommand(
+        'CompleteSyntheticReview',
+        1,
+        'APPROVAL_PREREQUISITES_NOT_MET',
+        persistedCase.caseId,
+      )
+    }
+    const currentVersions = requiredRequirementIds.map((requirementId) => {
+      const document = persistedCase.documents.find(
+        (candidate) => candidate.requirementId === requirementId,
+      )
+      return document?.versions.find(
+        ({ documentVersionId }) => documentVersionId === document.activeVersionId,
+      )
+    })
+    const completionAlreadyPersisted =
+      persistedCase.scrutiny.state === 'APPROVED' &&
+      persistedCase.eta.state === 'ISSUED' &&
+      currentVersions.every((version) => version?.state === 'ACCEPTED') &&
+      persistedCase.auditEvents.some(
+        ({ eventType }) => eventType === 'SyntheticScrutinyApproved',
+      ) &&
+      persistedCase.auditEvents.some(({ eventType }) => eventType === 'SyntheticETAIssued')
+    if (completionAlreadyPersisted) {
+      return deepFreeze({
+        status: 'SYNTHETIC_REVIEW_EXISTING',
+        operation: 'CompleteSyntheticReview',
+        caseId: persistedCase.caseId,
+        revision: persistedCase.revision,
+        scrutinyState: 'APPROVED',
+        etaState: 'ISSUED',
+        syntheticEtaReference: persistedCase.eta.syntheticEtaId,
+        idempotentReplay: true,
+      })
+    }
+    const mutation = applySyntheticReviewCompletion({
+      persistedCase,
+      requiredRequirementIds,
+      idempotencyKey: syntheticReviewCompletionIdempotencyKey(persistedCase.caseId),
+      metadata: dependencies.metadata,
+    })
+    if (!mutation.accepted) {
+      return invalidCommand(
+        'CompleteSyntheticReview',
+        1,
+        mutation.reasonCode === 'GUARD_FAILED'
+          ? 'APPROVAL_PREREQUISITES_NOT_MET'
+          : mutation.reasonCode,
+        persistedCase.caseId,
+      )
+    }
+    const envelope = loaded.state
+    if (envelope === null) {
+      throw new Error('A located Case must belong to a loaded persistence envelope.')
+    }
+    const saved = saveEnvelope(
+      dependencies,
+      replaceCase(envelope, mutation.persistedCase),
+      'CompleteSyntheticReview',
+      persistedCase.caseId,
+    )
+    if ('status' in saved) {
+      return saved
+    }
+    return deepFreeze({
+      status: 'SYNTHETIC_REVIEW_COMPLETED',
+      operation: 'CompleteSyntheticReview',
+      caseId: persistedCase.caseId,
+      revision: mutation.persistedCase.revision,
+      scrutinyState: 'APPROVED',
+      etaState: 'ISSUED',
+      acceptedDocumentVersionIds: mutation.acceptedDocumentVersionIds,
+      syntheticEtaReference: mutation.syntheticEtaReference,
+      emittedEventTypes: mutation.events.map(({ eventType }) => eventType),
+      emittedEventIds: mutation.events.map(({ eventId }) => eventId),
+    })
+  }
+
   return Object.freeze({
     inspectState,
     evaluateScenario,
@@ -2169,5 +2278,6 @@ export function createDemoRuntime(dependencies: DemoRuntimeDependencies): DemoRu
     inspectCorrection,
     prepareCorrection,
     submitCorrection,
+    completeSyntheticReview,
   })
 }

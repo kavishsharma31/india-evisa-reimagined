@@ -151,7 +151,7 @@ test('Medical A08 preserves V1, prepares only V2, and resumes unified no-action 
   await expect(page.getByRole('heading', { name: 'Under review' })).toBeVisible()
   await expect(page.getByText('Nothing needed from you')).toBeVisible()
   await expect(page.getByText('No action is needed now. Synthetic scrutiny is continuing.')).toBeVisible()
-  await expect(page.getByText('Demo review control')).toHaveCount(0)
+  await expect(page.getByText('Demo review control')).toHaveCount(1)
   const resumed = await loadCorrectionEvidence(page)
   expect(resumed.scrutinyState).toBe('IN_REVIEW')
   expect(resumed.versions.map(({ state }) => state)).toEqual(['SUPERSEDED', 'UNDER_REVIEW'])
@@ -192,7 +192,7 @@ test('Tourist remains in the ordinary A07 no-action status without Medical corre
   await expect(page.getByText('Tourism')).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Under review' })).toBeVisible()
   await expect(page.getByText('Nothing needed from you')).toBeVisible()
-  await expect(page.getByText('Demo review control')).toHaveCount(0)
+  await expect(page.getByText('Demo review control')).toHaveCount(1)
   await expect(page.getByRole('button', { name: 'Replace hospital letter' })).toHaveCount(0)
 })
 

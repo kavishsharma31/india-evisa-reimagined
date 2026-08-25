@@ -48,6 +48,7 @@ export function scrutinyEntryIdempotencyKey(caseId: SyntheticId): SyntheticId {
 
 function statusContent(input: {
   scrutinyState: PersistedCase['scrutiny']['state']
+  etaState: PersistedCase['eta']['state']
   replacementReady: boolean
 }): Readonly<{
   headline: string
@@ -82,12 +83,15 @@ function statusContent(input: {
   }
   if (input.scrutinyState === 'APPROVED') {
     return Object.freeze({
-      headline: 'Synthetic review complete',
-      explanation: 'The local synthetic review has completed. This is not a visa decision.',
+      headline: 'Demo application approved',
+      explanation:
+        input.etaState === 'ISSUED'
+          ? 'Local synthetic review is complete and a non-valid prototype ETA is available below.'
+          : 'Local synthetic review is complete. This is not a government decision.',
       applicantActionRequired: false,
       nextAction: null,
       actionGuidance: null,
-      waitMessage: 'No action is needed now.',
+      waitMessage: null,
     })
   }
   return Object.freeze({
@@ -133,6 +137,9 @@ export function buildStatusSummary(
   const documentsUnderReview = currentVersions.every(
     (version) => version?.state === 'UNDER_REVIEW',
   )
+  const documentsAccepted = currentVersions.every(
+    (version) => version?.state === 'ACCEPTED',
+  )
   const documentsSubmitted = currentVersions.every(
     (version) => version?.state === 'SUBMITTED',
   )
@@ -149,16 +156,19 @@ export function buildStatusSummary(
     )
   if (
     persistedCase.scrutiny.state === 'NOT_STARTED'
-      ? !documentsSubmitted
+      ? !documentsSubmitted || persistedCase.eta.state !== 'NOT_READY'
       : persistedCase.scrutiny.state === 'ACTION_REQUIRED'
-        ? !actionRequiredDocumentsValid
-        : !documentsUnderReview
+        ? !actionRequiredDocumentsValid || persistedCase.eta.state !== 'NOT_READY'
+        : persistedCase.scrutiny.state === 'APPROVED'
+          ? !documentsAccepted || persistedCase.eta.state !== 'ISSUED'
+          : !documentsUnderReview || persistedCase.eta.state !== 'NOT_READY'
   ) {
     return deepFreeze({ accepted: false, reasonCode: 'GUARD_FAILED' })
   }
 
   const content = statusContent({
     scrutinyState: persistedCase.scrutiny.state,
+    etaState: persistedCase.eta.state,
     replacementReady: hospitalVersion?.state === 'PREFLIGHT_PASSED',
   })
   const canRequestMedicalCorrection =
@@ -167,6 +177,13 @@ export function buildStatusSummary(
     hospitalVersion?.state === 'UNDER_REVIEW' &&
     documentFixtureForVersionId(hospitalVersion.documentVersionId)?.fixtureId ===
       'SYN-FIXTURE-HOSPITAL-LETTER-V1-001'
+  const canCompleteSyntheticReview =
+    persistedCase.scrutiny.state === 'IN_REVIEW' &&
+    persistedCase.eta.state === 'NOT_READY' &&
+    documentsUnderReview &&
+    (persistedCase.scenarioId === 'SYN-TOURIST-001' ||
+      documentFixtureForVersionId(hospitalVersion?.documentVersionId ?? 'SYN-MISSING')
+        ?.fixtureId === 'SYN-FIXTURE-HOSPITAL-LETTER-V2-001')
   return deepFreeze({
     accepted: true,
     summary: {
@@ -187,8 +204,14 @@ export function buildStatusSummary(
       actionGuidance: content.actionGuidance,
       demoReviewAction: canRequestMedicalCorrection
         ? 'REQUEST_MEDICAL_CORRECTION'
-        : null,
+        : canCompleteSyntheticReview
+          ? 'COMPLETE_SYNTHETIC_REVIEW'
+          : null,
       waitMessage: content.waitMessage,
+      syntheticEtaReference:
+        persistedCase.eta.state === 'ISSUED'
+          ? persistedCase.eta.syntheticEtaId
+          : null,
       journeyFacts: [
         { id: 'APPLICATION', label: 'Application', value: 'Application submitted', state: 'COMPLETE' },
         { id: 'PAYMENT', label: 'Payment', value: 'Payment confirmed', state: 'COMPLETE' },
@@ -197,16 +220,23 @@ export function buildStatusSummary(
           label: 'Documents',
           value: actionRequiredDocumentsValid
             ? 'Hospital letter correction required'
+            : documentsAccepted
+              ? 'Documents accepted'
             : documentsUnderReview
               ? 'Documents under review'
               : 'Documents submitted',
-          state: 'CURRENT',
+          state: documentsAccepted ? 'COMPLETE' : 'CURRENT',
         },
         {
           id: 'ETA',
           label: 'ETA',
-          value: persistedCase.eta.state === 'NOT_READY' ? 'ETA not ready' : 'ETA preparation continuing',
-          state: 'WAITING',
+          value:
+            persistedCase.eta.state === 'NOT_READY'
+              ? 'ETA not ready'
+              : persistedCase.eta.state === 'READY_TO_ISSUE'
+                ? 'Synthetic ETA ready to issue'
+                : 'Synthetic ETA issued',
+          state: persistedCase.eta.state === 'ISSUED' ? 'COMPLETE' : 'WAITING',
         },
       ],
     },

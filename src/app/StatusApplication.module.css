@@ -14,8 +14,15 @@
   letter-spacing: -0.035em;
 }
 
-.statusPage h2:focus {
+.statusPage h2:focus,
+.primaryStatus h3:focus:not(:focus-visible) {
   outline: none;
+}
+
+.primaryStatus h3:focus-visible {
+  border-radius: 0.18rem;
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 0.25rem;
 }
 
 .eyebrow,
@@ -47,6 +54,7 @@
 }
 
 .primaryStatus,
+.etaArtifact,
 .journeySection,
 .prototypeContext {
   width: 100%;
@@ -63,6 +71,94 @@
   margin-top: 2rem;
   border-top: 4px solid var(--accent-strong);
   box-shadow: 0 0.8rem 2.4rem rgb(32 50 55 / 7%);
+}
+
+.etaArtifact {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border: 3px dashed #8b4b27;
+  background: #fff8e8;
+  box-shadow: 0 0.8rem 2.4rem rgb(77 49 24 / 10%);
+}
+
+.etaWatermark {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  z-index: -1;
+  width: 130%;
+  margin: 0;
+  transform: translate(-50%, -50%) rotate(-12deg);
+  color: rgb(139 75 39 / 9%);
+  font-size: clamp(2.2rem, 8vw, 5.4rem);
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-align: center;
+}
+
+.etaContent {
+  width: 100%;
+  min-width: 0;
+}
+
+.etaContent h3 {
+  margin: 0.3rem 0 0;
+  color: var(--ink-strong);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: clamp(1.65rem, 5vw, 2.35rem);
+  line-height: 1.15;
+}
+
+.etaWarning,
+.borderDisclaimer {
+  margin: 1rem 0 0;
+  padding: 0.85rem 1rem;
+  border-left: 5px solid #8b4b27;
+  background: #fff;
+  color: #572d18;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.borderDisclaimer {
+  border-left-color: var(--accent-strong);
+  color: var(--ink-strong);
+  font-weight: 720;
+}
+
+.etaMetadata {
+  margin: 1.25rem 0 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.etaMetadata div {
+  min-width: 0;
+  padding: 0.8rem;
+  border: 1px solid rgb(139 75 39 / 28%);
+  border-radius: 0.45rem;
+  background: rgb(255 255 255 / 82%);
+}
+
+.etaMetadata dt,
+.etaMetadata dd {
+  margin: 0;
+}
+
+.etaMetadata dt {
+  color: var(--ink-light);
+  font-size: 0.74rem;
+}
+
+.etaMetadata dd {
+  margin-top: 0.3rem;
+  color: var(--ink-strong);
+  font-size: 0.88rem;
+  font-weight: 720;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .statusMarker {
@@ -264,6 +360,7 @@
 @media (max-width: 43.75rem) {
   .statusPage,
   .primaryStatus,
+  .etaArtifact,
   .journeySection,
   .prototypeContext {
     width: 100%;
@@ -279,6 +376,10 @@
     grid-template-columns: 1fr;
   }
 
+  .etaMetadata {
+    grid-template-columns: 1fr;
+  }
+
   .purposeTag {
     white-space: normal;
   }
@@ -286,6 +387,11 @@
   .primaryAction,
   .demoControl button {
     width: 100%;
+  }
+
+  .etaWatermark {
+    width: 160%;
+    font-size: clamp(2rem, 12vw, 3.4rem);
   }
 }
 

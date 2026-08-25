@@ -226,7 +226,7 @@ describe('runtime A08 Medical correction and resubmission', () => {
       headline: 'Under review',
       applicantActionRequired: false,
       nextAction: null,
-      demoReviewAction: null,
+      demoReviewAction: 'COMPLETE_SYNTHETIC_REVIEW',
       waitMessage: 'No action is needed now. Synthetic scrutiny is continuing.',
     })
   })
@@ -289,7 +289,7 @@ describe('runtime A08 Medical correction and resubmission', () => {
     expect(runtime.inspectStatus({ caseId })).toMatchObject({
       status: 'STATUS_INSPECTED',
       headline: 'Under review',
-      demoReviewAction: null,
+      demoReviewAction: 'COMPLETE_SYNTHETIC_REVIEW',
       applicantActionRequired: false,
     })
     expect(runtime.requestMedicalCorrection({ caseId })).toMatchObject({

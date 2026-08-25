@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import type { SyntheticId } from '../domain'
 import type { RuntimeStatusSummary } from '../runtime'
@@ -16,6 +16,8 @@ type StatusApplicationProps = Readonly<{
 export function StatusApplication(props: StatusApplicationProps) {
   const [, setRefreshIndex] = useState(0)
   const [actionMessage, setActionMessage] = useState<string | null>(null)
+  const focusIssuedStatus = useRef(false)
+  const projectedStatusHeading = useRef<HTMLHeadingElement>(null)
   const inspected = props.services.runtime.inspectStatus({ caseId: props.caseId })
   const status: RuntimeStatusSummary | null =
     inspected.status === 'STATUS_INSPECTED' ? inspected : null
@@ -28,6 +30,13 @@ export function StatusApplication(props: StatusApplicationProps) {
       props.onRecoveryRequired(inspected.status)
     }
   }, [inspected.status, props])
+
+  useEffect(() => {
+    if (focusIssuedStatus.current && status?.etaState === 'ISSUED') {
+      projectedStatusHeading.current?.focus()
+      focusIssuedStatus.current = false
+    }
+  }, [status?.etaState])
 
   function requestCorrection() {
     setActionMessage(null)
@@ -51,6 +60,24 @@ export function StatusApplication(props: StatusApplicationProps) {
     setActionMessage('The synthetic review outcome could not be recorded safely.')
   }
 
+  function completeSyntheticReview() {
+    setActionMessage(null)
+    const result = props.services.runtime.completeSyntheticReview({ caseId: props.caseId })
+    if (result.status === 'STORAGE_REQUIRES_RESET' || result.status === 'STORAGE_UNAVAILABLE') {
+      props.onRecoveryRequired(result.status)
+      return
+    }
+    if (
+      result.status === 'SYNTHETIC_REVIEW_COMPLETED' ||
+      result.status === 'SYNTHETIC_REVIEW_EXISTING'
+    ) {
+      focusIssuedStatus.current = true
+      setRefreshIndex((current) => current + 1)
+      return
+    }
+    setActionMessage('The local synthetic review could not be completed safely.')
+  }
+
   if (status === null) {
     return (
       <section className={styles.statusPage} aria-labelledby="status-heading">
@@ -71,9 +98,13 @@ export function StatusApplication(props: StatusApplicationProps) {
       </header>
 
       <section className={styles.primaryStatus} aria-labelledby="projected-status-heading">
-        <div className={styles.statusMarker} aria-hidden="true">···</div>
+        <div className={styles.statusMarker} aria-hidden="true">
+          {status.etaState === 'ISSUED' ? '✓' : '···'}
+        </div>
         <p className={styles.sectionLabel}>Current status</p>
-        <h3 id="projected-status-heading">{status.headline}</h3>
+        <h3 id="projected-status-heading" ref={projectedStatusHeading} tabIndex={-1}>
+          {status.headline}
+        </h3>
         <p>{status.explanation}</p>
         {status.actionGuidance ? <p className={styles.actionGuidance}>{status.actionGuidance}</p> : null}
         {status.nextAction === 'REPLACE_HOSPITAL_LETTER' ? (
@@ -88,6 +119,40 @@ export function StatusApplication(props: StatusApplicationProps) {
           </div>
         ) : null}
       </section>
+
+      {status.etaState === 'ISSUED' && status.syntheticEtaReference !== null ? (
+        <section className={styles.etaArtifact} aria-labelledby="synthetic-eta-heading">
+          <p className={styles.etaWatermark} aria-hidden="true">SYNTHETIC — NOT VALID</p>
+          <div className={styles.etaContent}>
+            <p className={styles.sectionLabel}>Prototype outcome</p>
+            <h3 id="synthetic-eta-heading">Synthetic ETA issued</h3>
+            <p className={styles.etaWarning}>
+              <strong>SYNTHETIC — NOT VALID. This is not a visa or travel document.</strong>
+            </p>
+            <p className={styles.borderDisclaimer}>
+              Entry into India is decided separately at the border.
+            </p>
+            <dl className={styles.etaMetadata}>
+              <div>
+                <dt>Synthetic Case reference</dt>
+                <dd>{status.caseId}</dd>
+              </div>
+              <div>
+                <dt>Purpose</dt>
+                <dd>{PURPOSE_NAMES[status.purposeFamily]}</dd>
+              </div>
+              <div>
+                <dt>Synthetic ETA reference</dt>
+                <dd>{status.syntheticEtaReference}</dd>
+              </div>
+              <div>
+                <dt>Policy version</dt>
+                <dd>{status.policyQualifiedVersion}</dd>
+              </div>
+            </dl>
+          </div>
+        </section>
+      ) : null}
 
       {actionMessage ? (
         <p
@@ -106,6 +171,19 @@ export function StatusApplication(props: StatusApplicationProps) {
           </p>
           <button type="button" onClick={requestCorrection}>
             Simulate hospital-letter review outcome
+          </button>
+        </details>
+      ) : null}
+
+      {status.demoReviewAction === 'COMPLETE_SYNTHETIC_REVIEW' ? (
+        <details className={styles.demoControl}>
+          <summary>Demo review control</summary>
+          <p>
+            Finish the deterministic local review simulation. This is not an applicant action,
+            government review, or government decision.
+          </p>
+          <button type="button" onClick={completeSyntheticReview}>
+            Complete synthetic review
           </button>
         </details>
       ) : null}
@@ -130,7 +208,10 @@ export function StatusApplication(props: StatusApplicationProps) {
 
       <aside className={styles.prototypeContext} aria-label="Simulation boundary">
         <strong>Local synthetic review only</strong>
-        <p>This does not represent government scrutiny, a decision, or a processing promise.</p>
+        <p>
+          This does not establish legal eligibility, government visa issuance, guaranteed entry,
+          or a processing promise.
+        </p>
         <p>Policy pin: {status.policyQualifiedVersion}</p>
       </aside>
     </section>

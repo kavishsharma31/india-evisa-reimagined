@@ -163,3 +163,53 @@ describe('A07 unified applicant status', () => {
     expect(screen.getByText(/Simulated delivery failed/)).toBeInTheDocument()
   })
 })
+
+describe('A09 synthetic approval and ETA outcome', () => {
+  it('completes corrected Medical review and renders the non-valid ETA artifact', async () => {
+    const prepared = prepareStatus('SYN-MEDICAL-001')
+    prepared.services.runtime.requestMedicalCorrection({ caseId: prepared.caseId })
+    prepared.services.runtime.prepareCorrection({
+      caseId: prepared.caseId,
+      fixtureId: 'SYN-FIXTURE-HOSPITAL-LETTER-V2-001',
+    })
+    prepared.services.runtime.submitCorrection({ caseId: prepared.caseId })
+    render(
+      <StatusApplication
+        services={prepared.services}
+        caseId={prepared.caseId}
+        onOpenCorrection={() => undefined}
+        onRecoveryRequired={() => undefined}
+      />,
+    )
+
+    await userEvent.click(screen.getByText('Demo review control'))
+    await userEvent.click(screen.getByRole('button', { name: 'Complete synthetic review' }))
+
+    const approvedHeading = screen.getByRole('heading', { name: 'Demo application approved' })
+    expect(approvedHeading).toHaveFocus()
+    expect(screen.getByRole('heading', { name: 'Synthetic ETA issued' })).toBeInTheDocument()
+    expect(screen.getByText(
+      'SYNTHETIC — NOT VALID. This is not a visa or travel document.',
+    )).toBeInTheDocument()
+    expect(screen.getByText(
+      'Entry into India is decided separately at the border.',
+    )).toBeInTheDocument()
+    expect(screen.getByText('SYN-ETA-MED-001')).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Under review' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Action required' })).not.toBeInTheDocument()
+  })
+
+  it('renders Tourist through the same issued-outcome component with safe metadata only', async () => {
+    renderStatus('SYN-TOURIST-001')
+    await userEvent.click(screen.getByText('Demo review control'))
+    await userEvent.click(screen.getByRole('button', { name: 'Complete synthetic review' }))
+
+    expect(screen.getAllByText('Tourism')).toHaveLength(2)
+    expect(screen.getByText('SYN-ETA-TOURIST-001')).toBeInTheDocument()
+    expect(screen.getAllByText(/SYN-EVISA-POLICY@1\.0\.0/)).toHaveLength(2)
+    expect(screen.getByText(
+      'SYNTHETIC — NOT VALID. This is not a visa or travel document.',
+    )).toBeInTheDocument()
+    expect(screen.queryByText(/passport number/i)).not.toBeInTheDocument()
+  })
+})

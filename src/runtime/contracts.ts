@@ -38,6 +38,7 @@ export type RuntimeOperation =
   | 'InspectCorrection'
   | 'PrepareCorrection'
   | 'SubmitCorrection'
+  | 'CompleteSyntheticReview'
 
 export type RuntimeCommandRejectionCode =
   | 'INVALID_COMMAND'
@@ -54,6 +55,7 @@ export type RuntimeCommandRejectionCode =
   | 'PAYMENT_EVIDENCE_MISMATCH'
   | 'STATUS_PREREQUISITES_NOT_MET'
   | 'CORRECTION_PREREQUISITES_NOT_MET'
+  | 'APPROVAL_PREREQUISITES_NOT_MET'
   | 'NOTIFICATION_ADAPTER_REJECTED'
   | 'PERSISTENCE_VALIDATION_FAILED'
 
@@ -89,6 +91,7 @@ export type RuntimeCommandRejected = Readonly<{
     missingRequirementIds?: readonly string[]
     paymentState?: PaymentState
     scrutinyState?: ScrutinyState
+    etaState?: EtaState
   }>
 }>
 
@@ -404,8 +407,9 @@ export type RuntimeStatusSummary = Readonly<{
   applicantActionRequired: boolean
   nextAction: 'BEGIN_SCRUTINY' | 'REPLACE_HOSPITAL_LETTER' | null
   actionGuidance: string | null
-  demoReviewAction: 'REQUEST_MEDICAL_CORRECTION' | null
+  demoReviewAction: 'REQUEST_MEDICAL_CORRECTION' | 'COMPLETE_SYNTHETIC_REVIEW' | null
   waitMessage: string | null
+  syntheticEtaReference: SyntheticId | null
   journeyFacts: readonly RuntimeStatusJourneyFact[]
 }>
 
@@ -439,6 +443,38 @@ export type RuntimeScrutinyExisting = Readonly<{
 export type RuntimeScrutinyMutationResult =
   | RuntimeScrutinyStarted
   | RuntimeScrutinyExisting
+  | RuntimeCaseNotFound
+  | RuntimeCommandRejected
+  | RuntimePolicyRejected
+  | RuntimeStorageFailure
+
+export type RuntimeSyntheticReviewCompleted = Readonly<{
+  status: 'SYNTHETIC_REVIEW_COMPLETED'
+  operation: 'CompleteSyntheticReview'
+  caseId: SyntheticId
+  revision: number
+  scrutinyState: 'APPROVED'
+  etaState: 'ISSUED'
+  acceptedDocumentVersionIds: readonly SyntheticId[]
+  syntheticEtaReference: SyntheticId
+  emittedEventTypes: readonly DomainEventType[]
+  emittedEventIds: readonly SyntheticId[]
+}>
+
+export type RuntimeSyntheticReviewExisting = Readonly<{
+  status: 'SYNTHETIC_REVIEW_EXISTING'
+  operation: 'CompleteSyntheticReview'
+  caseId: SyntheticId
+  revision: number
+  scrutinyState: 'APPROVED'
+  etaState: 'ISSUED'
+  syntheticEtaReference: SyntheticId
+  idempotentReplay: true
+}>
+
+export type RuntimeSyntheticReviewMutationResult =
+  | RuntimeSyntheticReviewCompleted
+  | RuntimeSyntheticReviewExisting
   | RuntimeCaseNotFound
   | RuntimeCommandRejected
   | RuntimePolicyRejected
@@ -597,4 +633,5 @@ export type DemoRuntime = Readonly<{
   inspectCorrection(candidate: unknown): RuntimeCorrectionInspectResult
   prepareCorrection(candidate: unknown): RuntimeCorrectionMutationResult
   submitCorrection(candidate: unknown): RuntimeCorrectionMutationResult
+  completeSyntheticReview(candidate: unknown): RuntimeSyntheticReviewMutationResult
 }>
