@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react'
 
 import { AdaptiveApplication } from './app/AdaptiveApplication'
 import { DocumentPreparation } from './app/DocumentPreparation'
+import { ReviewApplication } from './app/ReviewApplication'
+import { DOCUMENT_NAMES, PURPOSE_NAMES } from './app/applicant-labels'
 import { createAppRuntime, type AppRuntimeServices } from './app/create-app-runtime'
 import type { SyntheticId } from './domain'
-import type { PolicyEvaluationResult, PurposeFamily } from './policy'
+import type { PolicyEvaluationResult } from './policy'
 import type { RuntimeResumeResult } from './runtime'
 import styles from './App.module.css'
 
@@ -36,6 +38,7 @@ type Surface =
   | 'RESUME_CASE'
   | 'ADAPTIVE_APPLICATION'
   | 'DOCUMENT_PREPARATION'
+  | 'REVIEW_APPLICATION'
   | 'RESET_REQUIRED'
   | 'STORAGE_UNAVAILABLE'
 
@@ -54,17 +57,6 @@ type InitialView = Readonly<{
   resumedCase: ResumedCase | null
   evaluation: PolicyEvaluationResult | null
 }>
-
-const PURPOSE_NAMES: Readonly<Record<PurposeFamily, string>> = Object.freeze({
-  SYNTHETIC_MEDICAL_PURPOSE: 'Medical treatment',
-  SYNTHETIC_TOURIST_PURPOSE: 'Tourism',
-})
-
-const DOCUMENT_NAMES: Readonly<Record<string, string>> = Object.freeze({
-  SYNTHETIC_PORTRAIT: 'Synthetic portrait',
-  SYNTHETIC_PASSPORT_PAGE: 'Synthetic passport page',
-  SYNTHETIC_HOSPITAL_LETTER: 'Synthetic hospital letter',
-})
 
 function scenarioDetails(scenarioId: ScenarioId) {
   const scenario = SCENARIOS.find(({ id }) => id === scenarioId)
@@ -98,8 +90,22 @@ function inspectInitialView(services: AppRuntimeServices): InitialView {
   }
   if (inspected.status === 'VALID_STATE' && inspected.state.activeCaseId !== null) {
     const resumed = services.runtime.resumeCase()
-    if (resumed.status === 'CASE_RESUMED' && resumed.resumable) {
-      if (resumed.currentStep === 'DOCUMENTS' && isScenarioId(resumed.scenarioId)) {
+    if (resumed.status === 'CASE_RESUMED') {
+      if (
+        (resumed.applicationState === 'LOCKED' || resumed.currentStep === 'REVIEW') &&
+        isScenarioId(resumed.scenarioId)
+      ) {
+        return {
+          surface: 'REVIEW_APPLICATION',
+          resumedCase: resumed,
+          evaluation: null,
+        }
+      }
+      if (
+        resumed.resumable &&
+        resumed.currentStep === 'DOCUMENTS' &&
+        isScenarioId(resumed.scenarioId)
+      ) {
         const evaluated = services.runtime.evaluateScenario({ scenarioId: resumed.scenarioId })
         if (
           evaluated.status === 'POLICY_EVALUATED' &&
@@ -112,7 +118,9 @@ function inspectInitialView(services: AppRuntimeServices): InitialView {
           }
         }
       }
-      return { surface: 'RESUME_CASE', resumedCase: resumed, evaluation: null }
+      if (resumed.resumable) {
+        return { surface: 'RESUME_CASE', resumedCase: resumed, evaluation: null }
+      }
     }
     if (resumed.status === 'STORAGE_REQUIRES_RESET') {
       return { surface: 'RESET_REQUIRED', resumedCase: null, evaluation: null }
@@ -421,6 +429,7 @@ function App({ services: providedServices }: AppProps) {
   const [createdCase, setCreatedCase] = useState<CreatedCase | null>(null)
   const [resumedCase, setResumedCase] = useState<ResumedCase | null>(initialView.resumedCase)
   const [error, setError] = useState<string | null>(null)
+  const [documentEditMode, setDocumentEditMode] = useState(false)
   useEffect(() => {
     const headingIdBySurface: Partial<Record<Surface, string>> = {
       SCENARIO_SELECTION: 'scenario-heading',
@@ -429,13 +438,18 @@ function App({ services: providedServices }: AppProps) {
       RESUME_CASE: 'resume-heading',
       ADAPTIVE_APPLICATION: 'application-heading',
       DOCUMENT_PREPARATION: 'documents-heading',
+      REVIEW_APPLICATION: 'review-heading',
       RESET_REQUIRED: 'recovery-heading',
       STORAGE_UNAVAILABLE: 'recovery-heading',
     }
     const headingId = headingIdBySurface[surface]
     if (headingId !== undefined) {
       const heading = document.getElementById(headingId)
-      if (surface === 'ADAPTIVE_APPLICATION' || surface === 'DOCUMENT_PREPARATION') {
+      if (
+        surface === 'ADAPTIVE_APPLICATION' ||
+        surface === 'DOCUMENT_PREPARATION' ||
+        surface === 'REVIEW_APPLICATION'
+      ) {
         document.documentElement.scrollTop = 0
         document.body.scrollTop = 0
         heading?.focus({ preventScroll: true })
@@ -618,7 +632,7 @@ function App({ services: providedServices }: AppProps) {
     setSurface('RESUME_CASE')
   }
 
-  function openDocumentPreparation() {
+  function openDocumentPreparation(editMode = false) {
     if (resumedCase === null) {
       setError('The saved synthetic Case is not available for document preparation.')
       return
@@ -634,7 +648,7 @@ function App({ services: providedServices }: AppProps) {
     }
     if (
       refreshed.status !== 'CASE_RESUMED' ||
-      refreshed.currentStep !== 'DOCUMENTS' ||
+      (refreshed.currentStep !== 'DOCUMENTS' && refreshed.currentStep !== 'REVIEW') ||
       !isScenarioId(refreshed.scenarioId)
     ) {
       setError('Application details must be saved before demo documents can be prepared.')
@@ -654,9 +668,65 @@ function App({ services: providedServices }: AppProps) {
       return
     }
     setError(null)
+    setDocumentEditMode(editMode)
     setResumedCase(refreshed)
     setSelectedScenarioId(refreshed.scenarioId)
     setSurface('DOCUMENT_PREPARATION')
+  }
+
+  function openReviewApplication() {
+    if (resumedCase === null) {
+      setError('The saved synthetic Case is not available for review.')
+      return
+    }
+    const refreshed = services.runtime.resumeCase({ caseId: resumedCase.caseId })
+    if (refreshed.status === 'STORAGE_REQUIRES_RESET') {
+      setSurface('RESET_REQUIRED')
+      return
+    }
+    if (refreshed.status === 'STORAGE_UNAVAILABLE') {
+      setSurface('STORAGE_UNAVAILABLE')
+      return
+    }
+    if (refreshed.status !== 'CASE_RESUMED' || !isScenarioId(refreshed.scenarioId)) {
+      setError('The saved synthetic Case could not be loaded safely for review.')
+      return
+    }
+    if (refreshed.applicationState !== 'LOCKED' && refreshed.currentStep !== 'REVIEW') {
+      const prepared = services.runtime.prepareReview({
+        caseId: refreshed.caseId,
+        idempotencyKey: `SYN-IDEMPOTENCY-A05-UI-REVIEW-${refreshed.caseId.slice('SYN-'.length)}-${String(refreshed.revision + 1).padStart(3, '0')}`,
+      })
+      if (
+        prepared.status === 'STORAGE_REQUIRES_RESET' ||
+        prepared.status === 'STORAGE_UNAVAILABLE'
+      ) {
+        handleDocumentRecovery(prepared.status)
+        return
+      }
+      if (prepared.status !== 'REVIEW_PREPARED') {
+        setError('Every required answer and demo document must be ready before review.')
+        return
+      }
+    }
+    const review = services.runtime.inspectReview({ caseId: refreshed.caseId })
+    if (review.status === 'STORAGE_REQUIRES_RESET' || review.status === 'STORAGE_UNAVAILABLE') {
+      handleDocumentRecovery(review.status)
+      return
+    }
+    if (review.status !== 'REVIEW_INSPECTED') {
+      setError('The authoritative demo review could not be prepared safely.')
+      return
+    }
+    const current = services.runtime.resumeCase({ caseId: refreshed.caseId })
+    if (current.status !== 'CASE_RESUMED') {
+      setError('The prepared demo review could not be reloaded safely.')
+      return
+    }
+    setError(null)
+    setResumedCase(current)
+    setSelectedScenarioId(refreshed.scenarioId)
+    setSurface('REVIEW_APPLICATION')
   }
 
   function backToApplicationDetails() {
@@ -755,7 +825,7 @@ function App({ services: providedServices }: AppProps) {
             evaluation={evaluation}
             purposeName={scenarioDetails(resumedCase.scenarioId).name}
             onBack={backToSavedCase}
-            onPrepareDocuments={openDocumentPreparation}
+            onPrepareDocuments={() => openDocumentPreparation()}
           />
         ) : null}
         {surface === 'DOCUMENT_PREPARATION' && resumedCase && isScenarioId(resumedCase.scenarioId) ? (
@@ -763,7 +833,18 @@ function App({ services: providedServices }: AppProps) {
             services={services}
             caseId={resumedCase.caseId}
             purposeName={scenarioDetails(resumedCase.scenarioId).name}
+            editMode={documentEditMode}
             onBack={backToApplicationDetails}
+            onReviewApplication={openReviewApplication}
+            onRecoveryRequired={handleDocumentRecovery}
+          />
+        ) : null}
+        {surface === 'REVIEW_APPLICATION' && resumedCase ? (
+          <ReviewApplication
+            services={services}
+            caseId={resumedCase.caseId}
+            onEditApplication={backToApplicationDetails}
+            onEditDocuments={() => openDocumentPreparation(true)}
             onRecoveryRequired={handleDocumentRecovery}
           />
         ) : null}

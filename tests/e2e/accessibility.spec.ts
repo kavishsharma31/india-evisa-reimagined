@@ -83,4 +83,13 @@ test('A02 and A03 states have no automatically detectable accessibility violatio
   await hospitalCard.getByRole('button', { name: 'Run technical check' }).click()
   await expect(page.getByRole('heading', { name: 'Documents ready' })).toBeVisible()
   await expectNoAxeViolations(page)
+
+  await page.getByRole('button', { name: 'Review application' }).click()
+  await expect(page.getByRole('heading', { name: 'Review your demo application' })).toBeVisible()
+  await expectNoAxeViolations(page)
+
+  await page.getByRole('checkbox').check()
+  await page.getByRole('button', { name: 'Submit demo application' }).click()
+  await expect(page.getByRole('heading', { name: 'Application submitted in demo' })).toBeVisible()
+  await expectNoAxeViolations(page)
 })

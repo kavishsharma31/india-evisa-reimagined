@@ -71,7 +71,9 @@ function identifierBody(identifier: SyntheticId): string {
   return identifier.slice('SYN-'.length)
 }
 
-function fixtureForVersionId(documentVersionId: SyntheticId): DocumentFixture | undefined {
+export function documentFixtureForVersionId(
+  documentVersionId: SyntheticId,
+): DocumentFixture | undefined {
   const legacyFixtureId = legacyFixtureByVersionId[documentVersionId]
   if (legacyFixtureId !== undefined) {
     return canonicalDocumentFixtures.find(({ fixtureId }) => fixtureId === legacyFixtureId)
@@ -104,7 +106,7 @@ function versionView(
   persistedCase: PersistedCase,
   version: PersistedCase['documents'][number]['versions'][number],
 ): RuntimeDocumentVersionView | null {
-  const fixture = fixtureForVersionId(version.documentVersionId)
+  const fixture = documentFixtureForVersionId(version.documentVersionId)
   if (fixture === undefined) {
     return null
   }

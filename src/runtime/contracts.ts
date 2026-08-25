@@ -23,6 +23,9 @@ export type RuntimeOperation =
   | 'ResumeCase'
   | 'InspectDocuments'
   | 'PrepareDocument'
+  | 'InspectReview'
+  | 'PrepareReview'
+  | 'SubmitApplication'
 
 export type RuntimeCommandRejectionCode =
   | 'INVALID_COMMAND'
@@ -33,6 +36,7 @@ export type RuntimeCommandRejectionCode =
   | 'CASE_CONFLICT'
   | 'FIXTURE_NOT_COMPATIBLE'
   | 'DOCUMENT_INSPECTION_UNAVAILABLE'
+  | 'REVIEW_PREREQUISITES_NOT_MET'
   | 'PERSISTENCE_VALIDATION_FAILED'
 
 export type RuntimeStorageRequiresReset = Readonly<{
@@ -63,6 +67,8 @@ export type RuntimeCommandRejected = Readonly<{
     allowedNextStates?: readonly ApplicationState[]
     documentState?: DocumentVersionState
     requirementId?: string
+    missingQuestionIds?: readonly string[]
+    missingRequirementIds?: readonly string[]
   }>
 }>
 
@@ -216,6 +222,80 @@ export type RuntimeDocumentMutationResult =
   | RuntimePolicyRejected
   | RuntimeStorageFailure
 
+export type RuntimeReviewAnswerView = Readonly<{
+  questionId: string
+  prompt: string
+  answerValue: string
+  allowedValues: readonly string[]
+}>
+
+export type RuntimeReviewDocumentView = Readonly<{
+  requirementId: string
+  documentType: string
+  documentVersionId: SyntheticId
+  fixtureId: SyntheticId
+  state: DocumentVersionState
+}>
+
+export type RuntimeReviewSummary = Readonly<{
+  status: 'REVIEW_INSPECTED'
+  caseId: SyntheticId
+  scenarioId: SyntheticId
+  purposeFamily: NonNullable<PolicyEvaluationResult['suggestedPurposeFamily']>
+  policyQualifiedVersion: PolicyQualifiedVersion
+  applicationState: ApplicationState
+  revision: number
+  answers: readonly RuntimeReviewAnswerView[]
+  documents: readonly RuntimeReviewDocumentView[]
+  syntheticFee: NonNullable<PolicyEvaluationResult['syntheticFee']>
+  locked: boolean
+}>
+
+export type RuntimeReviewInspectResult =
+  | RuntimeReviewSummary
+  | RuntimeCaseNotFound
+  | RuntimeCommandRejected
+  | RuntimePolicyRejected
+  | RuntimeStorageFailure
+
+export type RuntimeReviewPrepared = Readonly<{
+  status: 'REVIEW_PREPARED'
+  operation: 'PrepareReview'
+  caseId: SyntheticId
+  revision: number
+  snapshotId: SyntheticId
+  idempotentReplay: boolean
+}>
+
+export type RuntimeApplicationSubmitted = Readonly<{
+  status: 'APPLICATION_SUBMITTED'
+  operation: 'SubmitApplication'
+  caseId: SyntheticId
+  revision: number
+  applicationState: 'LOCKED'
+  submittedDocumentVersionIds: readonly SyntheticId[]
+  emittedEventTypes: readonly DomainEventType[]
+  emittedEventIds: readonly SyntheticId[]
+}>
+
+export type RuntimeApplicationAlreadySubmitted = Readonly<{
+  status: 'APPLICATION_ALREADY_SUBMITTED'
+  operation: 'SubmitApplication'
+  caseId: SyntheticId
+  revision: number
+  applicationState: 'LOCKED'
+  idempotentReplay: true
+}>
+
+export type RuntimeReviewMutationResult =
+  | RuntimeReviewPrepared
+  | RuntimeApplicationSubmitted
+  | RuntimeApplicationAlreadySubmitted
+  | RuntimeCommandRejected
+  | RuntimeCaseNotFound
+  | RuntimePolicyRejected
+  | RuntimeStorageFailure
+
 export type RuntimeMetadataSource = Readonly<{
   nextTimestamp(previousTimestamp: SyntheticTimestamp): SyntheticTimestamp
   commandId(caseId: SyntheticId, operation: RuntimeOperation, revision: number): SyntheticId
@@ -240,4 +320,7 @@ export type DemoRuntime = Readonly<{
   resumeCase(candidate?: unknown): RuntimeResumeResult
   inspectDocuments(candidate: unknown): RuntimeDocumentInspectResult
   prepareDocumentFixture(candidate: unknown): RuntimeDocumentMutationResult
+  inspectReview(candidate: unknown): RuntimeReviewInspectResult
+  prepareReview(candidate: unknown): RuntimeReviewMutationResult
+  submitApplication(candidate: unknown): RuntimeReviewMutationResult
 }>

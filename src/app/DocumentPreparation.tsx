@@ -6,31 +6,24 @@ import type {
   RuntimeDocumentsInspected,
 } from '../runtime'
 import type { AppRuntimeServices } from './create-app-runtime'
+import {
+  DOCUMENT_FIXTURE_LABELS,
+  DOCUMENT_NAMES,
+} from './applicant-labels'
 import styles from './DocumentPreparation.module.css'
 
 type DocumentPreparationProps = Readonly<{
   services: AppRuntimeServices
   caseId: SyntheticId
   purposeName: string
+  editMode?: boolean
   onBack(): void
+  onReviewApplication(): void
   onRecoveryRequired(status: 'STORAGE_REQUIRES_RESET' | 'STORAGE_UNAVAILABLE'): void
 }>
 
 type RequirementMessages = Readonly<Record<string, string>>
 type FixtureSelections = Readonly<Record<string, SyntheticId>>
-
-const DOCUMENT_NAMES: Readonly<Record<string, string>> = Object.freeze({
-  SYNTHETIC_PORTRAIT: 'Synthetic portrait',
-  SYNTHETIC_PASSPORT_PAGE: 'Synthetic passport page',
-  SYNTHETIC_HOSPITAL_LETTER: 'Synthetic hospital letter',
-})
-
-const FIXTURE_LABELS: Readonly<Record<string, string>> = Object.freeze({
-  'SYN-FIXTURE-PORTRAIT-VALID-001': 'Bundled demo portrait',
-  'SYN-FIXTURE-PASSPORT-VALID-001': 'Clear demo passport page',
-  'SYN-FIXTURE-PASSPORT-UNCLEAR-001': 'Unclear demo passport page — recovery example',
-  'SYN-FIXTURE-HOSPITAL-LETTER-V1-001': 'Bundled demo hospital letter',
-})
 
 function documentName(requirement: RuntimeDocumentRequirementView): string {
   return DOCUMENT_NAMES[requirement.documentType] ?? 'Synthetic document'
@@ -182,7 +175,7 @@ export function DocumentPreparation(props: DocumentPreparationProps) {
     )
   }
 
-  if (documents.allReady) {
+  if (documents.allReady && !props.editMode) {
     return (
       <section className={styles.completionPanel} aria-labelledby="documents-heading" aria-live="polite">
         <div className={styles.completionMarker} aria-hidden="true">✓</div>
@@ -194,9 +187,14 @@ export function DocumentPreparation(props: DocumentPreparationProps) {
           <strong>Review</strong>
           <p>Review and submission begin in the next applicant step.</p>
         </div>
-        <button className={styles.secondaryButton} type="button" onClick={props.onBack}>
-          Back to application details
-        </button>
+        <div className={styles.completionActions}>
+          <button className={styles.checkButton} type="button" onClick={props.onReviewApplication}>
+            Review application <span aria-hidden="true">→</span>
+          </button>
+          <button className={styles.secondaryButton} type="button" onClick={props.onBack}>
+            Back to application details
+          </button>
+        </div>
       </section>
     )
   }
@@ -265,7 +263,7 @@ export function DocumentPreparation(props: DocumentPreparationProps) {
               >
                 {requirement.fixtureOptions.map((option) => (
                   <option value={option.fixtureId} key={option.fixtureId}>
-                    {FIXTURE_LABELS[option.fixtureId] ?? option.label}
+                    {DOCUMENT_FIXTURE_LABELS[option.fixtureId] ?? option.label}
                   </option>
                 ))}
               </select>
@@ -300,6 +298,14 @@ export function DocumentPreparation(props: DocumentPreparationProps) {
           )
         })}
       </div>
+      {documents.allReady ? (
+        <div className={styles.returnToReview}>
+          <p>All required demo documents remain ready.</p>
+          <button className={styles.checkButton} type="button" onClick={props.onReviewApplication}>
+            Return to review <span aria-hidden="true">→</span>
+          </button>
+        </div>
+      ) : null}
     </section>
   )
 }

@@ -35,6 +35,10 @@ import {
   applyDocumentPreparation,
   buildDocumentPreparationView,
 } from './document-runtime'
+import {
+  applyReviewSubmission,
+  buildReviewSummary,
+} from './review-runtime'
 import type {
   DemoRuntime,
   DemoRuntimeDependencies,
@@ -47,6 +51,8 @@ import type {
   RuntimeMutationResult,
   RuntimePolicyRejected,
   RuntimeResumeResult,
+  RuntimeReviewInspectResult,
+  RuntimeReviewMutationResult,
   RuntimeStorageFailure,
 } from './contracts'
 
@@ -82,6 +88,10 @@ const prepareDocumentInputSchema = z
     fixtureId: syntheticIdSchema,
     idempotencyKey: syntheticIdSchema,
   })
+  .strict()
+const reviewInputSchema = z.object({ caseId: syntheticIdSchema }).strict()
+const reviewMutationInputSchema = z
+  .object({ caseId: syntheticIdSchema, idempotencyKey: syntheticIdSchema })
   .strict()
 
 type CanonicalScenarioId = PersistedCase['scenarioId']
@@ -261,7 +271,13 @@ function appendCase(
 function saveEnvelope(
   dependencies: DemoRuntimeDependencies,
   envelope: PersistenceEnvelope,
-  operation: 'CreateDraft' | 'BeginDraft' | 'SaveSnapshot' | 'PrepareDocument',
+  operation:
+    | 'CreateDraft'
+    | 'BeginDraft'
+    | 'SaveSnapshot'
+    | 'PrepareDocument'
+    | 'PrepareReview'
+    | 'SubmitApplication',
   caseId: SyntheticId,
 ): PersistenceEnvelope | RuntimeCommandRejected | RuntimeStorageFailure {
   const validation = persistenceEnvelopeSchema.safeParse(envelope)
@@ -350,6 +366,25 @@ function evaluatePinnedDocumentPolicy(
     return evaluationPolicyRejection(evaluation)
   }
   return evaluation
+}
+
+function reviewPrerequisiteRejection(
+  operation: 'InspectReview' | 'PrepareReview' | 'SubmitApplication',
+  persistedCase: PersistedCase,
+  missingQuestionIds: readonly string[],
+  missingRequirementIds: readonly string[],
+): RuntimeCommandRejected {
+  return deepFreeze({
+    status: 'COMMAND_REJECTED',
+    operation,
+    reasonCode: 'REVIEW_PREREQUISITES_NOT_MET',
+    caseId: persistedCase.caseId,
+    diagnostic: {
+      currentState: persistedCase.application.state,
+      missingQuestionIds,
+      missingRequirementIds,
+    },
+  })
 }
 
 function documentRequestReference(
@@ -806,7 +841,8 @@ export function createDemoRuntime(dependencies: DemoRuntimeDependencies): DemoRu
     const latestSnapshot = persistedCase.application.draftSnapshots.at(-1)
     if (
       persistedCase.application.state !== 'IN_PROGRESS' ||
-      latestSnapshot?.currentStep !== 'DOCUMENTS'
+      (latestSnapshot?.currentStep !== 'DOCUMENTS' &&
+        latestSnapshot?.currentStep !== 'REVIEW')
     ) {
       return deepFreeze({
         status: 'COMMAND_REJECTED',
@@ -843,7 +879,8 @@ export function createDemoRuntime(dependencies: DemoRuntimeDependencies): DemoRu
     const latestSnapshot = persistedCase.application.draftSnapshots.at(-1)
     if (
       persistedCase.application.state !== 'IN_PROGRESS' ||
-      latestSnapshot?.currentStep !== 'DOCUMENTS'
+      (latestSnapshot?.currentStep !== 'DOCUMENTS' &&
+        latestSnapshot?.currentStep !== 'REVIEW')
     ) {
       return deepFreeze({
         status: 'COMMAND_REJECTED',
@@ -992,6 +1029,247 @@ export function createDemoRuntime(dependencies: DemoRuntimeDependencies): DemoRu
     })
   }
 
+  function inspectReview(candidate: unknown): RuntimeReviewInspectResult {
+    const parsed = reviewInputSchema.safeParse(candidate)
+    if (!parsed.success) {
+      return invalidCommand('InspectReview', parsed.error.issues.length)
+    }
+    const loaded = loadForMutation(dependencies)
+    if (loaded.status !== 'READY') {
+      return loaded
+    }
+    const persistedCase = loaded.state?.cases.find(
+      ({ caseId }) => caseId === parsed.data.caseId,
+    )
+    if (persistedCase === undefined) {
+      return Object.freeze({ status: 'CASE_NOT_FOUND', caseId: parsed.data.caseId })
+    }
+    const latestStep = persistedCase.application.draftSnapshots.at(-1)?.currentStep
+    if (
+      (persistedCase.application.state !== 'IN_PROGRESS' || latestStep !== 'REVIEW') &&
+      persistedCase.application.state !== 'LOCKED'
+    ) {
+      return deepFreeze({
+        status: 'COMMAND_REJECTED',
+        operation: 'InspectReview',
+        reasonCode: 'GUARD_FAILED',
+        caseId: persistedCase.caseId,
+        diagnostic: {
+          currentState: persistedCase.application.state,
+          requiredState: 'IN_PROGRESS',
+        },
+      })
+    }
+    const evaluation = evaluatePinnedDocumentPolicy(persistedCase)
+    if ('status' in evaluation) {
+      return evaluation
+    }
+    const projection = buildReviewSummary(persistedCase, evaluation)
+    if (!projection.accepted) {
+      return reviewPrerequisiteRejection(
+        'InspectReview',
+        persistedCase,
+        projection.missingQuestionIds,
+        projection.missingRequirementIds,
+      )
+    }
+    return projection.summary
+  }
+
+  function prepareReview(candidate: unknown): RuntimeReviewMutationResult {
+    const parsed = reviewMutationInputSchema.safeParse(candidate)
+    if (!parsed.success) {
+      return invalidCommand('PrepareReview', parsed.error.issues.length)
+    }
+    const loaded = loadForMutation(dependencies)
+    if (loaded.status !== 'READY') {
+      return loaded
+    }
+    const input = parsed.data
+    const persistedCase = loaded.state?.cases.find(({ caseId }) => caseId === input.caseId)
+    if (persistedCase === undefined) {
+      return Object.freeze({ status: 'CASE_NOT_FOUND', caseId: input.caseId })
+    }
+    const latestSnapshot = persistedCase.application.draftSnapshots.at(-1)
+    if (latestSnapshot?.currentStep === 'REVIEW') {
+      return deepFreeze({
+        status: 'REVIEW_PREPARED',
+        operation: 'PrepareReview',
+        caseId: persistedCase.caseId,
+        revision: persistedCase.revision,
+        snapshotId: latestSnapshot.snapshotId,
+        idempotentReplay: true,
+      })
+    }
+    if (
+      persistedCase.application.state !== 'IN_PROGRESS' ||
+      latestSnapshot?.currentStep !== 'DOCUMENTS'
+    ) {
+      return deepFreeze({
+        status: 'COMMAND_REJECTED',
+        operation: 'PrepareReview',
+        reasonCode: 'GUARD_FAILED',
+        caseId: persistedCase.caseId,
+        diagnostic: {
+          currentState: persistedCase.application.state,
+          requiredState: 'IN_PROGRESS',
+        },
+      })
+    }
+    const evaluation = evaluatePinnedDocumentPolicy(persistedCase)
+    if ('status' in evaluation) {
+      return evaluation
+    }
+    const projection = buildReviewSummary(persistedCase, evaluation)
+    if (!projection.accepted) {
+      return reviewPrerequisiteRejection(
+        'PrepareReview',
+        persistedCase,
+        projection.missingQuestionIds,
+        projection.missingRequirementIds,
+      )
+    }
+    if (existingIdempotentEvent(persistedCase, input.idempotencyKey) !== undefined) {
+      return invalidCommand(
+        'PrepareReview',
+        1,
+        'IDEMPOTENCY_CONFLICT',
+        persistedCase.caseId,
+      )
+    }
+
+    const nextRevision = persistedCase.revision + 1
+    const snapshotId = dependencies.metadata.snapshotId(
+      persistedCase.caseId,
+      persistedCase.application.draftSnapshots.length + 1,
+    )
+    const command: SaveSnapshotCommand = deepFreeze({
+      commandId: dependencies.metadata.commandId(
+        persistedCase.caseId,
+        'PrepareReview',
+        nextRevision,
+      ),
+      type: 'SaveSnapshot',
+      caseId: persistedCase.caseId,
+      actor: 'APPLICANT',
+      syntheticTimestamp: dependencies.metadata.nextTimestamp(persistedCase.updatedAt),
+      idempotencyKey: input.idempotencyKey,
+      payload: { draftSnapshotId: snapshotId, stepId: 'REVIEW' },
+    })
+    const mutation = applySaveSnapshot(
+      persistedCase,
+      command,
+      latestSnapshot.answers,
+      dependencies.metadata,
+    )
+    const envelope = loaded.state
+    if (envelope === null) {
+      throw new Error('A located Case must belong to a loaded persistence envelope.')
+    }
+    const saved = saveEnvelope(
+      dependencies,
+      replaceCase(envelope, mutation.persistedCase),
+      'PrepareReview',
+      persistedCase.caseId,
+    )
+    if ('status' in saved) {
+      return saved
+    }
+    return deepFreeze({
+      status: 'REVIEW_PREPARED',
+      operation: 'PrepareReview',
+      caseId: persistedCase.caseId,
+      revision: mutation.persistedCase.revision,
+      snapshotId,
+      idempotentReplay: false,
+    })
+  }
+
+  function submitApplication(candidate: unknown): RuntimeReviewMutationResult {
+    const parsed = reviewMutationInputSchema.safeParse(candidate)
+    if (!parsed.success) {
+      return invalidCommand('SubmitApplication', parsed.error.issues.length)
+    }
+    const loaded = loadForMutation(dependencies)
+    if (loaded.status !== 'READY') {
+      return loaded
+    }
+    const input = parsed.data
+    const persistedCase = loaded.state?.cases.find(({ caseId }) => caseId === input.caseId)
+    if (persistedCase === undefined) {
+      return Object.freeze({ status: 'CASE_NOT_FOUND', caseId: input.caseId })
+    }
+    if (persistedCase.application.state === 'LOCKED') {
+      return deepFreeze({
+        status: 'APPLICATION_ALREADY_SUBMITTED',
+        operation: 'SubmitApplication',
+        caseId: persistedCase.caseId,
+        revision: persistedCase.revision,
+        applicationState: 'LOCKED',
+        idempotentReplay: true,
+      })
+    }
+    if (existingIdempotentEvent(persistedCase, input.idempotencyKey) !== undefined) {
+      return invalidCommand(
+        'SubmitApplication',
+        1,
+        'IDEMPOTENCY_CONFLICT',
+        persistedCase.caseId,
+      )
+    }
+    const evaluation = evaluatePinnedDocumentPolicy(persistedCase)
+    if ('status' in evaluation) {
+      return evaluation
+    }
+    const projection = buildReviewSummary(persistedCase, evaluation)
+    if (!projection.accepted) {
+      return reviewPrerequisiteRejection(
+        'SubmitApplication',
+        persistedCase,
+        projection.missingQuestionIds,
+        projection.missingRequirementIds,
+      )
+    }
+    const mutation = applyReviewSubmission({
+      persistedCase,
+      evaluation,
+      idempotencyKey: input.idempotencyKey,
+      metadata: dependencies.metadata,
+    })
+    if (!mutation.accepted) {
+      return deepFreeze({
+        status: 'COMMAND_REJECTED',
+        operation: 'SubmitApplication',
+        reasonCode: mutation.reasonCode,
+        caseId: persistedCase.caseId,
+        diagnostic: { currentState: persistedCase.application.state },
+      })
+    }
+    const envelope = loaded.state
+    if (envelope === null) {
+      throw new Error('A located Case must belong to a loaded persistence envelope.')
+    }
+    const saved = saveEnvelope(
+      dependencies,
+      replaceCase(envelope, mutation.persistedCase),
+      'SubmitApplication',
+      persistedCase.caseId,
+    )
+    if ('status' in saved) {
+      return saved
+    }
+    return deepFreeze({
+      status: 'APPLICATION_SUBMITTED',
+      operation: 'SubmitApplication',
+      caseId: persistedCase.caseId,
+      revision: mutation.persistedCase.revision,
+      applicationState: 'LOCKED',
+      submittedDocumentVersionIds: mutation.submittedDocumentVersionIds,
+      emittedEventTypes: mutation.events.map(({ eventType }) => eventType),
+      emittedEventIds: mutation.events.map(({ eventId }) => eventId),
+    })
+  }
+
   return Object.freeze({
     inspectState,
     evaluateScenario,
@@ -1001,5 +1279,8 @@ export function createDemoRuntime(dependencies: DemoRuntimeDependencies): DemoRu
     resumeCase,
     inspectDocuments,
     prepareDocumentFixture,
+    inspectReview,
+    prepareReview,
+    submitApplication,
   })
 }

@@ -4,6 +4,7 @@ import type { SyntheticId } from '../domain'
 import type { PolicyEvaluationResult } from '../policy'
 import type { RuntimeResumeResult } from '../runtime'
 import type { AppRuntimeServices } from './create-app-runtime'
+import { applicantAnswerLabel } from './applicant-labels'
 import styles from './AdaptiveApplication.module.css'
 
 type ResumedCase = Extract<RuntimeResumeResult, { status: 'CASE_RESUMED' }>
@@ -19,30 +20,6 @@ type AdaptiveApplicationProps = Readonly<{
   onBack(): void
   onPrepareDocuments(): void
 }>
-
-const ANSWER_LABELS: Readonly<Record<string, string>> = Object.freeze({
-  'SYN-POLICY-COHORT-A': 'Synthetic policy cohort A',
-  SYNTHETIC_STANDARD_PASSPORT: 'Synthetic standard passport',
-  SYNTHETIC_MEDICAL_TREATMENT: 'Synthetic Medical treatment',
-  SYNTHETIC_TOURISM: 'Synthetic tourism',
-  YES_SYNTHETIC: 'Yes',
-  NO_SYNTHETIC: 'No',
-})
-
-const MONTH_NAMES = Object.freeze([
-  'January',
-  'February',
-  'March',
-  'April',
-  'May',
-  'June',
-  'July',
-  'August',
-  'September',
-  'October',
-  'November',
-  'December',
-] as const)
 
 function sameAnswers(left: AnswerMap, right: AnswerMap): boolean {
   const leftEntries = Object.entries(left)
@@ -61,28 +38,6 @@ function boundedAnswers(questions: readonly Question[], answers: AnswerMap): Ans
       }),
     ),
   )
-}
-
-function answerLabel(value: string): string {
-  const knownLabel = ANSWER_LABELS[value]
-  if (knownLabel !== undefined) {
-    return knownLabel
-  }
-
-  const dateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
-  if (dateMatch !== null) {
-    const [, year, monthText, dayText] = dateMatch
-    const month = monthText === undefined ? undefined : MONTH_NAMES[Number(monthText) - 1]
-    if (year !== undefined && dayText !== undefined && month !== undefined) {
-      return `${Number(dayText)} ${month} ${year} (fictional)`
-    }
-  }
-
-  return value
-    .replace(/^SYN(?:THETIC)?[-_]/, 'Synthetic ')
-    .replaceAll('_', ' ')
-    .toLowerCase()
-    .replace(/^./, (firstCharacter) => firstCharacter.toUpperCase())
 }
 
 function snapshotIdempotencyKey(caseId: SyntheticId, nextRevision: number): SyntheticId {
@@ -299,7 +254,7 @@ export function AdaptiveApplication(props: AdaptiveApplicationProps) {
                         required={question.required}
                         onChange={() => changeAnswer(question, value)}
                       />
-                      <span>{answerLabel(value)}</span>
+                      <span>{applicantAnswerLabel(value)}</span>
                     </label>
                   ))}
                 </div>
@@ -323,7 +278,7 @@ export function AdaptiveApplication(props: AdaptiveApplicationProps) {
                 >
                   <option value="">Choose a synthetic option</option>
                   {question.allowedValues.map((value) => (
-                    <option value={value} key={value}>{answerLabel(value)}</option>
+                    <option value={value} key={value}>{applicantAnswerLabel(value)}</option>
                   ))}
                 </select>
                 {fieldError ? <p className={styles.fieldError} id={errorId(index)}>{fieldError}</p> : null}
