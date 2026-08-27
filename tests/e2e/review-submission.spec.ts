@@ -25,6 +25,7 @@ async function reachReview(
   scenario: 'Medical treatment' | 'Tourism' = 'Medical treatment',
 ) {
   await page.getByText(scenario, { exact: true }).click()
+  await page.getByRole('link', { name: 'Continue' }).click()
   await page.getByRole('button', { name: 'Continue with this demo' }).click()
   await page.getByRole('button', { name: 'Start application' }).click()
   await page.getByLabel(/Choose the synthetic policy cohort/).selectOption('SYN-POLICY-COHORT-A')
@@ -46,7 +47,7 @@ async function reachReview(
     await page.getByLabel(/Choose the fictional planned exit date/).selectOption('2099-05-17')
   }
   await page.getByRole('button', { name: 'Continue to documents' }).click()
-  await page.getByRole('button', { name: 'Prepare documents' }).click()
+  await page.getByRole('link', { name: 'Prepare documents' }).click()
   const documentNames = [
     'Synthetic portrait',
     'Synthetic passport page',
@@ -58,7 +59,7 @@ async function reachReview(
     })
     await documentCard.getByRole('button', { name: 'Run technical check' }).click()
   }
-  await page.getByRole('button', { name: 'Review application' }).click()
+  await page.getByRole('link', { name: 'Review application' }).click()
   await expect(page.getByRole('heading', { name: 'Review your demo application' })).toBeVisible()
 }
 
@@ -121,6 +122,8 @@ async function submitReview(page: Page) {
     })
     .check()
   await page.getByRole('button', { name: 'Submit demo application' }).click()
+  await expect(page.getByRole('heading', { name: 'Complete the demo payment' })).toBeVisible()
+  await page.goBack()
   await expect(page.getByRole('heading', { name: 'Application submitted in demo' })).toBeVisible()
 }
 
@@ -144,8 +147,8 @@ test('Medical A05 reviews authoritative details and reaches one locked simulated
   await expect(page.getByText('Confirm the synthetic Medical treatment intent.')).toBeVisible()
 
   await submitReview(page)
-  await expect(page.getByText('Payment', { exact: true })).toBeVisible()
-  await expect(page.getByRole('button', { name: /Edit application details|Edit documents/ })).toHaveCount(0)
+  await expect(page.getByRole('link', { name: 'Continue to payment' })).toBeVisible()
+  await expect(page.getByRole('link', { name: /Edit application details|Edit documents/ })).toHaveCount(0)
   await expect(page.getByRole('heading', { name: /Mock payment|Payment details/i })).toHaveCount(0)
 
   const evidence = await loadCaseEvidence(page)
@@ -172,16 +175,17 @@ test('A05 edit paths preserve the Case and refresh authoritative review values',
   await reachReview(page)
   const before = await loadCaseEvidence(page)
 
-  await page.getByRole('button', { name: 'Edit application details' }).click()
+  await page.getByRole('link', { name: 'Edit application details' }).click()
   await page.getByRole('radio', { name: 'No' }).check()
   await page.getByRole('button', { name: 'Continue to documents' }).click()
-  await page.getByRole('button', { name: 'Prepare documents' }).click()
-  await page.getByRole('button', { name: 'Review application' }).click()
+  await page.getByRole('link', { name: 'Prepare documents' }).click()
+  await page.getByRole('button', { name: 'Prepare review' }).click()
+  await page.getByRole('link', { name: 'Review application' }).click()
   await expect(page.getByText('No', { exact: true })).toBeVisible()
 
-  await page.getByRole('button', { name: 'Edit documents' }).click()
+  await page.getByRole('link', { name: 'Edit documents' }).click()
   await expect(page.getByRole('heading', { name: 'Prepare your demo documents' })).toBeVisible()
-  await page.getByRole('button', { name: 'Return to review' }).click()
+  await page.getByRole('link', { name: 'Return to review' }).click()
   await expect(page.getByRole('heading', { name: 'Review your demo application' })).toBeVisible()
 
   const after = await loadCaseEvidence(page)
@@ -200,7 +204,7 @@ test('locked A05 reload is read-only and does not duplicate the submission seque
 
   await page.reload()
   await expect(page.getByRole('heading', { name: 'Application submitted in demo' })).toBeVisible()
-  await expect(page.getByRole('button', { name: /Edit application details|Edit documents/ })).toHaveCount(0)
+  await expect(page.getByRole('link', { name: /Edit application details|Edit documents/ })).toHaveCount(0)
   const after = await loadCaseEvidence(page)
   expect(after.raw).toBe(before.raw)
   expect(after.revision).toBe(before.revision)
@@ -217,7 +221,7 @@ test('Tourist reuses A05 with five answers, two documents, and 41 credits', asyn
   await expect(page.getByText(/Medical treatment intent/i)).toHaveCount(0)
   await expect(page.getByText('Synthetic hospital letter')).toHaveCount(0)
   await submitReview(page)
-  await expect(page.getByText('Payment', { exact: true })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Continue to payment' })).toBeVisible()
 })
 
 test('A05 review and submission remain usable without horizontal overflow at 360x800', async ({ page }) => {
@@ -277,6 +281,7 @@ test('A05 review and submission remain usable without horizontal overflow at 360
   await expect(checkbox).toBeChecked()
   await expect(submitButton).toBeEnabled()
   await submitButton.click()
+  await page.goBack()
   await expect(page.getByRole('heading', { name: 'Application submitted in demo' })).toBeVisible()
   const after = await page.evaluate(() => ({
     clientWidth: document.documentElement.clientWidth,

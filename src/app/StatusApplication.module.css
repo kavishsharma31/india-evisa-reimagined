@@ -39,6 +39,23 @@
   margin-bottom: 0.75rem;
 }
 
+.backLink {
+  min-height: 2.75rem;
+  margin: -0.75rem 0 1.25rem;
+  padding: 0.4rem 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--accent-strong);
+  font-weight: 680;
+  text-decoration: none;
+}
+
+.backLink:hover {
+  text-decoration: underline;
+  text-underline-offset: 0.2rem;
+}
+
 .pageHeader > p:not(.eyebrow, .caseReference) {
   max-width: 42rem;
   margin: 1rem 0 0;
@@ -55,6 +72,7 @@
 
 .primaryStatus,
 .etaArtifact,
+.etaReady,
 .journeySection,
 .prototypeContext {
   width: 100%;
@@ -206,7 +224,15 @@
   color: #fff;
   font: inherit;
   font-weight: 720;
+  text-decoration: none;
   cursor: pointer;
+}
+
+.primaryAction {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .primaryAction:hover,
@@ -216,6 +242,7 @@
 }
 
 .primaryAction:focus-visible,
+.backLink:focus-visible,
 .demoControl summary:focus-visible,
 .demoControl button:focus-visible {
   outline: 3px solid var(--focus-ring);

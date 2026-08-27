@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 
 import type { SyntheticId } from '../domain'
 import type {
@@ -17,8 +18,9 @@ type DocumentPreparationProps = Readonly<{
   caseId: SyntheticId
   purposeName: string
   editMode?: boolean
-  onBack(): void
-  onReviewApplication(): void
+  applicationPath: string
+  reviewPath: string
+  onPrepareReview(): boolean
   onRecoveryRequired(status: 'STORAGE_REQUIRES_RESET' | 'STORAGE_UNAVAILABLE'): void
 }>
 
@@ -82,6 +84,10 @@ export function DocumentPreparation(props: DocumentPreparationProps) {
   )
   const [messages, setMessages] = useState<RequirementMessages>({})
   const [activeRequirementId, setActiveRequirementId] = useState<string | null>(null)
+  const [reviewPrepared, setReviewPrepared] = useState(() => {
+    const resumed = props.services.runtime.resumeCase({ caseId: props.caseId })
+    return resumed.status === 'CASE_RESUMED' && resumed.currentStep === 'REVIEW'
+  })
 
   function refreshDocuments() {
     const inspected = props.services.runtime.inspectDocuments({ caseId: props.caseId })
@@ -90,16 +96,26 @@ export function DocumentPreparation(props: DocumentPreparationProps) {
       setSelections((currentSelections) =>
         Object.freeze({ ...initialSelections(inspected), ...currentSelections }),
       )
-      return true
+      return inspected
     }
     if (
       inspected.status === 'STORAGE_REQUIRES_RESET' ||
       inspected.status === 'STORAGE_UNAVAILABLE'
     ) {
       props.onRecoveryRequired(inspected.status)
-      return false
+      return null
     }
     setMessages({ general: 'The document checklist could not be refreshed safely.' })
+    return null
+  }
+
+  function prepareReview(): boolean {
+    const prepared = props.onPrepareReview()
+    if (prepared) {
+      setReviewPrepared(true)
+      return true
+    }
+    setMessages({ general: 'The authoritative demo review could not be prepared safely.' })
     return false
   }
 
@@ -145,7 +161,10 @@ export function DocumentPreparation(props: DocumentPreparationProps) {
       return
     }
     if (result.status === 'DOCUMENT_PREPARED' || result.status === 'DOCUMENT_EXISTING') {
-      refreshDocuments()
+      const refreshed = refreshDocuments()
+      if (refreshed?.allReady) {
+        prepareReview()
+      }
       setActiveRequirementId(null)
       return
     }
@@ -168,9 +187,9 @@ export function DocumentPreparation(props: DocumentPreparationProps) {
         <p className={styles.eyebrow}>Documents · Step 3 of 6</p>
         <h2 id="documents-heading" tabIndex={-1}>Document preparation is unavailable</h2>
         <p role="alert">The saved Case could not provide a safe document checklist.</p>
-        <button className={styles.secondaryButton} type="button" onClick={props.onBack}>
+        <Link className={styles.secondaryButton} to={props.applicationPath}>
           Back to application details
-        </button>
+        </Link>
       </section>
     )
   }
@@ -188,12 +207,18 @@ export function DocumentPreparation(props: DocumentPreparationProps) {
           <p>Review and submission begin in the next applicant step.</p>
         </div>
         <div className={styles.completionActions}>
-          <button className={styles.checkButton} type="button" onClick={props.onReviewApplication}>
-            Review application <span aria-hidden="true">→</span>
-          </button>
-          <button className={styles.secondaryButton} type="button" onClick={props.onBack}>
+          {reviewPrepared ? (
+            <Link className={styles.checkButton} to={props.reviewPath}>
+              Review application <span aria-hidden="true">→</span>
+            </Link>
+          ) : (
+            <button className={styles.checkButton} type="button" onClick={prepareReview}>
+              Prepare review
+            </button>
+          )}
+          <Link className={styles.secondaryButton} to={props.applicationPath}>
             Back to application details
-          </button>
+          </Link>
         </div>
       </section>
     )
@@ -201,9 +226,9 @@ export function DocumentPreparation(props: DocumentPreparationProps) {
 
   return (
     <section className={styles.documentsPanel} aria-labelledby="documents-heading">
-      <button className={styles.backButton} type="button" onClick={props.onBack}>
+      <Link className={styles.backButton} to={props.applicationPath}>
         <span aria-hidden="true">←</span> Back to application details
-      </button>
+      </Link>
 
       <header className={styles.documentsHeader}>
         <p className={styles.eyebrow}>Documents · Step 3 of 6</p>
@@ -301,9 +326,9 @@ export function DocumentPreparation(props: DocumentPreparationProps) {
       {documents.allReady ? (
         <div className={styles.returnToReview}>
           <p>All required demo documents remain ready.</p>
-          <button className={styles.checkButton} type="button" onClick={props.onReviewApplication}>
+          <Link className={styles.checkButton} to={props.reviewPath}>
             Return to review <span aria-hidden="true">→</span>
-          </button>
+          </Link>
         </div>
       ) : null}
     </section>

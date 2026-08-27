@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 
 import type { SyntheticId } from '../domain'
 import type { RuntimePaymentSummary } from '../runtime'
@@ -9,8 +10,8 @@ import styles from './PaymentApplication.module.css'
 type PaymentApplicationProps = Readonly<{
   services: AppRuntimeServices
   caseId: SyntheticId
-  onBackToSubmittedApplication(): void
-  onContinueToStatus(): void
+  reviewPath: string
+  statusPath: string
   onRecoveryRequired(status: 'STORAGE_REQUIRES_RESET' | 'STORAGE_UNAVAILABLE'): void
 }>
 
@@ -92,6 +93,9 @@ export function PaymentApplication(props: PaymentApplicationProps) {
 
   return (
     <section className={styles.paymentPage} aria-labelledby="payment-heading">
+      <Link className={styles.backLink} to={props.reviewPath}>
+        <span aria-hidden="true">←</span> Back to review
+      </Link>
       <header className={styles.pageHeader}>
         <p className={styles.eyebrow}>Payment · Step 5 of 6</p>
         <h2 id="payment-heading" tabIndex={-1}>Complete the demo payment</h2>
@@ -130,9 +134,9 @@ export function PaymentApplication(props: PaymentApplicationProps) {
           <button className={styles.primaryButton} type="button" onClick={startPayment}>
             Start mock payment <span aria-hidden="true">→</span>
           </button>
-          <button className={styles.secondaryButton} type="button" onClick={props.onBackToSubmittedApplication}>
+          <Link className={styles.secondaryButton} to={props.reviewPath}>
             Back to submitted application
-          </button>
+          </Link>
         </section>
       ) : null}
 
@@ -180,9 +184,9 @@ export function PaymentApplication(props: PaymentApplicationProps) {
             <strong>Status</strong>
             <p>Your synthetic application can now move to the status and review stage.</p>
           </div>
-          <button className={styles.primaryButton} type="button" onClick={props.onContinueToStatus}>
+          <Link className={styles.primaryButton} to={props.statusPath}>
             Continue to status <span aria-hidden="true">→</span>
-          </button>
+          </Link>
         </section>
       ) : null}
     </section>

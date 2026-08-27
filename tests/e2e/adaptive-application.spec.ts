@@ -58,6 +58,7 @@ async function openFreshApp(page: Page) {
 
 async function startApplication(page: Page, scenario: 'Medical treatment' | 'Tourism') {
   await page.getByText(scenario, { exact: true }).click()
+  await page.getByRole('link', { name: 'Continue' }).click()
   await page.getByRole('button', { name: 'Continue with this demo' }).click()
   await page.getByRole('button', { name: 'Start application' }).click()
   await expect(page.getByRole('heading', { name: 'Tell us about this trip' })).toBeVisible()
@@ -163,8 +164,7 @@ test('Medical A03 autosaves controlled answers and ends at the Documents handoff
 
   await expect(page.getByRole('heading', { name: 'Application details saved' })).toBeVisible()
   await expectSharedApplicantShell(page)
-  await expect(page.getByText('Documents', { exact: true })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Prepare documents' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Prepare documents' })).toBeVisible()
   const evidence = await loadApplicationEvidence(page)
   expect(evidence).toMatchObject({
     caseCount: 1,
@@ -196,8 +196,7 @@ test('Medical partial answers survive reload without duplicate Case or draft evi
   await page.reload()
   const afterPageLoad = await loadApplicationEvidence(page)
   expect(afterPageLoad.raw).toBe(beforeReload.raw)
-  await expect(page.getByRole('heading', { name: 'Continue your application' })).toBeVisible()
-  await page.getByRole('button', { name: 'Resume application' }).click()
+  await expect(page.getByRole('heading', { name: 'Tell us about this trip' })).toBeVisible()
   await expectSharedApplicantShell(page)
   await expect(page.getByLabel(/Choose the synthetic policy cohort/)).toHaveValue('SYN-POLICY-COHORT-A')
   await expect(page.getByLabel(/Choose the synthetic passport class/)).toHaveValue('SYNTHETIC_STANDARD_PASSPORT')

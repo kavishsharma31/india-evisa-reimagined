@@ -59,6 +59,7 @@ function requireValidState(store: PersistenceService) {
 
 async function openMedicalGuidance(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole('radio', { name: /Medical treatment/i }))
+  await user.click(screen.getByRole('link', { name: 'Continue' }))
   expect(
     screen.getByRole('heading', { level: 2, name: 'Medical treatment' }),
   ).toBeInTheDocument()
@@ -105,6 +106,7 @@ describe('applicant slice A00 and A01', () => {
     render(<App services={services} />)
 
     await user.click(screen.getByRole('radio', { name: /Tourism/i }))
+    await user.click(screen.getByRole('link', { name: 'Continue' }))
 
     expect(screen.getByRole('heading', { level: 2, name: 'Tourism' })).toBeInTheDocument()
     expect(screen.getByText('Synthetic portrait', { exact: true })).toBeInTheDocument()
@@ -182,13 +184,9 @@ describe('applicant slice A02 and resume', () => {
     const beforeReload = storage.getItem(P0_STORAGE_KEY)
     firstRender.unmount()
 
-    const secondUser = userEvent.setup()
     const reloadedStore = createPersistenceStore(storage)
     render(<App services={createAppRuntime({ store: reloadedStore })} />)
 
-    expect(screen.getByRole('heading', { name: 'Continue your application' })).toBeInTheDocument()
-    expect(screen.getByText('SYN-CASE-MED-001', { exact: true })).toBeInTheDocument()
-    await secondUser.click(screen.getByRole('button', { name: 'Resume application' }))
     expect(screen.getByRole('heading', { name: 'Tell us about this trip' })).toBeInTheDocument()
     expect(storage.getItem(P0_STORAGE_KEY)).toBe(beforeReload)
     expect(requireValidState(reloadedStore).cases).toHaveLength(1)
@@ -205,11 +203,12 @@ describe('applicant slice A02 and resume', () => {
       }).status,
     ).toBe('COMMAND_ACCEPTED')
 
+    window.history.replaceState(null, '', '/application/SYN-CASE-MED-001')
     render(<App services={services} />)
 
     expect(screen.getByRole('heading', { name: 'Continue your application' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Continue setup' })).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Continue setup' }))
+    expect(screen.getByRole('button', { name: 'Start application' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Start application' }))
 
     const state = requireValidState(store)
     expect(state.cases).toHaveLength(1)
@@ -310,7 +309,7 @@ describe('D01 deterministic demo controls', () => {
     await user.selectOptions(seedSelect, 'SEED-MEDICAL-REUPLOAD-REQUESTED')
 
     expect(screen.getByRole('heading', { name: 'Action required' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Replace hospital letter' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Replace hospital letter' })).toBeInTheDocument()
     expect(requireValidState(store)).toEqual(getSeed('SEED-MEDICAL-REUPLOAD-REQUESTED').envelope)
     const canonicalReuploadBytes = storage.getItem(P0_STORAGE_KEY)
 

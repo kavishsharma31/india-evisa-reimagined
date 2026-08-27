@@ -25,6 +25,7 @@ async function completeA03(
   scenario: 'Medical treatment' | 'Tourism' = 'Medical treatment',
 ) {
   await page.getByText(scenario, { exact: true }).click()
+  await page.getByRole('link', { name: 'Continue' }).click()
   await page.getByRole('button', { name: 'Continue with this demo' }).click()
   await page.getByRole('button', { name: 'Start application' }).click()
   await page.getByLabel(/Choose the synthetic policy cohort/).selectOption('SYN-POLICY-COHORT-A')
@@ -44,7 +45,7 @@ async function completeA03(
     await page.getByLabel(/Choose the fictional planned exit date/).selectOption('2099-05-17')
   }
   await page.getByRole('button', { name: 'Continue to documents' }).click()
-  await page.getByRole('button', { name: 'Prepare documents' }).click()
+  await page.getByRole('link', { name: 'Prepare documents' }).click()
   await expect(page.getByRole('heading', { name: 'Prepare your demo documents' })).toBeVisible()
 }
 
@@ -132,7 +133,7 @@ test('Medical A04 prepares all policy-required bundled files and hands off to Re
 
   await expect(page.getByRole('heading', { name: 'Documents ready' })).toBeVisible()
   await expect(page.getByText('All required demo documents passed the local technical check.')).toBeVisible()
-  await expect(page.getByText('Review', { exact: true })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Review Available' })).toBeVisible()
   await expect(page.getByRole('heading', { name: /Review your application/i })).toHaveCount(0)
   const evidence = await loadDocumentEvidence(page)
   expect(evidence.documents).toHaveLength(3)

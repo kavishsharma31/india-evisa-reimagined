@@ -16,6 +16,7 @@ async function openFreshApp(page: Page) {
 
 async function chooseMedical(page: Page) {
   await page.getByText('Medical treatment', { exact: true }).click()
+  await page.getByRole('link', { name: 'Continue' }).click()
   await expect(page.getByRole('heading', { level: 2, name: 'Medical treatment' })).toBeVisible()
 }
 
@@ -145,10 +146,6 @@ test('reload presents resume and preserves the same Medical case without duplica
 
   await page.reload()
 
-  await expect(page.getByRole('heading', { name: 'Continue your application' })).toBeVisible()
-  await expect(page.getByText('Medical treatment', { exact: true })).toBeVisible()
-  await expect(page.getByText('SYN-CASE-MED-001', { exact: true })).toBeVisible()
-  await page.getByRole('button', { name: 'Resume application' }).click()
   await expect(
     page.getByRole('heading', { name: 'Tell us about this trip' }),
   ).toBeVisible()
@@ -163,6 +160,7 @@ test('Tourist reuses the applicant path with Tourist policy guidance', async ({ 
   await openFreshApp(page)
 
   await page.getByText('Tourism', { exact: true }).click()
+  await page.getByRole('link', { name: 'Continue' }).click()
 
   await expect(page.getByRole('heading', { level: 2, name: 'Tourism' })).toBeVisible()
   await expect(page.getByText('41 SYNTHETIC_DEMO_CREDITS', { exact: true })).toBeVisible()

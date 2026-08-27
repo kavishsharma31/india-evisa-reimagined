@@ -49,6 +49,7 @@ async function reachA04(
   scenario: 'Medical treatment' | 'Tourism' = 'Medical treatment',
 ) {
   await user.click(screen.getByRole('radio', { name: new RegExp(scenario, 'i') }))
+  await user.click(screen.getByRole('link', { name: 'Continue' }))
   await user.click(screen.getByRole('button', { name: 'Continue with this demo' }))
   await user.click(screen.getByRole('button', { name: 'Start application' }))
 
@@ -71,7 +72,7 @@ async function reachA04(
     await user.click(screen.getByRole('radio', { name: 'Yes' }))
   }
   await user.click(screen.getByRole('button', { name: 'Continue to documents' }))
-  await user.click(screen.getByRole('button', { name: 'Prepare documents' }))
+  await user.click(screen.getByRole('link', { name: 'Prepare documents' }))
   expect(screen.getByRole('heading', { name: 'Prepare your demo documents' })).toBeInTheDocument()
 }
 
@@ -110,7 +111,7 @@ describe('A04 document preparation', () => {
 
     expect(screen.getByRole('heading', { name: 'Documents ready' })).toBeInTheDocument()
     expect(screen.getByText('All required demo documents passed the local technical check.')).toBeInTheDocument()
-    expect(screen.getByText('Review', { exact: true })).toBeInTheDocument()
+    expect(screen.getAllByText('Review', { exact: true }).length).toBeGreaterThanOrEqual(1)
     expect(screen.queryByRole('heading', { name: /Review your application/i })).not.toBeInTheDocument()
     expect(requireCase(store).application.state).toBe('IN_PROGRESS')
   })

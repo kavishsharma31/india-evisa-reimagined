@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { Link } from 'react-router-dom'
 
 import type { SyntheticId } from '../domain'
 import type { PolicyEvaluationResult } from '../policy'
@@ -17,8 +18,8 @@ type AdaptiveApplicationProps = Readonly<{
   resumedCase: ResumedCase
   evaluation: PolicyEvaluationResult
   purposeName: string
-  onBack(): void
-  onPrepareDocuments(): void
+  backPath: string
+  documentsPath: string
 }>
 
 function sameAnswers(left: AnswerMap, right: AnswerMap): boolean {
@@ -172,12 +173,12 @@ export function AdaptiveApplication(props: AdaptiveApplicationProps) {
           <p>Use bundled synthetic demo files to prepare the policy-required documents.</p>
         </div>
         <div className={styles.formActions}>
-          <button className={styles.primaryButton} type="button" onClick={props.onPrepareDocuments}>
+          <Link className={styles.primaryButton} to={props.documentsPath}>
             Prepare documents <span aria-hidden="true">→</span>
-          </button>
-          <button className={styles.secondaryButton} type="button" onClick={props.onBack}>
-            Back to saved case
-          </button>
+          </Link>
+          <Link className={styles.secondaryButton} to={props.backPath}>
+            Back to requirements
+          </Link>
         </div>
       </section>
     )
@@ -186,9 +187,9 @@ export function AdaptiveApplication(props: AdaptiveApplicationProps) {
   const errorCount = Object.keys(questionErrors).length
   return (
     <section className={styles.applicationPanel} aria-labelledby="application-heading">
-      <button className={styles.backButton} type="button" onClick={props.onBack}>
-        <span aria-hidden="true">←</span> Back to saved case
-      </button>
+      <Link className={styles.backButton} to={props.backPath}>
+        <span aria-hidden="true">←</span> Back to requirements
+      </Link>
 
       <div className={styles.applicationHeader}>
         <p className={styles.eyebrow}>Application · Step 2 of 6</p>
@@ -302,9 +303,9 @@ export function AdaptiveApplication(props: AdaptiveApplicationProps) {
           <button className={styles.primaryButton} type="submit">
             Continue to documents <span aria-hidden="true">→</span>
           </button>
-          <button className={styles.secondaryButton} type="button" onClick={props.onBack}>
-            Back to saved case
-          </button>
+          <Link className={styles.secondaryButton} to={props.backPath}>
+            Back to requirements
+          </Link>
         </div>
       </form>
     </section>

@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { Link } from 'react-router-dom'
 
 import type { SyntheticId } from '../domain'
 import type { RuntimeReviewSummary } from '../runtime'
@@ -14,9 +15,10 @@ import styles from './ReviewApplication.module.css'
 type ReviewApplicationProps = Readonly<{
   services: AppRuntimeServices
   caseId: SyntheticId
-  onEditApplication(): void
-  onEditDocuments(): void
-  onContinueToPayment(): void
+  applicationPath: string
+  documentsPath: string
+  paymentPath: string
+  onSubmitted(): void
   onRecoveryRequired(status: 'STORAGE_REQUIRES_RESET' | 'STORAGE_UNAVAILABLE'): void
 }>
 
@@ -72,7 +74,7 @@ export function ReviewApplication(props: ReviewApplicationProps) {
     }
     setReview(refreshed)
     setConfirmed(false)
-    document.getElementById('review-heading')?.focus()
+    props.onSubmitted()
   }
 
   if (review === null) {
@@ -116,9 +118,9 @@ export function ReviewApplication(props: ReviewApplicationProps) {
           <span>Next</span>
           <strong>Payment</strong>
           <p>The next step will use a local simulated payment. No money or payment details are involved.</p>
-          <button className={styles.nextStepButton} type="button" onClick={props.onContinueToPayment}>
+          <Link className={styles.nextStepButton} to={props.paymentPath}>
             Continue to payment <span aria-hidden="true">→</span>
-          </button>
+          </Link>
         </div>
       </section>
     )
@@ -126,6 +128,9 @@ export function ReviewApplication(props: ReviewApplicationProps) {
 
   return (
     <section className={styles.reviewPanel} aria-labelledby="review-heading">
+      <Link className={styles.backLink} to={props.documentsPath}>
+        <span aria-hidden="true">←</span> Back to documents
+      </Link>
       <header className={styles.reviewHeader}>
         <p className={styles.eyebrow}>Review · Step 4 of 6</p>
         <h2 id="review-heading" tabIndex={-1}>Review your demo application</h2>
@@ -150,9 +155,9 @@ export function ReviewApplication(props: ReviewApplicationProps) {
               <p className={styles.sectionLabel}>Application details</p>
               <h3 id="review-answers-heading">Your synthetic answers</h3>
             </div>
-            <button className={styles.editButton} type="button" onClick={props.onEditApplication}>
+            <Link className={styles.editButton} to={props.applicationPath}>
               Edit application details
-            </button>
+            </Link>
           </div>
           <dl className={styles.answerList}>
             {review.answers.map((answer) => (
@@ -170,9 +175,9 @@ export function ReviewApplication(props: ReviewApplicationProps) {
               <p className={styles.sectionLabel}>Documents</p>
               <h3 id="review-documents-heading">Required demo documents</h3>
             </div>
-            <button className={styles.editButton} type="button" onClick={props.onEditDocuments}>
+            <Link className={styles.editButton} to={props.documentsPath} state={{ editDocuments: true }}>
               Edit documents
-            </button>
+            </Link>
           </div>
           <ul className={styles.documentList}>
             {review.documents.map((document) => (

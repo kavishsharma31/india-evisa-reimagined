@@ -26,6 +26,7 @@ async function reachConfirmedPayment(
   scenario: 'Medical treatment' | 'Tourism' = 'Medical treatment',
 ) {
   await page.getByText(scenario, { exact: true }).click()
+  await page.getByRole('link', { name: 'Continue' }).click()
   await page.getByRole('button', { name: 'Continue with this demo' }).click()
   await page.getByRole('button', { name: 'Start application' }).click()
   await page.getByLabel(/Choose the synthetic policy cohort/).selectOption('SYN-POLICY-COHORT-A')
@@ -43,7 +44,7 @@ async function reachConfirmedPayment(
     await page.getByLabel(/Choose the fictional planned exit date/).selectOption('2099-05-17')
   }
   await page.getByRole('button', { name: 'Continue to documents' }).click()
-  await page.getByRole('button', { name: 'Prepare documents' }).click()
+  await page.getByRole('link', { name: 'Prepare documents' }).click()
   const documentNames = [
     'Synthetic portrait',
     'Synthetic passport page',
@@ -55,12 +56,11 @@ async function reachConfirmedPayment(
     })
     await card.getByRole('button', { name: 'Run technical check' }).click()
   }
-  await page.getByRole('button', { name: 'Review application' }).click()
+  await page.getByRole('link', { name: 'Review application' }).click()
   await page.getByRole('checkbox', {
     name: 'I confirm these synthetic demo details are ready for simulated submission.',
   }).check()
   await page.getByRole('button', { name: 'Submit demo application' }).click()
-  await page.getByRole('button', { name: 'Continue to payment' }).click()
   await page.getByRole('button', { name: 'Start mock payment' }).click()
   await page.getByRole('button', { name: 'Check mock payment status' }).click()
   await expect(page.getByRole('heading', { name: 'Payment confirmed' })).toBeVisible()
@@ -71,8 +71,10 @@ async function reachStatus(
   scenario: 'Medical treatment' | 'Tourism' = 'Medical treatment',
 ) {
   await reachConfirmedPayment(page, scenario)
-  await page.getByRole('button', { name: 'Continue to status' }).click()
+  await page.getByRole('link', { name: 'Continue to status' }).click()
   await expect(page.getByRole('heading', { name: 'Track your demo application' })).toBeVisible()
+  await page.getByRole('button', { name: 'Begin synthetic review' }).click()
+  await expect(page.getByRole('heading', { name: 'Under review' })).toBeVisible()
 }
 
 async function loadStatusEvidence(page: Page) {
@@ -139,7 +141,7 @@ test('Medical A07 enters one legal scrutiny review and projects an explicit no-a
   await expect(page.getByText('Your synthetic application is being reviewed.')).toBeVisible()
   await expect(page.getByText('Nothing needed from you')).toBeVisible()
   await expect(page.getByText('No action is needed now. Synthetic scrutiny is continuing.')).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Replace hospital letter' })).toHaveCount(0)
+  await expect(page.getByRole('link', { name: 'Replace hospital letter' })).toHaveCount(0)
   const evidence = await loadStatusEvidence(page)
   expect(evidence.applicationState).toBe('LOCKED')
   expect(evidence.paymentState).toBe('CONFIRMED')

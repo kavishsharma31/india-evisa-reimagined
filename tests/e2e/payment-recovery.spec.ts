@@ -26,6 +26,7 @@ async function reachSubmittedApplication(
   scenario: 'Medical treatment' | 'Tourism' = 'Medical treatment',
 ) {
   await page.getByText(scenario, { exact: true }).click()
+  await page.getByRole('link', { name: 'Continue' }).click()
   await page.getByRole('button', { name: 'Continue with this demo' }).click()
   await page.getByRole('button', { name: 'Start application' }).click()
   await page.getByLabel(/Choose the synthetic policy cohort/).selectOption('SYN-POLICY-COHORT-A')
@@ -47,7 +48,7 @@ async function reachSubmittedApplication(
     await page.getByLabel(/Choose the fictional planned exit date/).selectOption('2099-05-17')
   }
   await page.getByRole('button', { name: 'Continue to documents' }).click()
-  await page.getByRole('button', { name: 'Prepare documents' }).click()
+  await page.getByRole('link', { name: 'Prepare documents' }).click()
 
   const documentNames = [
     'Synthetic portrait',
@@ -60,12 +61,12 @@ async function reachSubmittedApplication(
     })
     await card.getByRole('button', { name: 'Run technical check' }).click()
   }
-  await page.getByRole('button', { name: 'Review application' }).click()
+  await page.getByRole('link', { name: 'Review application' }).click()
   await page.getByRole('checkbox', {
     name: 'I confirm these synthetic demo details are ready for simulated submission.',
   }).check()
   await page.getByRole('button', { name: 'Submit demo application' }).click()
-  await expect(page.getByRole('heading', { name: 'Application submitted in demo' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Complete the demo payment' })).toBeVisible()
 }
 
 async function reachPayment(
@@ -73,7 +74,6 @@ async function reachPayment(
   scenario: 'Medical treatment' | 'Tourism' = 'Medical treatment',
 ) {
   await reachSubmittedApplication(page, scenario)
-  await page.getByRole('button', { name: 'Continue to payment' }).click()
   await expect(page.getByRole('heading', { name: 'Complete the demo payment' })).toBeVisible()
 }
 
@@ -154,7 +154,7 @@ test('Medical A06 recovers one ambiguous payment to confirmed without a duplicat
 
   await page.getByRole('button', { name: 'Check mock payment status' }).click()
   await expect(page.getByRole('heading', { name: 'Payment confirmed' })).toBeVisible()
-  await expect(page.getByText('Status', { exact: true })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Continue to status' })).toBeVisible()
   await expect(page.getByRole('heading', { name: /scrutiny|case status/i })).toHaveCount(0)
   const confirmed = await loadPaymentEvidence(page)
   expect(confirmed.attemptId).toBe(uncertain.attemptId)

@@ -1,131 +1,48 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
+import { flushSync } from 'react-dom'
+import {
+  BrowserRouter,
+  Link,
+  Navigate,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+  useNavigationType,
+  useParams,
+} from 'react-router-dom'
 
 import { AdaptiveApplication } from './app/AdaptiveApplication'
-import { DocumentPreparation } from './app/DocumentPreparation'
-import { ReviewApplication } from './app/ReviewApplication'
-import { PaymentApplication } from './app/PaymentApplication'
-import { StatusApplication } from './app/StatusApplication'
-import { DocumentCorrection } from './app/DocumentCorrection'
 import { DemoControls } from './app/DemoControls'
+import { DocumentCorrection } from './app/DocumentCorrection'
+import { DocumentPreparation } from './app/DocumentPreparation'
+import { JourneyNavigation } from './app/JourneyNavigation'
+import { PaymentApplication } from './app/PaymentApplication'
+import { ReviewApplication } from './app/ReviewApplication'
+import { StatusApplication } from './app/StatusApplication'
+import { SyntheticEta } from './app/SyntheticEta'
 import { DOCUMENT_NAMES, PURPOSE_NAMES } from './app/applicant-labels'
 import { createAppRuntime, type AppRuntimeServices } from './app/create-app-runtime'
+import {
+  SCENARIOS,
+  applicationPath,
+  guardedDestination,
+  projectCaseNavigation,
+  scenarioFromSlug,
+  withPreservedDemo,
+  type CaseNavigationProjection,
+  type CaseStage,
+  type ScenarioId,
+} from './app/navigation'
 import type { SyntheticId } from './domain'
-import type { RecoverySeedId } from './fixtures'
+import { getSeed, type RecoverySeed, type RecoverySeedId } from './fixtures'
 import type { PolicyEvaluationResult } from './policy'
-import type { RuntimeResumeResult } from './runtime'
 import styles from './App.module.css'
 
 const PROTOTYPE_NOTICE =
   'UNOFFICIAL HACKATHON PROTOTYPE — SYNTHETIC DATA ONLY — CANNOT SUBMIT A VISA APPLICATION'
 
-const SCENARIOS = [
-  {
-    id: 'SYN-MEDICAL-001',
-    name: 'Medical treatment',
-    description: 'For a synthetic traveller visiting India for medical treatment.',
-    badge: 'Recommended demo',
-  },
-  {
-    id: 'SYN-TOURIST-001',
-    name: 'Tourism',
-    description: 'For a synthetic traveller visiting India for tourism.',
-    badge: 'Shared journey check',
-  },
-] as const
-
-type ScenarioId = (typeof SCENARIOS)[number]['id']
-type ResumedCase = Extract<RuntimeResumeResult, { status: 'CASE_RESUMED' }>
-type Surface =
-  | 'LOADING'
-  | 'SCENARIO_SELECTION'
-  | 'PURPOSE_GUIDANCE'
-  | 'CASE_CREATED'
-  | 'RESUME_CASE'
-  | 'ADAPTIVE_APPLICATION'
-  | 'DOCUMENT_PREPARATION'
-  | 'REVIEW_APPLICATION'
-  | 'PAYMENT_APPLICATION'
-  | 'STATUS_APPLICATION'
-  | 'DOCUMENT_CORRECTION'
-  | 'RESET_REQUIRED'
-  | 'STORAGE_UNAVAILABLE'
-
-type CreatedCase = Readonly<{
-  caseId: SyntheticId
-  scenarioId: ScenarioId
-  policyQualifiedVersion: string
-}>
-
-type AppProps = Readonly<{
-  services?: AppRuntimeServices
-}>
-
-type InitialView = Readonly<{
-  surface: Surface
-  resumedCase: ResumedCase | null
-  evaluation: PolicyEvaluationResult | null
-}>
-
-const PAYMENT_FRAGMENT = '#payment'
-const STATUS_FRAGMENT = '#status'
-const CORRECTION_FRAGMENT = '#correction'
-
-function demoControlsRequested(): boolean {
-  return (
-    typeof window !== 'undefined' &&
-    new URLSearchParams(window.location.search).get('demo') === '1'
-  )
-}
-
-function paymentSurfaceRequested(): boolean {
-  return typeof window !== 'undefined' && window.location.hash === PAYMENT_FRAGMENT
-}
-
-function setPaymentFragment(active: boolean): void {
-  if (typeof window === 'undefined') {
-    return
-  }
-  const nextLocation = active
-    ? `${window.location.pathname}${window.location.search}${PAYMENT_FRAGMENT}`
-    : `${window.location.pathname}${window.location.search}`
-  window.history.replaceState(null, '', nextLocation)
-}
-
-function setStatusFragment(active: boolean): void {
-  if (typeof window === 'undefined') {
-    return
-  }
-  const nextLocation = active
-    ? `${window.location.pathname}${window.location.search}${STATUS_FRAGMENT}`
-    : `${window.location.pathname}${window.location.search}`
-  window.history.replaceState(null, '', nextLocation)
-}
-
-function correctionSurfaceRequested(): boolean {
-  return typeof window !== 'undefined' && window.location.hash === CORRECTION_FRAGMENT
-}
-
-function setCorrectionFragment(active: boolean): void {
-  if (typeof window === 'undefined') {
-    return
-  }
-  const nextLocation = active
-    ? `${window.location.pathname}${window.location.search}${CORRECTION_FRAGMENT}`
-    : `${window.location.pathname}${window.location.search}`
-  window.history.replaceState(null, '', nextLocation)
-}
-
-function scenarioDetails(scenarioId: ScenarioId) {
-  const scenario = SCENARIOS.find(({ id }) => id === scenarioId)
-  if (scenario === undefined) {
-    throw new Error('The selected synthetic scenario is not in the applicant catalogue.')
-  }
-  return scenario
-}
-
-function isScenarioId(value: SyntheticId): value is ScenarioId {
-  return value === 'SYN-MEDICAL-001' || value === 'SYN-TOURIST-001'
-}
+type AppProps = Readonly<{ services?: AppRuntimeServices }>
 
 function createCaseIdempotencyKey(scenarioId: ScenarioId): SyntheticId {
   return scenarioId === 'SYN-MEDICAL-001'
@@ -137,129 +54,37 @@ function beginDraftIdempotencyKey(caseId: SyntheticId): SyntheticId {
   return `SYN-IDEMPOTENCY-UI-BEGIN-${caseId.slice('SYN-'.length)}-001`
 }
 
-function inspectInitialView(services: AppRuntimeServices): InitialView {
-  const inspected = services.runtime.inspectState()
-  if (inspected.status === 'STORAGE_REQUIRES_RESET') {
-    return { surface: 'RESET_REQUIRED', resumedCase: null, evaluation: null }
-  }
-  if (inspected.status === 'STORAGE_UNAVAILABLE') {
-    return { surface: 'STORAGE_UNAVAILABLE', resumedCase: null, evaluation: null }
-  }
-  if (inspected.status === 'VALID_STATE' && inspected.state.activeCaseId !== null) {
-    const resumed = services.runtime.resumeCase()
-    if (resumed.status === 'CASE_RESUMED') {
-      const persistedCase = inspected.state.cases.find(
-        ({ caseId }) => caseId === resumed.caseId,
-      )
-      if (
-        resumed.applicationState === 'LOCKED' &&
-        persistedCase?.payment.state === 'CONFIRMED' &&
-        persistedCase.scrutiny.state !== 'NOT_STARTED' &&
-        isScenarioId(resumed.scenarioId)
-      ) {
-        if (
-          persistedCase.scrutiny.state === 'ACTION_REQUIRED' &&
-          correctionSurfaceRequested()
-        ) {
-          const correction = services.runtime.inspectCorrection({ caseId: resumed.caseId })
-          if (correction.status === 'CORRECTION_INSPECTED') {
-            return {
-              surface: 'DOCUMENT_CORRECTION',
-              resumedCase: resumed,
-              evaluation: null,
-            }
-          }
-        }
-        const status = services.runtime.inspectStatus({ caseId: resumed.caseId })
-        if (status.status === 'STATUS_INSPECTED') {
-          return { surface: 'STATUS_APPLICATION', resumedCase: resumed, evaluation: null }
-        }
-      }
-      if (
-        resumed.applicationState === 'LOCKED' &&
-        (paymentSurfaceRequested() ||
-          (persistedCase !== undefined && persistedCase.payment.state !== 'NOT_STARTED')) &&
-        isScenarioId(resumed.scenarioId)
-      ) {
-        const payment = services.runtime.inspectPayment({ caseId: resumed.caseId })
-        if (payment.status === 'PAYMENT_INSPECTED') {
-          return {
-            surface: 'PAYMENT_APPLICATION',
-            resumedCase: resumed,
-            evaluation: null,
-          }
-        }
-      }
-      if (
-        (resumed.applicationState === 'LOCKED' || resumed.currentStep === 'REVIEW') &&
-        isScenarioId(resumed.scenarioId)
-      ) {
-        return {
-          surface: 'REVIEW_APPLICATION',
-          resumedCase: resumed,
-          evaluation: null,
-        }
-      }
-      if (
-        resumed.resumable &&
-        resumed.currentStep === 'DOCUMENTS' &&
-        isScenarioId(resumed.scenarioId)
-      ) {
-        const evaluated = services.runtime.evaluateScenario({ scenarioId: resumed.scenarioId })
-        if (
-          evaluated.status === 'POLICY_EVALUATED' &&
-          evaluated.evaluation.policy.qualifiedVersion === resumed.policyQualifiedVersion
-        ) {
-          return {
-            surface: 'DOCUMENT_PREPARATION',
-            resumedCase: resumed,
-            evaluation: evaluated.evaluation,
-          }
-        }
-      }
-      if (resumed.resumable) {
-        return { surface: 'RESUME_CASE', resumedCase: resumed, evaluation: null }
-      }
-    }
-    if (resumed.status === 'STORAGE_REQUIRES_RESET') {
-      return { surface: 'RESET_REQUIRED', resumedCase: null, evaluation: null }
-    }
-    if (resumed.status === 'STORAGE_UNAVAILABLE') {
-      return { surface: 'STORAGE_UNAVAILABLE', resumedCase: null, evaluation: null }
-    }
-  }
-  return { surface: 'SCENARIO_SELECTION', resumedCase: null, evaluation: null }
-}
-
 function PrototypeNotice() {
   return (
     <p className={styles.prototypeNotice} role="note">
-      <span className={styles.noticeMarker} aria-hidden="true">
-        Demo
-      </span>
+      <span className={styles.noticeMarker} aria-hidden="true">Demo</span>
       <span>{PROTOTYPE_NOTICE}</span>
     </p>
   )
 }
 
-function ScenarioSelection(props: {
-  selectedScenarioId: ScenarioId | null
-  error: string | null
-  onSelect(scenarioId: ScenarioId): void
-}) {
+function ScenarioSelection({ services }: { services: AppRuntimeServices }) {
+  const location = useLocation()
+  const [selectedSlug, setSelectedSlug] = useState<string | null>(null)
+  const [selectionError, setSelectionError] = useState<string | null>(null)
+  const selectedScenario = scenarioFromSlug(selectedSlug ?? undefined)
+  const selectedSupported = selectedScenario !== null &&
+    services.runtime.evaluateScenario({ scenarioId: selectedScenario.id }).status === 'POLICY_EVALUATED'
+  const continuePath = !selectedSupported || selectedScenario === null
+    ? null
+    : withPreservedDemo(`/apply/${selectedScenario.slug}`, location.search)
+
   return (
     <section className={styles.entryLayout} aria-labelledby="scenario-heading">
       <div className={styles.entryIntroduction}>
         <p className={styles.eyebrow}>Purpose guidance</p>
-        <h2 id="scenario-heading" tabIndex={-1}>
-          What are you travelling to India for?
-        </h2>
+        <h2 id="scenario-heading" tabIndex={-1}>What are you travelling to India for?</h2>
         <p className={styles.lead}>
           Choose a controlled synthetic scenario. We’ll use its versioned demo policy to explain what comes next.
         </p>
       </div>
 
-      <fieldset className={styles.scenarioFieldset} aria-describedby={props.error ? 'scenario-error' : undefined}>
+      <fieldset className={styles.scenarioFieldset}>
         <legend className={styles.visuallyHidden}>Choose one synthetic travel purpose</legend>
         {SCENARIOS.map((scenario, index) => (
           <label
@@ -269,9 +94,17 @@ function ScenarioSelection(props: {
             <input
               type="radio"
               name="scenario"
-              value={scenario.id}
-              checked={props.selectedScenarioId === scenario.id}
-              onChange={() => props.onSelect(scenario.id)}
+              value={scenario.slug}
+              checked={selectedSlug === scenario.slug}
+              onChange={() => {
+                setSelectedSlug(scenario.slug)
+                const result = services.runtime.evaluateScenario({ scenarioId: scenario.id })
+                setSelectionError(
+                  result.status === 'POLICY_EVALUATED'
+                    ? null
+                    : 'We could not confirm support for that demo scenario. No application has been created.',
+                )
+              }}
             />
             <span className={styles.scenarioCopy}>
               <span className={styles.scenarioTopline}>
@@ -283,12 +116,15 @@ function ScenarioSelection(props: {
             <span className={styles.radioIndicator} aria-hidden="true" />
           </label>
         ))}
-        <p className={styles.selectionHint}>Selecting a purpose opens its demo-policy guidance.</p>
-        {props.error ? (
-          <p className={styles.inlineError} id="scenario-error" role="alert">
-            {props.error}
-          </p>
-        ) : null}
+        <p className={styles.selectionHint}>Select a purpose, then continue to its demo-policy guidance.</p>
+        {selectionError ? <p className={styles.inlineError} role="alert">{selectionError}</p> : null}
+        {continuePath === null ? (
+          <button className={styles.primaryButton} type="button" disabled>Continue</button>
+        ) : (
+          <Link className={styles.primaryButton} to={continuePath}>
+            Continue <span aria-hidden="true">→</span>
+          </Link>
+        )}
       </fieldset>
 
       <div className={styles.safetyNote}>
@@ -301,9 +137,9 @@ function ScenarioSelection(props: {
 
 function PurposeGuidance(props: {
   evaluation: PolicyEvaluationResult
+  backPath: string
   error: string | null
   onContinue(): void
-  onChooseAnother(): void
 }) {
   const purposeName = props.evaluation.suggestedPurposeFamily
     ? PURPOSE_NAMES[props.evaluation.suggestedPurposeFamily]
@@ -314,15 +150,12 @@ function PurposeGuidance(props: {
 
   return (
     <section className={styles.guidance} aria-labelledby="guidance-heading">
-      <button className={styles.textButton} type="button" onClick={props.onChooseAnother}>
-        <span aria-hidden="true">←</span> Choose a different purpose
-      </button>
-
+      <Link className={styles.textButton} to={props.backPath}>
+        <span aria-hidden="true">←</span> Back to visa purposes
+      </Link>
       <div className={styles.guidanceHeader}>
         <p className={styles.eyebrow}>Purpose guidance · Step 1 of 6</p>
-        <h2 id="guidance-heading" tabIndex={-1}>
-          {purposeName}
-        </h2>
+        <h2 id="guidance-heading" tabIndex={-1}>{purposeName}</h2>
         <p className={styles.demoDisclaimer}>
           This purpose is supported by the selected demo scenario. It is not a legal eligibility decision.
         </p>
@@ -332,42 +165,26 @@ function PurposeGuidance(props: {
         <section className={styles.guidanceSection} aria-labelledby="questions-heading">
           <div className={styles.sectionHeading}>
             <span className={styles.sectionNumber} aria-hidden="true">01</span>
-            <div>
-              <h3 id="questions-heading">What we’ll ask</h3>
-              <p>Only bounded synthetic choices from this demo policy.</p>
-            </div>
+            <div><h3 id="questions-heading">What we’ll ask</h3><p>Only bounded synthetic choices from this demo policy.</p></div>
           </div>
-          <ul className={styles.plainList}>
-            {questions.map((question) => (
-              <li key={question.id}>{question.prompt}</li>
-            ))}
-          </ul>
+          <ul className={styles.plainList}>{questions.map((question) => <li key={question.id}>{question.prompt}</li>)}</ul>
         </section>
 
         <section className={styles.guidanceSection} aria-labelledby="documents-heading">
           <div className={styles.sectionHeading}>
             <span className={styles.sectionNumber} aria-hidden="true">02</span>
-            <div>
-              <h3 id="documents-heading">Demo documents</h3>
-              <p>Bundled project-created fixtures only.</p>
-            </div>
+            <div><h3 id="documents-heading">Demo documents</h3><p>Bundled project-created fixtures only.</p></div>
           </div>
           <ul className={styles.requirementList}>
             {requirements.map((requirement) => (
-              <li key={requirement.id}>
-                <span aria-hidden="true">✓</span>
-                {DOCUMENT_NAMES[requirement.documentType] ?? requirement.documentType}
-              </li>
+              <li key={requirement.id}><span aria-hidden="true">✓</span>{DOCUMENT_NAMES[requirement.documentType] ?? requirement.documentType}</li>
             ))}
           </ul>
         </section>
 
         {fee ? (
           <section className={styles.feePanel} aria-labelledby="fee-heading">
-            <div>
-              <p className={styles.feeLabel} id="fee-heading">Synthetic demo fee</p>
-              <p className={styles.feeAmount}>{fee.amount} {fee.unit}</p>
-            </div>
+            <div><p className={styles.feeLabel} id="fee-heading">Synthetic demo fee</p><p className={styles.feeAmount}>{fee.amount} {fee.unit}</p></div>
             <strong>{fee.label}</strong>
           </section>
         ) : null}
@@ -376,758 +193,386 @@ function PurposeGuidance(props: {
       <details className={styles.policyDetails}>
         <summary>Why am I seeing this?</summary>
         <div className={styles.policyDetailBody}>
-          <p>
-            This guidance comes from demo policy <strong>{props.evaluation.policy.qualifiedVersion}</strong>.
-          </p>
-          <ul>
-            {props.evaluation.reasons.map((reason) => (
-              <li key={reason.code}>{reason.explanation}</li>
-            ))}
-          </ul>
-          <p className={styles.provenanceLine}>
-            Sources: {props.evaluation.provenance.map(({ sourceLabel }) => sourceLabel).join(' · ')}
-          </p>
+          <p>This guidance comes from demo policy <strong>{props.evaluation.policy.qualifiedVersion}</strong>.</p>
+          <ul>{props.evaluation.reasons.map((reason) => <li key={reason.code}>{reason.explanation}</li>)}</ul>
+          <p className={styles.provenanceLine}>Sources: {props.evaluation.provenance.map(({ sourceLabel }) => sourceLabel).join(' · ')}</p>
         </div>
       </details>
 
       {props.error ? <p className={styles.inlineError} role="alert">{props.error}</p> : null}
-
       <div className={styles.actions}>
         <button className={styles.primaryButton} type="button" onClick={props.onContinue}>
-          Continue with this demo
-          <span aria-hidden="true">→</span>
+          Continue with this demo <span aria-hidden="true">→</span>
         </button>
-        <button className={styles.secondaryButton} type="button" onClick={props.onChooseAnother}>
-          Choose a different purpose
-        </button>
+        <Link className={styles.secondaryButton} to={props.backPath}>Choose a different purpose</Link>
       </div>
     </section>
   )
 }
 
-function CaseCreated(props: {
-  createdCase: CreatedCase
+function CaseStart(props: {
+  projection: CaseNavigationProjection
+  created: boolean
   error: string | null
   onStart(): void
 }) {
-  const scenario = scenarioDetails(props.createdCase.scenarioId)
   return (
-    <section className={styles.outcomePanel} aria-labelledby="case-created-heading">
-      <div className={styles.outcomeMarker} aria-hidden="true">✓</div>
+    <section className={props.created ? styles.outcomePanel : styles.resumePanel} aria-labelledby="case-created-heading">
+      {props.created ? <div className={styles.outcomeMarker} aria-hidden="true">✓</div> : null}
       <p className={styles.eyebrow}>Application · Step 2 of 6</p>
-      <h2 id="case-created-heading" tabIndex={-1}>
-        Your synthetic application has been created
-      </h2>
-      <p>
-        Your {scenario.name.toLowerCase()} demo case is saved in this browser and pinned to the policy used for its guidance.
-      </p>
+      <h2 id="case-created-heading" tabIndex={-1}>{props.created ? 'Your synthetic application has been created' : 'Continue your application'}</h2>
+      <p>Your {props.projection.scenario.name.toLowerCase()} demo case is saved in this browser and pinned to its policy.</p>
       <dl className={styles.caseFacts}>
-        <div>
-          <dt>Purpose</dt>
-          <dd>{scenario.name}</dd>
-        </div>
-        <div>
-          <dt>Synthetic case reference</dt>
-          <dd>{props.createdCase.caseId}</dd>
-        </div>
-        <div>
-          <dt>Demo policy</dt>
-          <dd>{props.createdCase.policyQualifiedVersion}</dd>
-        </div>
+        <div><dt>Purpose</dt><dd>{props.projection.scenario.name}</dd></div>
+        <div><dt>Synthetic case reference</dt><dd>{props.projection.caseId}</dd></div>
+        <div><dt>Demo policy</dt><dd>{props.projection.resumedCase.policyQualifiedVersion}</dd></div>
       </dl>
       {props.error ? <p className={styles.inlineError} role="alert">{props.error}</p> : null}
-      <button className={styles.primaryButton} type="button" onClick={props.onStart}>
-        Start application <span aria-hidden="true">→</span>
-      </button>
+      <button className={styles.primaryButton} type="button" onClick={props.onStart}>Start application <span aria-hidden="true">→</span></button>
       <p className={styles.actionNote}>This starts the saved draft. It does not submit anything.</p>
     </section>
   )
 }
 
-function ResumeCase(props: {
-  resumedCase: ResumedCase
-  error: string | null
-  onResume(): void
-}) {
-  const scenario = isScenarioId(props.resumedCase.scenarioId)
-    ? scenarioDetails(props.resumedCase.scenarioId)
-    : null
-  const isCreatedOnly = props.resumedCase.applicationState === 'DRAFT_CREATED'
-  return (
-    <section className={styles.resumePanel} aria-labelledby="resume-heading">
-      <div className={styles.resumeHeader}>
-        <div>
-          <p className={styles.eyebrow}>Saved in this browser</p>
-          <h2 id="resume-heading" tabIndex={-1}>
-            Continue your application
-          </h2>
-        </div>
-        <span className={styles.savedBadge}>Progress preserved</span>
-      </div>
-      <p className={styles.resumePurpose}>{scenario?.name ?? 'Synthetic application'}</p>
-      <p>
-        {isCreatedOnly
-          ? 'Your synthetic case is ready to begin.'
-          : 'Your application is in progress. Resume the same saved case without starting again.'}
-      </p>
-      <dl className={styles.caseFacts}>
-        <div>
-          <dt>Application state</dt>
-          <dd>{isCreatedOnly ? 'Ready to start' : 'In progress'}</dd>
-        </div>
-        <div>
-          <dt>Last saved</dt>
-          <dd>Synthetic demo state</dd>
-        </div>
-        <div>
-          <dt>Synthetic case reference</dt>
-          <dd>{props.resumedCase.caseId}</dd>
-        </div>
-      </dl>
-      {props.error ? <p className={styles.inlineError} role="alert">{props.error}</p> : null}
-      <button className={styles.primaryButton} type="button" onClick={props.onResume}>
-        {isCreatedOnly ? 'Continue setup' : 'Resume application'}
-        <span aria-hidden="true">→</span>
-      </button>
-    </section>
-  )
-}
-
-function RecoveryPanel(props: {
-  storageUnavailable: boolean
-  error: string | null
-  onReset(): void
-}) {
+function RecoveryPanel(props: { storageUnavailable: boolean; error?: string | null; onReset(): void }) {
   return (
     <section className={styles.recoveryPanel} aria-labelledby="recovery-heading">
       <p className={styles.eyebrow}>Local demo storage</p>
-      <h2 id="recovery-heading" tabIndex={-1}>
-        {props.storageUnavailable ? 'Progress cannot be saved in this browser' : 'Saved demo data cannot be read'}
-      </h2>
-      <p>
-        {props.storageUnavailable
-          ? 'This prototype requires local browser storage to preserve synthetic progress. Storage is currently unavailable, so a case cannot be created safely.'
-          : 'The local synthetic demo state is incompatible or corrupted. It has not been trusted or changed.'}
-      </p>
+      <h2 id="recovery-heading" tabIndex={-1}>{props.storageUnavailable ? 'Progress cannot be saved in this browser' : 'Saved demo data cannot be read'}</h2>
+      <p>{props.storageUnavailable
+        ? 'This prototype requires local browser storage to preserve synthetic progress. Storage is currently unavailable.'
+        : 'The local synthetic demo state is incompatible or corrupted. It has not been trusted or changed.'}</p>
       {props.error ? <p className={styles.inlineError} role="alert">{props.error}</p> : null}
-      {!props.storageUnavailable ? (
-        <button className={styles.primaryButton} type="button" onClick={props.onReset}>
-          Reset demo data
-        </button>
-      ) : null}
+      {!props.storageUnavailable ? <button className={styles.primaryButton} type="button" onClick={props.onReset}>Reset demo data</button> : null}
     </section>
   )
 }
 
-function App({ services: providedServices }: AppProps) {
-  const [services] = useState(() => providedServices ?? createAppRuntime())
-  const [initialView] = useState(() => inspectInitialView(services))
-  const [demoControlsEnabled] = useState(demoControlsRequested)
-  const [surface, setSurface] = useState<Surface>(initialView.surface)
-  const [selectedScenarioId, setSelectedScenarioId] = useState<ScenarioId | null>(null)
-  const [evaluation, setEvaluation] = useState<PolicyEvaluationResult | null>(initialView.evaluation)
-  const [createdCase, setCreatedCase] = useState<CreatedCase | null>(null)
-  const [resumedCase, setResumedCase] = useState<ResumedCase | null>(initialView.resumedCase)
-  const [error, setError] = useState<string | null>(null)
-  const [documentEditMode, setDocumentEditMode] = useState(false)
-  const [applicantSurfaceKey, setApplicantSurfaceKey] = useState(0)
-  const [demoControlFeedback, setDemoControlFeedback] = useState<string | null>(null)
+function pageTitle(pathname: string): string {
+  const scenarioMatch = pathname.match(/^\/apply\/([^/]+)$/)
+  if (scenarioMatch) return `${scenarioFromSlug(scenarioMatch[1])?.pageTitle ?? 'Purpose'} — India e-Visa Reimagined`
+  if (pathname.endsWith('/documents')) return 'Documents — India e-Visa Reimagined'
+  if (pathname.endsWith('/review')) return 'Review — India e-Visa Reimagined'
+  if (pathname.endsWith('/payment')) return 'Payment — India e-Visa Reimagined'
+  if (pathname.endsWith('/correction')) return 'Correction — India e-Visa Reimagined'
+  if (pathname.endsWith('/status')) return 'Status — India e-Visa Reimagined'
+  if (pathname.endsWith('/eta')) return 'Synthetic ETA — India e-Visa Reimagined'
+  if (pathname.startsWith('/application/')) return 'Application — India e-Visa Reimagined'
+  return 'India e-Visa Reimagined'
+}
+
+function RouteEffects() {
+  const location = useLocation()
+  const navigationType = useNavigationType()
   useEffect(() => {
-    const headingIdBySurface: Partial<Record<Surface, string>> = {
-      SCENARIO_SELECTION: 'scenario-heading',
-      PURPOSE_GUIDANCE: 'guidance-heading',
-      CASE_CREATED: 'case-created-heading',
-      RESUME_CASE: 'resume-heading',
-      ADAPTIVE_APPLICATION: 'application-heading',
-      DOCUMENT_PREPARATION: 'documents-heading',
-      REVIEW_APPLICATION: 'review-heading',
-      PAYMENT_APPLICATION: 'payment-heading',
-      STATUS_APPLICATION: 'status-heading',
-      DOCUMENT_CORRECTION: 'correction-heading',
-      RESET_REQUIRED: 'recovery-heading',
-      STORAGE_UNAVAILABLE: 'recovery-heading',
+    document.title = pageTitle(location.pathname)
+    if (navigationType !== 'POP') {
+      document.documentElement.scrollTop = 0
+      document.body.scrollTop = 0
     }
-    const headingId = headingIdBySurface[surface]
-    if (headingId !== undefined) {
-      const heading = document.getElementById(headingId)
-      if (
-        surface === 'ADAPTIVE_APPLICATION' ||
-        surface === 'DOCUMENT_PREPARATION' ||
-        surface === 'REVIEW_APPLICATION' ||
-        surface === 'PAYMENT_APPLICATION'
-        || surface === 'STATUS_APPLICATION'
-        || surface === 'DOCUMENT_CORRECTION'
-      ) {
-        document.documentElement.scrollTop = 0
-        document.body.scrollTop = 0
-        heading?.focus({ preventScroll: true })
-        return
-      }
-      heading?.focus()
-    }
-  }, [surface, applicantSurfaceKey])
+    document.querySelector<HTMLElement>('main h2[tabindex="-1"]')?.focus({ preventScroll: true })
+  }, [location.pathname, navigationType])
+  return null
+}
 
-  function refreshApplicantSurface() {
-    const refreshedView = inspectInitialView(services)
-    setSelectedScenarioId(null)
-    setEvaluation(refreshedView.evaluation)
-    setCreatedCase(null)
-    setResumedCase(refreshedView.resumedCase)
-    setError(null)
-    setDocumentEditMode(false)
-    setApplicantSurfaceKey((current) => current + 1)
-    setSurface(refreshedView.surface)
+function seedDestination(seed: RecoverySeed): string {
+  if (seed.expectedState.eta === 'ISSUED') return applicationPath(seed.caseId, 'eta')
+  if (seed.expectedState.payment === 'CONFIRMED') return applicationPath(seed.caseId, 'status')
+  if (seed.expectedState.application === 'LOCKED') return applicationPath(seed.caseId, 'payment')
+  if (seed.expectedState.currentStep === 'DOCUMENTS') return applicationPath(seed.caseId, 'documents')
+  if (seed.expectedState.currentStep === 'REVIEW') return applicationPath(seed.caseId, 'review')
+  return applicationPath(seed.caseId)
+}
+
+function CaseBoundary(props: {
+  services: AppRuntimeServices
+  refreshVersion: number
+  stage: CaseStage
+  onReset(): void
+  children(projection: CaseNavigationProjection): ReactNode
+}) {
+  const { caseId } = useParams()
+  const location = useLocation()
+  void props.refreshVersion
+  const projection = projectCaseNavigation(props.services, caseId)
+  if (projection.status === 'CASE_NOT_FOUND') {
+    return (
+      <section className={styles.recoveryPanel} aria-labelledby="case-not-found-heading">
+        <p className={styles.eyebrow}>Application lookup</p>
+        <h2 id="case-not-found-heading" tabIndex={-1}>Application not found</h2>
+        <p>No saved synthetic application matches this address. Nothing was created or changed.</p>
+        <Link className={styles.primaryButton} to={withPreservedDemo('/', location.search)}>
+          Back to visa purposes
+        </Link>
+      </section>
+    )
   }
+  if (projection.status === 'RESET_REQUIRED') return <RecoveryPanel storageUnavailable={false} onReset={props.onReset} />
+  if (projection.status === 'STORAGE_UNAVAILABLE') return <RecoveryPanel storageUnavailable onReset={props.onReset} />
+  const redirect = guardedDestination(projection, props.stage)
+  if (redirect !== null) return <Navigate to={withPreservedDemo(redirect, location.search)} replace />
+  return <><JourneyNavigation projection={projection} currentStage={props.stage} />{props.children(projection)}</>
+}
 
-  function loadDemoSeed(seedId: RecoverySeedId) {
-    const result = services.loadDemoSeed(seedId)
-    if (result.status === 'SAVED') {
-      setCorrectionFragment(false)
-      refreshApplicantSurface()
-      setDemoControlFeedback(`Loaded ${seedId}.`)
-      return
-    }
-    setDemoControlFeedback('The canonical seed could not be saved to local demo storage.')
-  }
+function PurposeRoute(props: { services: AppRuntimeServices }) {
+  const { scenarioSlug } = useParams()
+  const location = useLocation()
+  const navigate = useNavigate()
+  const [error, setError] = useState<string | null>(null)
+  const scenario = scenarioFromSlug(scenarioSlug)
+  if (scenario === null) return <Navigate to={withPreservedDemo('/', location.search)} replace />
+  const evaluated = props.services.runtime.evaluateScenario({ scenarioId: scenario.id })
+  if (evaluated.status !== 'POLICY_EVALUATED') return <Navigate to={withPreservedDemo('/', location.search)} replace />
 
-  function chooseScenario(scenarioId: ScenarioId) {
+  function createCase() {
+    if (scenario === null) return
     setError(null)
-    setSelectedScenarioId(scenarioId)
-    const result = services.runtime.evaluateScenario({ scenarioId })
-    if (result.status === 'POLICY_EVALUATED') {
-      setEvaluation(result.evaluation)
-      setSurface('PURPOSE_GUIDANCE')
-      return
-    }
-    setEvaluation(null)
-    setError('We could not confirm support for that demo scenario. No application has been created.')
-  }
-
-  function chooseAnotherPurpose() {
-    setError(null)
-    setEvaluation(null)
-    setSelectedScenarioId(null)
-    setSurface('SCENARIO_SELECTION')
-  }
-
-  function continueWithDemo() {
-    if (selectedScenarioId === null || evaluation === null) {
-      setError('Choose a supported demo purpose before continuing.')
-      return
-    }
-    setError(null)
-    const result = services.runtime.createCase({
-      scenarioId: selectedScenarioId,
-      idempotencyKey: createCaseIdempotencyKey(selectedScenarioId),
-    })
-    if (result.status === 'COMMAND_ACCEPTED') {
-      setCreatedCase({
-        caseId: result.caseId,
-        scenarioId: selectedScenarioId,
-        policyQualifiedVersion: evaluation.policy.qualifiedVersion,
-      })
-      setSurface('CASE_CREATED')
-      return
-    }
-    if (result.status === 'EXISTING_CASE') {
-      const resumed = services.runtime.resumeCase({ caseId: result.caseId })
-      if (resumed.status === 'CASE_RESUMED') {
-        setResumedCase(resumed)
-        setSurface('RESUME_CASE')
-        return
-      }
-    }
-    if (result.status === 'STORAGE_REQUIRES_RESET') {
-      setSurface('RESET_REQUIRED')
-      return
-    }
-    if (result.status === 'STORAGE_UNAVAILABLE') {
-      setSurface('STORAGE_UNAVAILABLE')
+    const result = props.services.runtime.createCase({ scenarioId: scenario.id, idempotencyKey: createCaseIdempotencyKey(scenario.id) })
+    if (result.status === 'COMMAND_ACCEPTED' || result.status === 'EXISTING_CASE') {
+      navigate(withPreservedDemo(applicationPath(result.caseId), location.search), { state: { created: result.status === 'COMMAND_ACCEPTED' } })
       return
     }
     setError('The synthetic case could not be created safely. Your saved demo data was not changed.')
   }
 
-  function startApplication() {
-    if (createdCase === null) {
-      setError('The synthetic case is not available to start.')
-      return
-    }
-    setError(null)
-    const result = services.runtime.beginDraft({
-      caseId: createdCase.caseId,
-      idempotencyKey: beginDraftIdempotencyKey(createdCase.caseId),
-    })
-    if (result.status === 'COMMAND_ACCEPTED') {
-      const resumed = services.runtime.resumeCase({ caseId: createdCase.caseId })
-      if (resumed.status === 'CASE_RESUMED') {
-        openAdaptiveApplication(resumed)
-        return
-      }
-      setError('The started draft could not be loaded safely. Your saved demo data was not changed.')
-      return
-    }
-    if (result.status === 'STORAGE_REQUIRES_RESET') {
-      setSurface('RESET_REQUIRED')
-      return
-    }
-    if (result.status === 'STORAGE_UNAVAILABLE') {
-      setSurface('STORAGE_UNAVAILABLE')
-      return
-    }
-    setError('The draft could not be started safely. No application state was changed.')
-  }
+  return <PurposeGuidance evaluation={evaluated.evaluation} backPath={withPreservedDemo('/', location.search)} error={error} onContinue={createCase} />
+}
 
-  function resumeApplication() {
-    if (resumedCase === null || !isScenarioId(resumedCase.scenarioId)) {
-      setError('The saved synthetic case cannot be resumed by this demo slice.')
-      return
-    }
-    setError(null)
-    let caseToOpen = resumedCase
-    if (resumedCase.applicationState === 'DRAFT_CREATED') {
-      const result = services.runtime.beginDraft({
-        caseId: resumedCase.caseId,
-        idempotencyKey: beginDraftIdempotencyKey(resumedCase.caseId),
-      })
-      if (result.status !== 'COMMAND_ACCEPTED') {
-        if (result.status === 'STORAGE_REQUIRES_RESET') {
-          setSurface('RESET_REQUIRED')
-          return
+function LandingRoute(props: { services: AppRuntimeServices; onReset(): void }) {
+  const inspected = props.services.runtime.inspectState()
+  if (inspected.status === 'STORAGE_REQUIRES_RESET') {
+    return <RecoveryPanel storageUnavailable={false} onReset={props.onReset} />
+  }
+  if (inspected.status === 'STORAGE_UNAVAILABLE') {
+    return <RecoveryPanel storageUnavailable onReset={props.onReset} />
+  }
+  return <ScenarioSelection services={props.services} />
+}
+
+type SharedRouteProps = {
+  services: AppRuntimeServices
+  refreshVersion: number
+  onStateChanged(): void
+  onReset(): void
+}
+
+function ApplicationRoute(props: SharedRouteProps) {
+  const location = useLocation()
+  const [error, setError] = useState<string | null>(null)
+  return (
+    <CaseBoundary {...props} stage="application">
+      {(projection) => {
+        if (projection.resumedCase.applicationState === 'DRAFT_CREATED') {
+          return <CaseStart projection={projection} created={Boolean((location.state as { created?: boolean } | null)?.created)} error={error} onStart={() => {
+            const result = props.services.runtime.beginDraft({ caseId: projection.caseId, idempotencyKey: beginDraftIdempotencyKey(projection.caseId) })
+            if (result.status === 'COMMAND_ACCEPTED') {
+              setError(null)
+              window.scrollTo({ top: 0 })
+              props.onStateChanged()
+            }
+            else setError('The draft could not be started safely. No application state was changed.')
+          }} />
         }
-        if (result.status === 'STORAGE_UNAVAILABLE') {
-          setSurface('STORAGE_UNAVAILABLE')
-          return
-        }
-        setError('The saved draft could not be started safely. No application state was changed.')
-        return
-      }
-      const refreshed = services.runtime.resumeCase({ caseId: resumedCase.caseId })
-      if (refreshed.status !== 'CASE_RESUMED') {
-        setError('The started draft could not be loaded safely. Your saved demo data was not changed.')
-        return
-      }
-      caseToOpen = refreshed
-    } else if (resumedCase.applicationState === 'IN_PROGRESS') {
-      const refreshed = services.runtime.resumeCase({ caseId: resumedCase.caseId })
-      if (refreshed.status === 'STORAGE_REQUIRES_RESET') {
-        setSurface('RESET_REQUIRED')
-        return
-      }
-      if (refreshed.status === 'STORAGE_UNAVAILABLE') {
-        setSurface('STORAGE_UNAVAILABLE')
-        return
-      }
-      if (refreshed.status !== 'CASE_RESUMED') {
-        setError('The saved draft could not be loaded safely. Your saved demo data was not changed.')
-        return
-      }
-      caseToOpen = refreshed
-    } else {
-      setError('This saved synthetic case is beyond the current applicant slice.')
-      return
-    }
-    openAdaptiveApplication(caseToOpen)
-  }
+        const evaluated = props.services.runtime.evaluateScenario({ scenarioId: projection.scenario.id })
+        if (evaluated.status !== 'POLICY_EVALUATED') return <p role="alert">The pinned demo policy could not safely provide this application form.</p>
+        return <AdaptiveApplication
+          services={props.services}
+          resumedCase={projection.resumedCase}
+          evaluation={evaluated.evaluation}
+          purposeName={projection.scenario.name}
+          backPath={withPreservedDemo(`/apply/${projection.scenario.slug}`, location.search)}
+          documentsPath={withPreservedDemo(applicationPath(projection.caseId, 'documents'), location.search)}
+        />
+      }}
+    </CaseBoundary>
+  )
+}
 
-  function openAdaptiveApplication(caseToOpen: ResumedCase) {
-    if (!isScenarioId(caseToOpen.scenarioId)) {
-      setError('The saved synthetic scenario is not supported by this applicant form.')
-      return
-    }
-    const evaluated = services.runtime.evaluateScenario({ scenarioId: caseToOpen.scenarioId })
-    if (
-      evaluated.status !== 'POLICY_EVALUATED' ||
-      evaluated.evaluation.policy.qualifiedVersion !== caseToOpen.policyQualifiedVersion ||
-      evaluated.evaluation.questionManifest === undefined
-    ) {
-      setError('The pinned demo policy could not safely provide this application form.')
-      return
-    }
-    setEvaluation(evaluated.evaluation)
-    setSelectedScenarioId(caseToOpen.scenarioId)
-    setCreatedCase({
-      caseId: caseToOpen.caseId,
-      scenarioId: caseToOpen.scenarioId,
-      policyQualifiedVersion: caseToOpen.policyQualifiedVersion,
-    })
-    setResumedCase(caseToOpen)
-    setSurface('ADAPTIVE_APPLICATION')
-  }
+function DocumentsRoute(props: SharedRouteProps) {
+  const location = useLocation()
+  return (
+    <CaseBoundary {...props} stage="documents">
+      {(projection) => <DocumentPreparation
+        services={props.services}
+        caseId={projection.caseId}
+        purposeName={projection.scenario.name}
+        editMode={Boolean((location.state as { editDocuments?: boolean } | null)?.editDocuments)}
+        applicationPath={withPreservedDemo(applicationPath(projection.caseId), location.search)}
+        reviewPath={withPreservedDemo(applicationPath(projection.caseId, 'review'), location.search)}
+        onPrepareReview={() => {
+          const current = props.services.runtime.resumeCase({ caseId: projection.caseId })
+          if (current.status === 'CASE_RESUMED' && current.currentStep === 'REVIEW') return true
+          if (current.status !== 'CASE_RESUMED') return false
+          const result = props.services.runtime.prepareReview({
+            caseId: projection.caseId,
+            idempotencyKey: `SYN-IDEMPOTENCY-A05-UI-REVIEW-${projection.caseId.slice('SYN-'.length)}-${String(current.revision + 1).padStart(3, '0')}`,
+          })
+          if (result.status === 'REVIEW_PREPARED') { props.onStateChanged(); return true }
+          return false
+        }}
+        onRecoveryRequired={props.onStateChanged}
+      />}
+    </CaseBoundary>
+  )
+}
 
-  function backToSavedCase() {
-    if (resumedCase === null) {
-      return
-    }
-    setError(null)
-    setSurface('RESUME_CASE')
-  }
+function ReviewRoute(props: SharedRouteProps) {
+  const location = useLocation()
+  const navigate = useNavigate()
+  return (
+    <CaseBoundary {...props} stage="review">
+      {(projection) => {
+        const paymentPath = withPreservedDemo(applicationPath(projection.caseId, 'payment'), location.search)
+        return <ReviewApplication
+          services={props.services}
+          caseId={projection.caseId}
+          applicationPath={withPreservedDemo(applicationPath(projection.caseId), location.search)}
+          documentsPath={withPreservedDemo(applicationPath(projection.caseId, 'documents'), location.search)}
+          paymentPath={paymentPath}
+          onSubmitted={() => { props.onStateChanged(); navigate(paymentPath) }}
+          onRecoveryRequired={props.onStateChanged}
+        />
+      }}
+    </CaseBoundary>
+  )
+}
 
-  function openDocumentPreparation(editMode = false) {
-    if (resumedCase === null) {
-      setError('The saved synthetic Case is not available for document preparation.')
-      return
-    }
-    const refreshed = services.runtime.resumeCase({ caseId: resumedCase.caseId })
-    if (refreshed.status === 'STORAGE_REQUIRES_RESET') {
-      setSurface('RESET_REQUIRED')
-      return
-    }
-    if (refreshed.status === 'STORAGE_UNAVAILABLE') {
-      setSurface('STORAGE_UNAVAILABLE')
-      return
-    }
-    if (
-      refreshed.status !== 'CASE_RESUMED' ||
-      (refreshed.currentStep !== 'DOCUMENTS' && refreshed.currentStep !== 'REVIEW') ||
-      !isScenarioId(refreshed.scenarioId)
-    ) {
-      setError('Application details must be saved before demo documents can be prepared.')
-      return
-    }
-    const inspected = services.runtime.inspectDocuments({ caseId: refreshed.caseId })
-    if (inspected.status === 'STORAGE_REQUIRES_RESET') {
-      setSurface('RESET_REQUIRED')
-      return
-    }
-    if (inspected.status === 'STORAGE_UNAVAILABLE') {
-      setSurface('STORAGE_UNAVAILABLE')
-      return
-    }
-    if (inspected.status !== 'DOCUMENTS_INSPECTED') {
-      setError('The pinned demo policy could not safely provide the document checklist.')
-      return
-    }
-    setError(null)
-    setDocumentEditMode(editMode)
-    setResumedCase(refreshed)
-    setSelectedScenarioId(refreshed.scenarioId)
-    setSurface('DOCUMENT_PREPARATION')
-  }
+function PaymentRoute(props: SharedRouteProps) {
+  const location = useLocation()
+  return (
+    <CaseBoundary {...props} stage="payment">
+      {(projection) => <PaymentApplication
+        services={props.services}
+        caseId={projection.caseId}
+        reviewPath={withPreservedDemo(applicationPath(projection.caseId, 'review'), location.search)}
+        statusPath={withPreservedDemo(applicationPath(projection.caseId, 'status'), location.search)}
+        onRecoveryRequired={props.onStateChanged}
+      />}
+    </CaseBoundary>
+  )
+}
 
-  function openReviewApplication() {
-    if (resumedCase === null) {
-      setError('The saved synthetic Case is not available for review.')
-      return
-    }
-    const refreshed = services.runtime.resumeCase({ caseId: resumedCase.caseId })
-    if (refreshed.status === 'STORAGE_REQUIRES_RESET') {
-      setSurface('RESET_REQUIRED')
-      return
-    }
-    if (refreshed.status === 'STORAGE_UNAVAILABLE') {
-      setSurface('STORAGE_UNAVAILABLE')
-      return
-    }
-    if (refreshed.status !== 'CASE_RESUMED' || !isScenarioId(refreshed.scenarioId)) {
-      setError('The saved synthetic Case could not be loaded safely for review.')
-      return
-    }
-    if (refreshed.applicationState !== 'LOCKED' && refreshed.currentStep !== 'REVIEW') {
-      const prepared = services.runtime.prepareReview({
-        caseId: refreshed.caseId,
-        idempotencyKey: `SYN-IDEMPOTENCY-A05-UI-REVIEW-${refreshed.caseId.slice('SYN-'.length)}-${String(refreshed.revision + 1).padStart(3, '0')}`,
-      })
-      if (
-        prepared.status === 'STORAGE_REQUIRES_RESET' ||
-        prepared.status === 'STORAGE_UNAVAILABLE'
-      ) {
-        handleDocumentRecovery(prepared.status)
-        return
-      }
-      if (prepared.status !== 'REVIEW_PREPARED') {
-        setError('Every required answer and demo document must be ready before review.')
-        return
-      }
-    }
-    const review = services.runtime.inspectReview({ caseId: refreshed.caseId })
-    if (review.status === 'STORAGE_REQUIRES_RESET' || review.status === 'STORAGE_UNAVAILABLE') {
-      handleDocumentRecovery(review.status)
-      return
-    }
-    if (review.status !== 'REVIEW_INSPECTED') {
-      setError('The authoritative demo review could not be prepared safely.')
-      return
-    }
-    const current = services.runtime.resumeCase({ caseId: refreshed.caseId })
-    if (current.status !== 'CASE_RESUMED') {
-      setError('The prepared demo review could not be reloaded safely.')
-      return
-    }
-    setError(null)
-    setResumedCase(current)
-    setSelectedScenarioId(refreshed.scenarioId)
-    setSurface('REVIEW_APPLICATION')
-  }
+function StatusRoute(props: SharedRouteProps) {
+  const location = useLocation()
+  const navigate = useNavigate()
+  return (
+    <CaseBoundary {...props} stage="status">
+      {(projection) => {
+        const etaPath = withPreservedDemo(applicationPath(projection.caseId, 'eta'), location.search)
+        return <StatusApplication
+          services={props.services}
+          caseId={projection.caseId}
+          paymentPath={withPreservedDemo(applicationPath(projection.caseId, 'payment'), location.search)}
+          correctionPath={withPreservedDemo(applicationPath(projection.caseId, 'correction'), location.search)}
+          etaPath={etaPath}
+          onEtaIssued={() => { props.onStateChanged(); navigate(etaPath) }}
+          onRecoveryRequired={props.onStateChanged}
+        />
+      }}
+    </CaseBoundary>
+  )
+}
 
-  function backToApplicationDetails() {
-    if (resumedCase === null) {
-      return
-    }
-    const refreshed = services.runtime.resumeCase({ caseId: resumedCase.caseId })
-    if (refreshed.status === 'STORAGE_REQUIRES_RESET') {
-      setSurface('RESET_REQUIRED')
-      return
-    }
-    if (refreshed.status === 'STORAGE_UNAVAILABLE') {
-      setSurface('STORAGE_UNAVAILABLE')
-      return
-    }
-    if (refreshed.status === 'CASE_RESUMED') {
-      openAdaptiveApplication(refreshed)
-    }
-  }
+function CorrectionRoute(props: SharedRouteProps) {
+  const location = useLocation()
+  const navigate = useNavigate()
+  return (
+    <CaseBoundary {...props} stage="correction">
+      {(projection) => {
+        const statusPath = withPreservedDemo(applicationPath(projection.caseId, 'status'), location.search)
+        return <DocumentCorrection
+          services={props.services}
+          caseId={projection.caseId}
+          statusPath={statusPath}
+          onCorrectionSubmitted={() => { props.onStateChanged(); navigate(statusPath) }}
+          onRecoveryRequired={props.onStateChanged}
+        />
+      }}
+    </CaseBoundary>
+  )
+}
 
-  function openPaymentApplication() {
-    if (resumedCase === null) {
-      setError('The submitted synthetic Case is not available for mock payment.')
-      return
-    }
-    const inspected = services.runtime.inspectPayment({ caseId: resumedCase.caseId })
-    if (inspected.status === 'STORAGE_REQUIRES_RESET' || inspected.status === 'STORAGE_UNAVAILABLE') {
-      handleDocumentRecovery(inspected.status)
-      return
-    }
-    if (inspected.status !== 'PAYMENT_INSPECTED') {
-      setError('The submitted synthetic Case is not ready for the local payment simulation.')
-      return
-    }
-    const refreshed = services.runtime.resumeCase({ caseId: resumedCase.caseId })
-    if (refreshed.status !== 'CASE_RESUMED') {
-      setError('The submitted synthetic Case could not be reloaded safely for payment.')
-      return
-    }
-    setError(null)
-    setResumedCase(refreshed)
-    setPaymentFragment(true)
-    setSurface('PAYMENT_APPLICATION')
-  }
+function EtaRoute(props: SharedRouteProps) {
+  const location = useLocation()
+  return (
+    <CaseBoundary {...props} stage="eta">
+      {(projection) => <SyntheticEta
+        services={props.services}
+        caseId={projection.caseId}
+        statusPath={withPreservedDemo(applicationPath(projection.caseId, 'status'), location.search)}
+      />}
+    </CaseBoundary>
+  )
+}
 
-  function backToSubmittedApplication() {
-    setError(null)
-    setPaymentFragment(false)
-    setSurface('REVIEW_APPLICATION')
-  }
-
-  function openStatusApplication() {
-    if (resumedCase === null) {
-      setError('The confirmed synthetic Case is not available for status review.')
-      return
-    }
-    const started = services.runtime.beginScrutiny({ caseId: resumedCase.caseId })
-    if (started.status === 'STORAGE_REQUIRES_RESET' || started.status === 'STORAGE_UNAVAILABLE') {
-      handleDocumentRecovery(started.status)
-      return
-    }
-    if (started.status !== 'SCRUTINY_STARTED' && started.status !== 'SCRUTINY_EXISTING') {
-      setError('Synthetic review could not begin safely. The saved Case was not changed.')
-      return
-    }
-    const inspected = services.runtime.inspectStatus({ caseId: resumedCase.caseId })
-    if (inspected.status !== 'STATUS_INSPECTED') {
-      setError('The authoritative synthetic status could not be read safely.')
-      return
-    }
-    const refreshed = services.runtime.resumeCase({ caseId: resumedCase.caseId })
-    if (refreshed.status !== 'CASE_RESUMED') {
-      setError('The synthetic Case could not be reloaded safely for status.')
-      return
-    }
-    setError(null)
-    setResumedCase(refreshed)
-    setStatusFragment(true)
-    setSurface('STATUS_APPLICATION')
-  }
-
-  function openDocumentCorrection() {
-    if (resumedCase === null) {
-      setError('The synthetic correction is not available for this Case.')
-      return
-    }
-    const inspected = services.runtime.inspectCorrection({ caseId: resumedCase.caseId })
-    if (inspected.status === 'STORAGE_REQUIRES_RESET' || inspected.status === 'STORAGE_UNAVAILABLE') {
-      handleDocumentRecovery(inspected.status)
-      return
-    }
-    if (inspected.status !== 'CORRECTION_INSPECTED') {
-      setError('The hospital-letter correction could not be opened safely.')
-      return
-    }
-    setError(null)
-    setCorrectionFragment(true)
-    setSurface('DOCUMENT_CORRECTION')
-  }
-
-  function returnToStatusFromCorrection() {
-    setError(null)
-    setCorrectionFragment(false)
-    setStatusFragment(true)
-    setSurface('STATUS_APPLICATION')
-  }
-
-  function handleDocumentRecovery(
-    status: 'STORAGE_REQUIRES_RESET' | 'STORAGE_UNAVAILABLE',
-  ) {
-    setSurface(status === 'STORAGE_REQUIRES_RESET' ? 'RESET_REQUIRED' : 'STORAGE_UNAVAILABLE')
-  }
+function RoutedApp({ services }: { services: AppRuntimeServices }) {
+  const location = useLocation()
+  const navigate = useNavigate()
+  const [refreshVersion, setRefreshVersion] = useState(0)
+  const [demoControlFeedback, setDemoControlFeedback] = useState<string | null>(null)
+  const [loadingDemoSeed, setLoadingDemoSeed] = useState(false)
+  const demoEnabled = new URLSearchParams(location.search).get('demo') === '1'
+  const onStateChanged = () => setRefreshVersion((current) => current + 1)
 
   function resetDemoData() {
-    setError(null)
     const result = services.resetDemoData()
     if (result.status === 'RESET') {
-      setPaymentFragment(false)
-      setStatusFragment(false)
-      setCorrectionFragment(false)
-      setSelectedScenarioId(null)
-      setEvaluation(null)
-      setCreatedCase(null)
-      setResumedCase(null)
-      setDocumentEditMode(false)
-      setApplicantSurfaceKey((current) => current + 1)
       setDemoControlFeedback('Reset to the canonical clean demo state.')
-      setSurface('SCENARIO_SELECTION')
-      return
-    }
-    setError('Demo data could not be reset because local browser storage is unavailable.')
-    setSurface('STORAGE_UNAVAILABLE')
+      navigate(withPreservedDemo('/', location.search))
+    } else setDemoControlFeedback('Demo data could not be reset because local browser storage is unavailable.')
   }
 
+  function loadDemoSeed(seedId: RecoverySeedId) {
+    flushSync(() => setLoadingDemoSeed(true))
+    const result = services.loadDemoSeed(seedId)
+    if (result.status === 'SAVED') {
+      const seed = getSeed(seedId)
+      setDemoControlFeedback(`Loaded ${seedId}.`)
+      setTimeout(() => {
+        navigate(withPreservedDemo(seedDestination(seed), location.search))
+      }, 0)
+    } else setDemoControlFeedback('The canonical seed could not be saved to local demo storage.')
+    setLoadingDemoSeed(false)
+  }
+
+  const sharedRouteProps = { services, refreshVersion, onStateChanged, onReset: resetDemoData }
   return (
-    <div className={styles.appShell}>
+    <div className={styles.appShell} data-testid="app-shell">
+      <RouteEffects />
       <header className={styles.siteHeader}>
         <PrototypeNotice />
         <div className={styles.headerInner}>
           <div className={styles.wordmark} aria-hidden="true">EV</div>
-          <div>
-            <p className={styles.headerLabel}>Applicant prototype</p>
-            <h1>India e-Visa Reimagined</h1>
-            <p>A simpler way to understand, prepare and track a synthetic e-Visa application.</p>
-          </div>
+          <div><p className={styles.headerLabel}>Applicant prototype</p><h1>India e-Visa Reimagined</h1><p>A simpler way to understand, prepare and track a synthetic e-Visa application.</p></div>
         </div>
       </header>
-
-      {demoControlsEnabled ? (
-        <DemoControls
-          feedback={demoControlFeedback}
-          onLoadSeed={loadDemoSeed}
-          onReset={resetDemoData}
-        />
-      ) : null}
-
-      <main className={styles.mainContent} key={applicantSurfaceKey}>
-        {surface === 'LOADING' ? (
-          <section className={styles.loadingPanel} aria-live="polite">
-            <h2>Checking saved demo progress</h2>
-            <p>Validating local synthetic state before it can be used.</p>
-          </section>
-        ) : null}
-        {surface === 'SCENARIO_SELECTION' ? (
-          <ScenarioSelection
-            selectedScenarioId={selectedScenarioId}
-            error={error}
-            onSelect={chooseScenario}
-          />
-        ) : null}
-        {surface === 'PURPOSE_GUIDANCE' && evaluation ? (
-          <PurposeGuidance
-            evaluation={evaluation}
-            error={error}
-            onContinue={continueWithDemo}
-            onChooseAnother={chooseAnotherPurpose}
-          />
-        ) : null}
-        {surface === 'CASE_CREATED' && createdCase ? (
-          <CaseCreated
-            createdCase={createdCase}
-            error={error}
-            onStart={startApplication}
-          />
-        ) : null}
-        {surface === 'RESUME_CASE' && resumedCase ? (
-          <ResumeCase
-            resumedCase={resumedCase}
-            error={error}
-            onResume={resumeApplication}
-          />
-        ) : null}
-        {surface === 'ADAPTIVE_APPLICATION' && resumedCase && evaluation && isScenarioId(resumedCase.scenarioId) ? (
-          <AdaptiveApplication
-            services={services}
-            resumedCase={resumedCase}
-            evaluation={evaluation}
-            purposeName={scenarioDetails(resumedCase.scenarioId).name}
-            onBack={backToSavedCase}
-            onPrepareDocuments={() => openDocumentPreparation()}
-          />
-        ) : null}
-        {surface === 'DOCUMENT_PREPARATION' && resumedCase && isScenarioId(resumedCase.scenarioId) ? (
-          <DocumentPreparation
-            services={services}
-            caseId={resumedCase.caseId}
-            purposeName={scenarioDetails(resumedCase.scenarioId).name}
-            editMode={documentEditMode}
-            onBack={backToApplicationDetails}
-            onReviewApplication={openReviewApplication}
-            onRecoveryRequired={handleDocumentRecovery}
-          />
-        ) : null}
-        {surface === 'REVIEW_APPLICATION' && resumedCase ? (
-          <ReviewApplication
-            services={services}
-            caseId={resumedCase.caseId}
-            onEditApplication={backToApplicationDetails}
-            onEditDocuments={() => openDocumentPreparation(true)}
-            onContinueToPayment={openPaymentApplication}
-            onRecoveryRequired={handleDocumentRecovery}
-          />
-        ) : null}
-        {surface === 'PAYMENT_APPLICATION' && resumedCase ? (
-          <PaymentApplication
-            services={services}
-            caseId={resumedCase.caseId}
-            onBackToSubmittedApplication={backToSubmittedApplication}
-            onContinueToStatus={openStatusApplication}
-            onRecoveryRequired={handleDocumentRecovery}
-          />
-        ) : null}
-        {surface === 'STATUS_APPLICATION' && resumedCase ? (
-          <StatusApplication
-            services={services}
-            caseId={resumedCase.caseId}
-            onOpenCorrection={openDocumentCorrection}
-            onRecoveryRequired={handleDocumentRecovery}
-          />
-        ) : null}
-        {surface === 'DOCUMENT_CORRECTION' && resumedCase ? (
-          <DocumentCorrection
-            services={services}
-            caseId={resumedCase.caseId}
-            onBackToStatus={returnToStatusFromCorrection}
-            onCorrectionSubmitted={returnToStatusFromCorrection}
-            onRecoveryRequired={handleDocumentRecovery}
-          />
-        ) : null}
-        {surface === 'RESET_REQUIRED' ? (
-          <RecoveryPanel
-            storageUnavailable={false}
-            error={error}
-            onReset={resetDemoData}
-          />
-        ) : null}
-        {surface === 'STORAGE_UNAVAILABLE' ? (
-          <RecoveryPanel
-            storageUnavailable
-            error={error}
-            onReset={resetDemoData}
-          />
-        ) : null}
+      {demoEnabled ? <DemoControls feedback={demoControlFeedback} onLoadSeed={loadDemoSeed} onReset={resetDemoData} /> : null}
+      <main className={styles.mainContent} data-testid="app-main">
+        {loadingDemoSeed ? <p role="status">Loading selected demo state…</p> : <Routes>
+          <Route path="/" element={<LandingRoute services={services} onReset={resetDemoData} />} />
+          <Route path="/apply/:scenarioSlug" element={<PurposeRoute services={services} />} />
+          <Route path="/application/:caseId" element={<ApplicationRoute {...sharedRouteProps} />} />
+          <Route path="/application/:caseId/documents" element={<DocumentsRoute {...sharedRouteProps} />} />
+          <Route path="/application/:caseId/review" element={<ReviewRoute {...sharedRouteProps} />} />
+          <Route path="/application/:caseId/payment" element={<PaymentRoute {...sharedRouteProps} />} />
+          <Route path="/application/:caseId/status" element={<StatusRoute {...sharedRouteProps} />} />
+          <Route path="/application/:caseId/correction" element={<CorrectionRoute {...sharedRouteProps} />} />
+          <Route path="/application/:caseId/eta" element={<EtaRoute {...sharedRouteProps} />} />
+          <Route path="*" element={<Navigate to={withPreservedDemo('/', location.search)} replace />} />
+        </Routes>}
       </main>
-
       <footer className={styles.siteFooter}>
-        <p>Hackathon proof of concept · Synthetic policy and local mock boundaries only</p>
+        <div className={styles.footerInner}>
+          <p>Hackathon proof of concept · Synthetic policy and local mock boundaries only</p>
+        </div>
       </footer>
     </div>
   )
+}
+
+function App({ services: providedServices }: AppProps) {
+  const [services] = useState(() => providedServices ?? createAppRuntime())
+  return <BrowserRouter><RoutedApp services={services} /></BrowserRouter>
 }
 
 export default App

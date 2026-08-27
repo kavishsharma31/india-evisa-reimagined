@@ -1,6 +1,7 @@
 import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
+import { MemoryRouter } from 'react-router-dom'
 
 import { StatusApplication } from './app/StatusApplication'
 import { createAppRuntime } from './app/create-app-runtime'
@@ -74,12 +75,17 @@ function prepareStatus(scenarioId: 'SYN-MEDICAL-001' | 'SYN-TOURIST-001') {
 function renderStatus(scenarioId: 'SYN-MEDICAL-001' | 'SYN-TOURIST-001') {
   const prepared = prepareStatus(scenarioId)
   render(
-    <StatusApplication
-      services={prepared.services}
-      caseId={prepared.caseId}
-      onOpenCorrection={() => undefined}
-      onRecoveryRequired={() => undefined}
-    />,
+    <MemoryRouter>
+      <StatusApplication
+        services={prepared.services}
+        caseId={prepared.caseId}
+        paymentPath="/payment"
+        correctionPath="/correction"
+        etaPath="/eta"
+        onEtaIssued={() => undefined}
+        onRecoveryRequired={() => undefined}
+      />
+    </MemoryRouter>,
   )
   return prepared
 }
@@ -97,7 +103,7 @@ describe('A07 unified applicant status', () => {
     expect(screen.getByText('Payment confirmed')).toBeInTheDocument()
     expect(screen.getByText('Documents under review')).toBeInTheDocument()
     expect(screen.getByText('ETA not ready')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Replace hospital letter' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Replace hospital letter' })).not.toBeInTheDocument()
   })
 
   it('reuses the same status component for Tourist', () => {
@@ -114,41 +120,48 @@ describe('A07 unified applicant status', () => {
     expect(store.save(getSeed('SEED-MEDICAL-STATUS-RECOVERY').envelope).status).toBe('SAVED')
     const services = createAppRuntime({ store })
     render(
-      <StatusApplication
-        services={services}
-        caseId="SYN-CASE-MED-001"
-        onOpenCorrection={() => undefined}
-        onRecoveryRequired={() => undefined}
-      />,
+      <MemoryRouter>
+        <StatusApplication
+          services={services}
+          caseId="SYN-CASE-MED-001"
+          paymentPath="/payment"
+          correctionPath="/correction"
+          etaPath="/eta"
+          onEtaIssued={() => undefined}
+          onRecoveryRequired={() => undefined}
+        />
+      </MemoryRouter>,
     )
 
     expect(screen.getByRole('heading', { name: 'Under review' })).toBeInTheDocument()
     expect(screen.getByText('Nothing needed from you')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Replace hospital letter' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Replace hospital letter' })).not.toBeInTheDocument()
   })
 
   it('projects the canonical re-upload seed as one specific applicant action', async () => {
     const store = createPersistenceStore(new MemoryStorage())
     expect(store.save(getSeed('SEED-MEDICAL-REUPLOAD-REQUESTED').envelope).status).toBe('SAVED')
     const services = createAppRuntime({ store })
-    const onOpenCorrection = vi.fn()
     render(
-      <StatusApplication
-        services={services}
-        caseId="SYN-CASE-MED-001"
-        onOpenCorrection={onOpenCorrection}
-        onRecoveryRequired={() => undefined}
-      />,
+      <MemoryRouter>
+        <StatusApplication
+          services={services}
+          caseId="SYN-CASE-MED-001"
+          paymentPath="/payment"
+          correctionPath="/correction"
+          etaPath="/eta"
+          onEtaIssued={() => undefined}
+          onRecoveryRequired={() => undefined}
+        />
+      </MemoryRouter>,
     )
 
     expect(screen.getByRole('heading', { name: 'Action required' })).toBeInTheDocument()
     expect(screen.getByText('Your synthetic hospital letter needs one correction.')).toBeInTheDocument()
     expect(screen.getByText(/admission date on the demo hospital letter/)).toBeInTheDocument()
     expect(screen.queryByText('DOC_HOSPITAL_ADMISSION_DATE_UNCLEAR_SYNTHETIC')).not.toBeInTheDocument()
-    const action = screen.getByRole('button', { name: 'Replace hospital letter' })
-    expect(screen.getAllByRole('button')).toHaveLength(1)
-    await userEvent.click(action)
-    expect(onOpenCorrection).toHaveBeenCalledOnce()
+    const action = screen.getByRole('link', { name: 'Replace hospital letter' })
+    expect(action).toHaveAttribute('href', '/correction')
   })
 
   it('uses the low-priority demo control to record the deterministic Medical review outcome', async () => {
@@ -159,13 +172,13 @@ describe('A07 unified applicant status', () => {
     )
 
     expect(screen.getByRole('heading', { name: 'Action required' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Replace hospital letter' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Replace hospital letter' })).toBeInTheDocument()
     expect(screen.getByText(/Simulated delivery failed/)).toBeInTheDocument()
   })
 })
 
 describe('A09 synthetic approval and ETA outcome', () => {
-  it('completes corrected Medical review and renders the non-valid ETA artifact', async () => {
+  it('completes corrected Medical review and exposes the issued ETA route', async () => {
     const prepared = prepareStatus('SYN-MEDICAL-001')
     prepared.services.runtime.requestMedicalCorrection({ caseId: prepared.caseId })
     prepared.services.runtime.prepareCorrection({
@@ -174,42 +187,45 @@ describe('A09 synthetic approval and ETA outcome', () => {
     })
     prepared.services.runtime.submitCorrection({ caseId: prepared.caseId })
     render(
-      <StatusApplication
-        services={prepared.services}
-        caseId={prepared.caseId}
-        onOpenCorrection={() => undefined}
-        onRecoveryRequired={() => undefined}
-      />,
+      <MemoryRouter>
+        <StatusApplication
+          services={prepared.services}
+          caseId={prepared.caseId}
+          paymentPath="/payment"
+          correctionPath="/correction"
+          etaPath="/eta"
+          onEtaIssued={() => undefined}
+          onRecoveryRequired={() => undefined}
+        />
+      </MemoryRouter>,
     )
 
     await userEvent.click(screen.getByText('Demo review control'))
     await userEvent.click(screen.getByRole('button', { name: 'Complete synthetic review' }))
 
     const approvedHeading = screen.getByRole('heading', { name: 'Demo application approved' })
-    expect(approvedHeading).toHaveFocus()
-    expect(screen.getByRole('heading', { name: 'Synthetic ETA issued' })).toBeInTheDocument()
-    expect(screen.getByText(
-      'SYNTHETIC — NOT VALID. This is not a visa or travel document.',
-    )).toBeInTheDocument()
-    expect(screen.getByText(
-      'Entry into India is decided separately at the border.',
-    )).toBeInTheDocument()
-    expect(screen.getByText('SYN-ETA-MED-001')).toBeInTheDocument()
+    expect(approvedHeading).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Synthetic ETA available' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'View synthetic ETA' })).toHaveAttribute('href', '/eta')
+    expect(prepared.services.runtime.inspectStatus({ caseId: prepared.caseId })).toMatchObject({
+      etaState: 'ISSUED',
+      syntheticEtaReference: 'SYN-ETA-MED-001',
+    })
     expect(screen.queryByRole('heading', { name: 'Under review' })).not.toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Action required' })).not.toBeInTheDocument()
   })
 
   it('renders Tourist through the same issued-outcome component with safe metadata only', async () => {
-    renderStatus('SYN-TOURIST-001')
+    const prepared = renderStatus('SYN-TOURIST-001')
     await userEvent.click(screen.getByText('Demo review control'))
     await userEvent.click(screen.getByRole('button', { name: 'Complete synthetic review' }))
 
-    expect(screen.getAllByText('Tourism')).toHaveLength(2)
-    expect(screen.getByText('SYN-ETA-TOURIST-001')).toBeInTheDocument()
-    expect(screen.getAllByText(/SYN-EVISA-POLICY@1\.0\.0/)).toHaveLength(2)
-    expect(screen.getByText(
-      'SYNTHETIC — NOT VALID. This is not a visa or travel document.',
-    )).toBeInTheDocument()
+    expect(screen.getAllByText('Tourism')).toHaveLength(1)
+    expect(prepared.services.runtime.inspectStatus({ caseId: prepared.caseId })).toMatchObject({
+      etaState: 'ISSUED',
+      syntheticEtaReference: 'SYN-ETA-TOURIST-001',
+    })
+    expect(screen.getAllByText(/SYN-EVISA-POLICY@1\.0\.0/)).toHaveLength(1)
     expect(screen.queryByText(/passport number/i)).not.toBeInTheDocument()
   })
 })

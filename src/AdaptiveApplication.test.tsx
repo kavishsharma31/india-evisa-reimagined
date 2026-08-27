@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -54,6 +54,7 @@ async function startApplication(
   scenarioName: 'Medical treatment' | 'Tourism' = 'Medical treatment',
 ) {
   await user.click(screen.getByRole('radio', { name: new RegExp(scenarioName, 'i') }))
+  await user.click(screen.getByRole('link', { name: 'Continue' }))
   await user.click(screen.getByRole('button', { name: 'Continue with this demo' }))
   await user.click(screen.getByRole('button', { name: 'Start application' }))
   expect(screen.getByRole('heading', { name: 'Tell us about this trip' })).toBeInTheDocument()
@@ -160,9 +161,7 @@ describe('A03 adaptive application', () => {
       ...baseServices,
       runtime: Object.freeze({ ...baseServices.runtime, beginDraft }),
     })
-    const secondUser = userEvent.setup()
     render(<App services={services} />)
-    await secondUser.click(screen.getByRole('button', { name: 'Resume application' }))
 
     const resumedQuestions = screen.getAllByRole('combobox')
     expect(resumedQuestions[0]).toHaveValue('SYN-POLICY-COHORT-A')
@@ -186,8 +185,10 @@ describe('A03 adaptive application', () => {
     )
     const beforeBack = requireCase(store)
 
-    await user.click(requiredItem(screen.getAllByRole('button', { name: 'Back to saved case' }), 0))
-    await user.click(screen.getByRole('button', { name: 'Resume application' }))
+    await user.click(requiredItem(screen.getAllByRole('link', { name: 'Back to requirements' }), 0))
+    expect(screen.getByRole('heading', { name: 'Medical treatment' })).toBeInTheDocument()
+    window.history.back()
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Tell us about this trip' })).toBeInTheDocument())
 
     expect(requiredItem(screen.getAllByRole('combobox'), 0)).toHaveValue('SYN-POLICY-COHORT-A')
     const afterReturn = requireCase(store)
@@ -195,7 +196,7 @@ describe('A03 adaptive application', () => {
     expect(afterReturn.application.draftSnapshots).toHaveLength(1)
   })
 
-  it('completes with a Documents snapshot and reloads directly into A04', async () => {
+  it('completes with a Documents snapshot and reloads the same application route without mutation', async () => {
     const user = userEvent.setup()
     const storage = new MemoryStorage()
     const store = createPersistenceStore(storage)
@@ -205,8 +206,8 @@ describe('A03 adaptive application', () => {
     await user.click(screen.getByRole('button', { name: 'Continue to documents' }))
 
     expect(screen.getByRole('heading', { name: 'Application details saved' })).toBeInTheDocument()
-    expect(screen.getByText('Documents', { exact: true })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Prepare documents' })).toBeInTheDocument()
+    expect(screen.getAllByText('Documents', { exact: true }).length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByRole('link', { name: 'Prepare documents' })).toBeInTheDocument()
     const completedCase = requireCase(store)
     expect(completedCase.application.state).toBe('IN_PROGRESS')
     expect(completedCase.application.draftSnapshots.at(-1)?.currentStep).toBe('DOCUMENTS')
@@ -217,8 +218,8 @@ describe('A03 adaptive application', () => {
     firstView.unmount()
 
     render(<App services={createAppRuntime({ store: createPersistenceStore(storage) })} />)
-    expect(screen.getByRole('heading', { name: 'Prepare your demo documents' })).toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: 'Tell us about this trip' })).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Application details saved' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Prepare documents' })).toBeInTheDocument()
   })
 
   it('completes the Tourist manifest through the shared snapshot path', async () => {

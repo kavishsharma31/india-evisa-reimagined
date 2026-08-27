@@ -1,6 +1,7 @@
 import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it } from 'vitest'
+import { MemoryRouter } from 'react-router-dom'
 
 import { PaymentApplication } from './app/PaymentApplication'
 import { createAppRuntime, type AppRuntimeServices } from './app/create-app-runtime'
@@ -83,13 +84,15 @@ function renderPayment(input: {
   const services = createAppRuntime({ store, ...(input.adapters ? { adapters: input.adapters } : {}) })
   const caseId = prepareLockedCase(services, input.scenarioId ?? 'SYN-MEDICAL-001')
   render(
-    <PaymentApplication
-      services={services}
-      caseId={caseId}
-      onBackToSubmittedApplication={() => undefined}
-      onContinueToStatus={() => undefined}
-      onRecoveryRequired={() => undefined}
-    />,
+    <MemoryRouter>
+      <PaymentApplication
+        services={services}
+        caseId={caseId}
+        reviewPath="/review"
+        statusPath="/status"
+        onRecoveryRequired={() => undefined}
+      />
+    </MemoryRouter>,
   )
   return { services, store, caseId }
 }

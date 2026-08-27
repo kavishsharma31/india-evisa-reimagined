@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 
 import type { SyntheticId } from '../domain'
 import type { RuntimeStatusSummary } from '../runtime'
@@ -9,14 +10,16 @@ import styles from './StatusApplication.module.css'
 type StatusApplicationProps = Readonly<{
   services: AppRuntimeServices
   caseId: SyntheticId
-  onOpenCorrection(): void
+  paymentPath: string
+  correctionPath: string
+  etaPath: string
+  onEtaIssued(): void
   onRecoveryRequired(status: 'STORAGE_REQUIRES_RESET' | 'STORAGE_UNAVAILABLE'): void
 }>
 
 export function StatusApplication(props: StatusApplicationProps) {
   const [, setRefreshIndex] = useState(0)
   const [actionMessage, setActionMessage] = useState<string | null>(null)
-  const focusIssuedStatus = useRef(false)
   const projectedStatusHeading = useRef<HTMLHeadingElement>(null)
   const inspected = props.services.runtime.inspectStatus({ caseId: props.caseId })
   const status: RuntimeStatusSummary | null =
@@ -30,13 +33,6 @@ export function StatusApplication(props: StatusApplicationProps) {
       props.onRecoveryRequired(inspected.status)
     }
   }, [inspected.status, props])
-
-  useEffect(() => {
-    if (focusIssuedStatus.current && status?.etaState === 'ISSUED') {
-      projectedStatusHeading.current?.focus()
-      focusIssuedStatus.current = false
-    }
-  }, [status?.etaState])
 
   function requestCorrection() {
     setActionMessage(null)
@@ -60,6 +56,20 @@ export function StatusApplication(props: StatusApplicationProps) {
     setActionMessage('The synthetic review outcome could not be recorded safely.')
   }
 
+  function beginSyntheticReview() {
+    setActionMessage(null)
+    const result = props.services.runtime.beginScrutiny({ caseId: props.caseId })
+    if (result.status === 'STORAGE_REQUIRES_RESET' || result.status === 'STORAGE_UNAVAILABLE') {
+      props.onRecoveryRequired(result.status)
+      return
+    }
+    if (result.status === 'SCRUTINY_STARTED' || result.status === 'SCRUTINY_EXISTING') {
+      setRefreshIndex((current) => current + 1)
+      return
+    }
+    setActionMessage('Synthetic review could not begin safely. The saved Case was not changed.')
+  }
+
   function completeSyntheticReview() {
     setActionMessage(null)
     const result = props.services.runtime.completeSyntheticReview({ caseId: props.caseId })
@@ -71,8 +81,8 @@ export function StatusApplication(props: StatusApplicationProps) {
       result.status === 'SYNTHETIC_REVIEW_COMPLETED' ||
       result.status === 'SYNTHETIC_REVIEW_EXISTING'
     ) {
-      focusIssuedStatus.current = true
       setRefreshIndex((current) => current + 1)
+      props.onEtaIssued()
       return
     }
     setActionMessage('The local synthetic review could not be completed safely.')
@@ -90,6 +100,9 @@ export function StatusApplication(props: StatusApplicationProps) {
 
   return (
     <section className={styles.statusPage} aria-labelledby="status-heading">
+      <Link className={styles.backLink} to={props.paymentPath}>
+        <span aria-hidden="true">←</span> Back to payment
+      </Link>
       <header className={styles.pageHeader}>
         <p className={styles.eyebrow}>Status · Step 6 of 6</p>
         <h2 id="status-heading" tabIndex={-1}>Track your demo application</h2>
@@ -108,8 +121,13 @@ export function StatusApplication(props: StatusApplicationProps) {
         <p>{status.explanation}</p>
         {status.actionGuidance ? <p className={styles.actionGuidance}>{status.actionGuidance}</p> : null}
         {status.nextAction === 'REPLACE_HOSPITAL_LETTER' ? (
-          <button className={styles.primaryAction} type="button" onClick={props.onOpenCorrection}>
+          <Link className={styles.primaryAction} to={props.correctionPath}>
             Replace hospital letter
+          </Link>
+        ) : null}
+        {status.nextAction === 'BEGIN_SCRUTINY' ? (
+          <button className={styles.primaryAction} type="button" onClick={beginSyntheticReview}>
+            Begin synthetic review
           </button>
         ) : null}
         {status.waitMessage ? (
@@ -120,37 +138,14 @@ export function StatusApplication(props: StatusApplicationProps) {
         ) : null}
       </section>
 
-      {status.etaState === 'ISSUED' && status.syntheticEtaReference !== null ? (
-        <section className={styles.etaArtifact} aria-labelledby="synthetic-eta-heading">
-          <p className={styles.etaWatermark} aria-hidden="true">SYNTHETIC — NOT VALID</p>
-          <div className={styles.etaContent}>
-            <p className={styles.sectionLabel}>Prototype outcome</p>
-            <h3 id="synthetic-eta-heading">Synthetic ETA issued</h3>
-            <p className={styles.etaWarning}>
-              <strong>SYNTHETIC — NOT VALID. This is not a visa or travel document.</strong>
-            </p>
-            <p className={styles.borderDisclaimer}>
-              Entry into India is decided separately at the border.
-            </p>
-            <dl className={styles.etaMetadata}>
-              <div>
-                <dt>Synthetic Case reference</dt>
-                <dd>{status.caseId}</dd>
-              </div>
-              <div>
-                <dt>Purpose</dt>
-                <dd>{PURPOSE_NAMES[status.purposeFamily]}</dd>
-              </div>
-              <div>
-                <dt>Synthetic ETA reference</dt>
-                <dd>{status.syntheticEtaReference}</dd>
-              </div>
-              <div>
-                <dt>Policy version</dt>
-                <dd>{status.policyQualifiedVersion}</dd>
-              </div>
-            </dl>
-          </div>
+      {status.etaState === 'ISSUED' ? (
+        <section className={styles.etaReady} aria-labelledby="eta-ready-heading">
+          <p className={styles.sectionLabel}>Prototype outcome</p>
+          <h3 id="eta-ready-heading">Synthetic ETA available</h3>
+          <p>The issued, non-valid prototype artifact is preserved on its own route.</p>
+          <Link className={styles.primaryAction} to={props.etaPath}>
+            View synthetic ETA <span aria-hidden="true">→</span>
+          </Link>
         </section>
       ) : null}
 

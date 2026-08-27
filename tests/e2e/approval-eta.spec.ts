@@ -26,6 +26,7 @@ async function reachStatus(
   scenario: 'Medical treatment' | 'Tourism' = 'Medical treatment',
 ) {
   await page.getByText(scenario, { exact: true }).click()
+  await page.getByRole('link', { name: 'Continue' }).click()
   await page.getByRole('button', { name: 'Continue with this demo' }).click()
   await page.getByRole('button', { name: 'Start application' }).click()
   await page.getByLabel(/Choose the synthetic policy cohort/).selectOption('SYN-POLICY-COHORT-A')
@@ -45,7 +46,7 @@ async function reachStatus(
     await page.getByLabel(/Choose the fictional planned exit date/).selectOption('2099-05-17')
   }
   await page.getByRole('button', { name: 'Continue to documents' }).click()
-  await page.getByRole('button', { name: 'Prepare documents' }).click()
+  await page.getByRole('link', { name: 'Prepare documents' }).click()
   const documentNames = [
     'Synthetic portrait',
     'Synthetic passport page',
@@ -57,22 +58,22 @@ async function reachStatus(
     })
     await card.getByRole('button', { name: 'Run technical check' }).click()
   }
-  await page.getByRole('button', { name: 'Review application' }).click()
+  await page.getByRole('link', { name: 'Review application' }).click()
   await page.getByRole('checkbox', {
     name: 'I confirm these synthetic demo details are ready for simulated submission.',
   }).check()
   await page.getByRole('button', { name: 'Submit demo application' }).click()
-  await page.getByRole('button', { name: 'Continue to payment' }).click()
   await page.getByRole('button', { name: 'Start mock payment' }).click()
   await page.getByRole('button', { name: 'Check mock payment status' }).click()
-  await page.getByRole('button', { name: 'Continue to status' }).click()
+  await page.getByRole('link', { name: 'Continue to status' }).click()
+  await page.getByRole('button', { name: 'Begin synthetic review' }).click()
   await expect(page.getByRole('heading', { name: 'Under review' })).toBeVisible()
 }
 
 async function correctMedicalHospitalLetter(page: Page) {
   await page.getByText('Demo review control').click()
   await page.getByRole('button', { name: 'Simulate hospital-letter review outcome' }).click()
-  await page.getByRole('button', { name: 'Replace hospital letter' }).click()
+  await page.getByRole('link', { name: 'Replace hospital letter' }).click()
   await page.getByRole('button', { name: 'Use corrected demo letter' }).click()
   await page.getByRole('button', { name: 'Submit correction' }).click()
   await expect(page.getByRole('heading', { name: 'Under review' })).toBeVisible()
@@ -81,7 +82,7 @@ async function correctMedicalHospitalLetter(page: Page) {
 async function completeSyntheticReview(page: Page) {
   await page.getByText('Demo review control').click()
   await page.getByRole('button', { name: 'Complete synthetic review' }).click()
-  await expect(page.getByRole('heading', { name: 'Demo application approved' })).toBeVisible()
+  await expect(page).toHaveURL(/\/application\/[^/]+\/eta(?:\?demo=1)?$/)
   await expect(page.getByRole('heading', { name: 'Synthetic ETA issued' })).toBeVisible()
 }
 
@@ -182,7 +183,6 @@ test('A09 issued reload is mutation-free and returns the same deterministic ETA'
 
   await page.reload()
 
-  await expect(page.getByRole('heading', { name: 'Demo application approved' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Synthetic ETA issued' })).toBeVisible()
   await expect(page.getByText(String(issued.etaReference))).toBeVisible()
   expect(await loadApprovalEvidence(page)).toEqual(issued)
@@ -218,18 +218,14 @@ test('A09 issued outcome stays full-width, readable, overflow-free, and axe-clea
 
   for (const width of [360, 390, 430, 768, 1280]) {
     await page.setViewportSize({ width, height: width < 768 ? 900 : 960 })
-    const statusPage = page.getByRole('region', { name: 'Track your demo application' })
-    const approvedPanel = page.getByRole('region', { name: 'Demo application approved' })
-    const etaPanel = page.getByRole('region', { name: 'Synthetic ETA issued' })
+    const etaPanel = page.getByRole('region', { name: 'Synthetic ETA details' })
     const watermark = etaPanel.getByText('SYNTHETIC — NOT VALID', { exact: true })
     const warning = page.getByText(
       'SYNTHETIC — NOT VALID. This is not a visa or travel document.',
     )
-    const statusWidth = (await statusPage.boundingBox())?.width ?? 0
-    const approvedWidth = (await approvedPanel.boundingBox())?.width ?? 0
+    const etaPageWidth = (await page.getByRole('region', { name: 'Synthetic ETA issued' }).boundingBox())?.width ?? 0
     const etaWidth = (await etaPanel.boundingBox())?.width ?? 0
-    expect(approvedWidth).toBeGreaterThan(statusWidth - 2)
-    expect(etaWidth).toBeGreaterThan(statusWidth - 2)
+    expect(etaWidth).toBeGreaterThan(etaPageWidth - 2)
     await expect(watermark).toBeVisible()
     const etaBox = await etaPanel.boundingBox()
     const warningBox = await warning.boundingBox()

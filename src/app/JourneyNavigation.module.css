@@ -1,0 +1,85 @@
+.journey {
+  width: min(100%, 64rem);
+  margin: -1.4rem auto 2rem;
+}
+
+.journey ol {
+  margin: 0;
+  padding: 0.45rem;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.35rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.75rem;
+  background: var(--surface-raised);
+  list-style: none;
+}
+
+.journey li {
+  min-width: 0;
+}
+
+.journey a,
+.unavailable {
+  min-height: 3.8rem;
+  padding: 0.55rem 0.65rem;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.1rem 0.5rem;
+  border-radius: 0.5rem;
+  color: var(--ink-muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1.2;
+  text-decoration: none;
+}
+
+.journey a:hover {
+  background: var(--accent-faint);
+  color: var(--accent-strong);
+}
+
+.journey a:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.journey li[data-current] a,
+.journey li[data-current] .unavailable {
+  background: var(--accent-soft);
+  color: var(--accent-deep);
+}
+
+.stageMarker {
+  width: 1.65rem;
+  height: 1.65rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  font-size: 0.68rem;
+}
+
+li[data-completed] .stageMarker {
+  border-color: var(--success-strong);
+  background: var(--success-soft);
+  color: var(--success-strong);
+}
+
+.stageState {
+  grid-column: 2;
+  color: var(--ink-light);
+  font-size: 0.65rem;
+  font-weight: 600;
+}
+
+.unavailable {
+  color: var(--ink-light);
+}
+
+@media (max-width: 48rem) {
+  .journey {
+    display: none;
+  }
+}

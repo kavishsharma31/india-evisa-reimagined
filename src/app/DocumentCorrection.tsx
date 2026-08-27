@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 
 import type { SyntheticId } from '../domain'
 import type { RuntimeCorrectionSummary } from '../runtime'
@@ -8,7 +9,7 @@ import styles from './DocumentCorrection.module.css'
 type DocumentCorrectionProps = Readonly<{
   services: AppRuntimeServices
   caseId: SyntheticId
-  onBackToStatus(): void
+  statusPath: string
   onCorrectionSubmitted(): void
   onRecoveryRequired(status: 'STORAGE_REQUIRES_RESET' | 'STORAGE_UNAVAILABLE'): void
 }>
@@ -92,9 +93,9 @@ export function DocumentCorrection(props: DocumentCorrectionProps) {
         <p className={styles.eyebrow}>Status · Step 6 of 6</p>
         <h2 id="correction-heading" tabIndex={-1}>Correction is unavailable</h2>
         <p role="alert">The authoritative synthetic Case could not provide a safe correction.</p>
-        <button className={styles.secondaryButton} type="button" onClick={props.onBackToStatus}>
+        <Link className={styles.secondaryButton} to={props.statusPath}>
           Back to status
-        </button>
+        </Link>
       </section>
     )
   }
@@ -106,9 +107,9 @@ export function DocumentCorrection(props: DocumentCorrectionProps) {
 
   return (
     <section className={styles.correctionPage} aria-labelledby="correction-heading">
-      <button className={styles.backButton} type="button" onClick={props.onBackToStatus}>
+      <Link className={styles.backButton} to={props.statusPath}>
         <span aria-hidden="true">←</span> Back to status
-      </button>
+      </Link>
 
       <header className={styles.pageHeader}>
         <p className={styles.eyebrow}>Status · Step 6 of 6</p>

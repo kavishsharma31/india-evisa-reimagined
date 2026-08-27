@@ -114,7 +114,7 @@ test('D01 loads all seven canonical seeds, switches byte-stably, reloads, and re
 
   expect((await chooseSeed(page, 'SEED-MEDICAL-START')).scenarioId).toBe('SYN-MEDICAL-001')
   await expect(page.getByRole('heading', { name: 'Continue your application' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Continue setup' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Start application' })).toBeVisible()
 
   expect((await chooseSeed(page, 'SEED-TOURIST-START')).scenarioId).toBe('SYN-TOURIST-001')
   await expect(page.getByRole('heading', { name: 'Continue your application' })).toBeVisible()
@@ -138,7 +138,7 @@ test('D01 loads all seven canonical seeds, switches byte-stably, reloads, and re
 
   await chooseSeed(page, 'SEED-MEDICAL-REUPLOAD-REQUESTED')
   await expect(page.getByRole('heading', { name: 'Action required' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Replace hospital letter' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Replace hospital letter' })).toBeVisible()
 
   const firstStatusSeed = await chooseSeed(page, 'SEED-MEDICAL-STATUS-RECOVERY')
   await expect(page.getByRole('heading', { name: 'Under review' })).toBeVisible()

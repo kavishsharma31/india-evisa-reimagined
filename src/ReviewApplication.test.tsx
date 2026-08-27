@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it } from 'vitest'
 
@@ -49,6 +49,7 @@ async function reachA05(
   scenario: 'Medical treatment' | 'Tourism' = 'Medical treatment',
 ) {
   await user.click(screen.getByRole('radio', { name: new RegExp(scenario, 'i') }))
+  await user.click(screen.getByRole('link', { name: 'Continue' }))
   await user.click(screen.getByRole('button', { name: 'Continue with this demo' }))
   await user.click(screen.getByRole('button', { name: 'Start application' }))
 
@@ -71,12 +72,12 @@ async function reachA05(
     await user.click(screen.getByRole('radio', { name: 'Yes' }))
   }
   await user.click(screen.getByRole('button', { name: 'Continue to documents' }))
-  await user.click(screen.getByRole('button', { name: 'Prepare documents' }))
+  await user.click(screen.getByRole('link', { name: 'Prepare documents' }))
 
   for (const button of screen.getAllByRole('button', { name: 'Run technical check' })) {
     await user.click(button)
   }
-  await user.click(screen.getByRole('button', { name: 'Review application' }))
+  await user.click(screen.getByRole('link', { name: 'Review application' }))
   expect(screen.getByRole('heading', { name: 'Review your demo application' })).toBeInTheDocument()
 }
 
@@ -116,12 +117,13 @@ describe('A05 review and simulated submission', () => {
     await reachA05(user)
     const before = requireCase(store)
 
-    await user.click(screen.getByRole('button', { name: 'Edit application details' }))
+    await user.click(screen.getByRole('link', { name: 'Edit application details' }))
     expect(screen.getByRole('heading', { name: 'Tell us about this trip' })).toBeInTheDocument()
     await user.click(screen.getByRole('radio', { name: 'No' }))
     await user.click(screen.getByRole('button', { name: 'Continue to documents' }))
-    await user.click(screen.getByRole('button', { name: 'Prepare documents' }))
-    await user.click(screen.getByRole('button', { name: 'Review application' }))
+    await user.click(screen.getByRole('link', { name: 'Prepare documents' }))
+    await user.click(screen.getByRole('button', { name: 'Prepare review' }))
+    await user.click(screen.getByRole('link', { name: 'Review application' }))
 
     expect(screen.getByText('No')).toBeInTheDocument()
     const after = requireCase(store)
@@ -137,9 +139,9 @@ describe('A05 review and simulated submission', () => {
     const before = requireCase(store)
     const versionCount = before.documents.reduce((total, document) => total + document.versions.length, 0)
 
-    await user.click(screen.getByRole('button', { name: 'Edit documents' }))
+    await user.click(screen.getByRole('link', { name: 'Edit documents' }))
     expect(screen.getByRole('heading', { name: 'Prepare your demo documents' })).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Return to review' }))
+    await user.click(screen.getByRole('link', { name: 'Return to review' }))
     expect(screen.getByRole('heading', { name: 'Review your demo application' })).toBeInTheDocument()
     const after = requireCase(store)
     expect(after.documents.reduce((total, document) => total + document.versions.length, 0)).toBe(versionCount)
@@ -160,8 +162,10 @@ describe('A05 review and simulated submission', () => {
     )
     await user.dblClick(submitButton)
 
-    expect(screen.getByRole('heading', { name: 'Application submitted in demo' })).toBeInTheDocument()
-    expect(screen.getByText('Payment', { exact: true })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Complete the demo payment' })).toBeInTheDocument()
+    window.history.back()
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Application submitted in demo' })).toBeInTheDocument())
+    expect(screen.getAllByText('Payment', { exact: true }).length).toBeGreaterThanOrEqual(1)
     expect(screen.queryByRole('button', { name: /Edit application details|Edit documents/ })).not.toBeInTheDocument()
     const persistedCase = requireCase(store)
     expect(persistedCase.application.state).toBe('LOCKED')
@@ -177,6 +181,8 @@ describe('A05 review and simulated submission', () => {
     await reachA05(user)
     await user.click(screen.getByRole('checkbox'))
     await user.click(screen.getByRole('button', { name: 'Submit demo application' }))
+    window.history.back()
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Application submitted in demo' })).toBeInTheDocument())
     const beforeReload = JSON.stringify(requireCase(store))
 
     firstRender.unmount()

@@ -41,6 +41,7 @@
   color: var(--accent-strong);
   font: inherit;
   font-weight: 680;
+  text-decoration: none;
   cursor: pointer;
 }
 
@@ -148,6 +149,7 @@
   border-radius: 0.45rem;
   font: inherit;
   font-weight: 720;
+  text-decoration: none;
   cursor: pointer;
 }
 

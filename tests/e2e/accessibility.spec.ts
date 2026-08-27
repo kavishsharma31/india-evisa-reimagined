@@ -23,6 +23,7 @@ test('A00 has no automatically detectable accessibility violations', async ({ pa
 test('Medical A01 has no automatically detectable accessibility violations', async ({ page }) => {
   await openFreshApp(page)
   await page.getByText('Medical treatment', { exact: true }).click()
+  await page.getByRole('link', { name: 'Continue' }).click()
 
   await expectNoAxeViolations(page)
 })
@@ -39,6 +40,7 @@ async function answerMedicalApplication(page: Page) {
 test('A02 and A03 states have no automatically detectable accessibility violations', async ({ page }) => {
   await openFreshApp(page)
   await page.getByText('Medical treatment', { exact: true }).click()
+  await page.getByRole('link', { name: 'Continue' }).click()
   await page.getByRole('button', { name: 'Continue with this demo' }).click()
   await expect(page.getByRole('heading', { name: 'Your synthetic application has been created' })).toBeVisible()
   await expectNoAxeViolations(page)
@@ -56,7 +58,8 @@ test('A02 and A03 states have no automatically detectable accessibility violatio
   await expectNoAxeViolations(page)
 
   await page.reload()
-  await expect(page.getByRole('heading', { name: 'Prepare your demo documents' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Application details saved' })).toBeVisible()
+  await page.getByRole('link', { name: 'Prepare documents' }).click()
   await expectNoAxeViolations(page)
 
   const passportCard = page.locator('article').filter({
@@ -84,12 +87,12 @@ test('A02 and A03 states have no automatically detectable accessibility violatio
   await expect(page.getByRole('heading', { name: 'Documents ready' })).toBeVisible()
   await expectNoAxeViolations(page)
 
-  await page.getByRole('button', { name: 'Review application' }).click()
+  await page.getByRole('link', { name: 'Review application' }).click()
   await expect(page.getByRole('heading', { name: 'Review your demo application' })).toBeVisible()
   await expectNoAxeViolations(page)
 
   await page.getByRole('checkbox').check()
   await page.getByRole('button', { name: 'Submit demo application' }).click()
-  await expect(page.getByRole('heading', { name: 'Application submitted in demo' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Complete the demo payment' })).toBeVisible()
   await expectNoAxeViolations(page)
 })

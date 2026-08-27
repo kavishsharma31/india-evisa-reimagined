@@ -1,6 +1,7 @@
 import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { MemoryRouter } from 'react-router-dom'
 
 import { DocumentCorrection } from './app/DocumentCorrection'
 import { createAppRuntime } from './app/create-app-runtime'
@@ -43,13 +44,15 @@ function renderCorrection() {
   const services = createAppRuntime({ store })
   const onCorrectionSubmitted = vi.fn()
   render(
-    <DocumentCorrection
-      services={services}
-      caseId="SYN-CASE-MED-001"
-      onBackToStatus={() => undefined}
-      onCorrectionSubmitted={onCorrectionSubmitted}
-      onRecoveryRequired={() => undefined}
-    />,
+    <MemoryRouter>
+      <DocumentCorrection
+        services={services}
+        caseId="SYN-CASE-MED-001"
+        statusPath="/status"
+        onCorrectionSubmitted={onCorrectionSubmitted}
+        onRecoveryRequired={() => undefined}
+      />
+    </MemoryRouter>,
   )
   return { services, store, onCorrectionSubmitted }
 }
