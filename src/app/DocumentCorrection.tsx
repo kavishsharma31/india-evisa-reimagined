@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 
 import type { SyntheticId } from '../domain'
 import type { RuntimeCorrectionSummary } from '../runtime'
+import { applicantReference } from './applicant-labels'
 import type { AppRuntimeServices } from './create-app-runtime'
 import styles from './DocumentCorrection.module.css'
 
@@ -16,8 +17,8 @@ type DocumentCorrectionProps = Readonly<{
 
 function versionLabel(fixtureId: SyntheticId): string {
   return fixtureId === 'SYN-FIXTURE-HOSPITAL-LETTER-V2-001'
-    ? 'Hospital letter V2 — corrected demo'
-    : 'Hospital letter V1'
+    ? 'Corrected hospital letter'
+    : 'Current hospital letter'
 }
 
 export function DocumentCorrection(props: DocumentCorrectionProps) {
@@ -65,10 +66,10 @@ export function DocumentCorrection(props: DocumentCorrectionProps) {
       result.status === 'CORRECTION_EXISTING'
     ) {
       refreshCorrection()
-      setMessage('The corrected bundled letter passed the local technical check.')
+      setMessage('The corrected letter is ready.')
       return
     }
-    setMessage('The corrected demo letter could not be prepared safely. No version was forced.')
+    setMessage('The corrected letter could not be checked safely. The current document was not changed.')
   }
 
   function submitCorrection() {
@@ -84,7 +85,7 @@ export function DocumentCorrection(props: DocumentCorrectionProps) {
       props.onCorrectionSubmitted()
       return
     }
-    setMessage('The correction could not be submitted safely. Synthetic review has not resumed.')
+    setMessage('The correction could not be submitted safely. Review has not resumed.')
   }
 
   if (correction === null) {
@@ -92,7 +93,7 @@ export function DocumentCorrection(props: DocumentCorrectionProps) {
       <section className={styles.correctionPage} aria-labelledby="correction-heading">
         <p className={styles.eyebrow}>Status · Step 6 of 6</p>
         <h2 id="correction-heading" tabIndex={-1}>Correction is unavailable</h2>
-        <p role="alert">The authoritative synthetic Case could not provide a safe correction.</p>
+        <p role="alert">The application could not provide the requested correction.</p>
         <Link className={styles.secondaryButton} to={props.statusPath}>
           Back to status
         </Link>
@@ -115,24 +116,22 @@ export function DocumentCorrection(props: DocumentCorrectionProps) {
         <p className={styles.eyebrow}>Status · Step 6 of 6</p>
         <h2 id="correction-heading" tabIndex={-1}>Replace your hospital letter</h2>
         <p>
-          Use the one corrected bundled demo fixture. Nothing is selected from your device.
+          Check the corrected document, then submit it for review.
         </p>
-        <p className={styles.caseReference}>Synthetic case {correction.caseId}</p>
+        <p>For this prototype, a sample corrected document is provided.</p>
+        <p className={styles.caseReference}>Application reference {applicantReference(correction.caseId)}</p>
       </header>
 
       <section className={styles.reasonPanel} aria-labelledby="correction-reason-heading">
-        <p className={styles.sectionLabel}>Why this is needed</p>
-        <h3 id="correction-reason-heading">One controlled correction</h3>
-        <p>
-          The admission date on the demo hospital letter could not be confirmed during synthetic review.
-        </p>
-        <p>This correction is for the bundled fixture only. It is not a visa finding.</p>
+        <p className={styles.sectionLabel}>Action required</p>
+        <h3 id="correction-reason-heading">What needs to be corrected</h3>
+        <p>The admission date on the hospital letter could not be confirmed during review.</p>
       </section>
 
       <section className={styles.versionCard} aria-labelledby="current-version-heading">
         <div className={styles.versionHeading}>
           <div>
-            <p className={styles.sectionLabel}>Current version</p>
+            <p className={styles.sectionLabel}>Current document</p>
             <h3 id="current-version-heading">
               {versionLabel(correction.currentVersion.fixtureId)}
             </h3>
@@ -144,22 +143,21 @@ export function DocumentCorrection(props: DocumentCorrectionProps) {
 
         {!replacementReady ? (
           <div className={styles.replacementChoice}>
-            <p className={styles.sectionLabel}>Corrected bundled replacement</p>
+            <p className={styles.sectionLabel}>Corrected replacement</p>
             <strong>{versionLabel(correction.replacementOption.fixtureId)}</strong>
-            <p>{correction.replacementOption.watermark}</p>
             <button
               className={styles.primaryButton}
               type="button"
               disabled={working}
               onClick={prepareReplacement}
             >
-              {working ? 'Checking corrected letter…' : 'Use corrected demo letter'}
+              {working ? 'Checking document…' : 'Use corrected letter'}
             </button>
           </div>
         ) : (
           <div className={styles.readyPanel} role="status">
             <strong>Correction ready</strong>
-            <p>The corrected bundled letter passed the local technical check.</p>
+            <p>The corrected letter is ready to submit.</p>
             <button
               className={styles.primaryButton}
               type="button"
@@ -172,19 +170,15 @@ export function DocumentCorrection(props: DocumentCorrectionProps) {
         )}
 
         {v1?.state === 'SUPERSEDED' ? (
-          <p className={styles.historyNote}>Hospital letter V1 remains preserved in version history as superseded.</p>
+          <p className={styles.historyNote}>The previous hospital letter remains in the application history.</p>
         ) : null}
         {message ? (
-          <p className={message.startsWith('The corrected bundled') ? styles.successMessage : styles.inlineError} role="status">
+          <p className={message.startsWith('The corrected letter is ready') ? styles.successMessage : styles.inlineError} role="status">
             {message}
           </p>
         ) : null}
       </section>
 
-      <aside className={styles.prototypeContext} aria-label="Synthetic re-upload boundary">
-        <strong>Synthetic re-upload</strong>
-        <p>No file picker, upload, real hospital record, or external review system is used.</p>
-      </aside>
     </section>
   )
 }

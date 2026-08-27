@@ -101,11 +101,11 @@ describe('A06 mock payment and ambiguous-result recovery', () => {
   it('shows the policy-derived Medical fee and requires an explicit start action', () => {
     const { store } = renderPayment({})
 
-    expect(screen.getByRole('heading', { name: 'Complete the demo payment' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Pay visa fee' })).toBeInTheDocument()
     expect(screen.getByText('Medical treatment')).toBeInTheDocument()
-    expect(screen.getByText('73 SYNTHETIC_DEMO_CREDITS')).toBeInTheDocument()
-    expect(screen.getByText('SYNTHETIC — NOT PAYABLE')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Start mock payment' })).toBeInTheDocument()
+    expect(screen.getByText('Not calculated in this prototype')).toBeInTheDocument()
+    expect(screen.getByText('No real payment will be processed in this prototype.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Pay visa fee' })).toBeInTheDocument()
     expect(requireCase(store).payment.state).toBe('NOT_STARTED')
   })
 
@@ -113,28 +113,28 @@ describe('A06 mock payment and ambiguous-result recovery', () => {
     renderPayment({ scenarioId: 'SYN-TOURIST-001' })
 
     expect(screen.getByText('Tourism')).toBeInTheDocument()
-    expect(screen.getByText('41 SYNTHETIC_DEMO_CREDITS')).toBeInTheDocument()
+    expect(screen.getByText('Not calculated in this prototype')).toBeInTheDocument()
   })
 
   it('starts once, explains ambiguity exactly, and reconciles the existing attempt', async () => {
     const user = userEvent.setup()
     const { store } = renderPayment({})
-    await user.click(screen.getByRole('button', { name: 'Start mock payment' }))
+    await user.click(screen.getByRole('button', { name: 'Pay visa fee' }))
 
     expect(screen.getByRole('heading', {
-      name: 'Mock payment is pending. No real payment was made.',
+      name: 'Payment status pending',
     })).toBeInTheDocument()
     expect(screen.getByText(
-      'Do not start another mock payment. Check mock payment status instead.',
+      'Do not make another payment.',
     )).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Start mock payment' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Pay visa fee' })).not.toBeInTheDocument()
     expect(requireCase(store).payment).toEqual({
       state: 'RECONCILIATION_REQUIRED',
       mockPaymentAttemptId: 'SYN-PAYMENT-ATTEMPT-MED-001',
       syntheticReference: 'SYN-PAYMENT-REFERENCE-MED-001',
     })
 
-    await user.click(screen.getByRole('button', { name: 'Check mock payment status' }))
+    await user.click(screen.getByRole('button', { name: 'Check payment status' }))
     expect(screen.getByRole('heading', { name: 'Payment confirmed' })).toBeInTheDocument()
     expect(screen.getByText('Status', { exact: true })).toBeInTheDocument()
     expect(requireCase(store).payment.state).toBe('CONFIRMED')
@@ -143,7 +143,7 @@ describe('A06 mock payment and ambiguous-result recovery', () => {
   it('prevents a double start from creating duplicate payment evidence', async () => {
     const user = userEvent.setup()
     const { store } = renderPayment({})
-    await user.dblClick(screen.getByRole('button', { name: 'Start mock payment' }))
+    await user.dblClick(screen.getByRole('button', { name: 'Pay visa fee' }))
 
     const persistedCase = requireCase(store)
     expect(persistedCase.auditEvents.filter(({ eventType }) => eventType === 'MockPaymentInitiated')).toHaveLength(1)
@@ -174,7 +174,7 @@ describe('A06 mock payment and ambiguous-result recovery', () => {
       }),
     })
     const { store } = renderPayment({ adapters })
-    await user.click(screen.getByRole('button', { name: 'Start mock payment' }))
+    await user.click(screen.getByRole('button', { name: 'Pay visa fee' }))
 
     expect(screen.getByRole('alert')).toHaveTextContent('could not start safely')
     expect(screen.queryByRole('heading', { name: 'Payment confirmed' })).not.toBeInTheDocument()

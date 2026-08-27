@@ -33,7 +33,7 @@ test('completes A00 to A02 at 360x800 without console errors or horizontal overf
   ).toBeVisible()
   await expect(
     page.getByText(
-      'UNOFFICIAL HACKATHON PROTOTYPE — SYNTHETIC DATA ONLY — CANNOT SUBMIT A VISA APPLICATION',
+      'UNOFFICIAL HACKATHON PROTOTYPE — NO REAL APPLICATIONS OR PAYMENTS',
       { exact: true },
     ),
   ).toBeVisible()
@@ -48,12 +48,12 @@ test('completes A00 to A02 at 360x800 without console errors or horizontal overf
 
   await page.getByText('Medical treatment', { exact: true }).click()
   await page.getByRole('link', { name: 'Continue' }).click()
-  await expect(page.getByText('73 SYNTHETIC_DEMO_CREDITS', { exact: true })).toBeVisible()
-  await expect(page.getByText('Synthetic hospital letter')).toBeVisible()
+  await expect(page.getByText('Calculated before payment', { exact: true })).toBeVisible()
+  await expect(page.getByText('Hospital letter')).toBeVisible()
   await expectNoHorizontalOverflow()
 
-  await page.getByRole('button', { name: 'Continue with this demo' }).click()
-  await expect(page.getByRole('heading', { name: 'Your synthetic application has been created' })).toBeVisible()
+  await page.getByRole('button', { name: 'Continue application' }).click()
+  await expect(page.getByRole('heading', { name: 'Your application has been created' })).toBeVisible()
   await expectNoHorizontalOverflow()
 
   await page.getByRole('button', { name: 'Start application' }).click()

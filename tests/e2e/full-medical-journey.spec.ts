@@ -12,64 +12,64 @@ test('Medical completes the full applicant A00 through A09 journey without seed 
   await page.getByText('Medical treatment', { exact: true }).click()
   await page.getByRole('link', { name: 'Continue' }).click()
   await expect(page).toHaveURL('/apply/medical')
-  await page.getByRole('button', { name: 'Continue with this demo' }).click()
+  await page.getByRole('button', { name: 'Continue application' }).click()
   await expect(page).toHaveURL('/application/SYN-CASE-MED-001')
-  await expect(page.getByRole('heading', { name: 'Your synthetic application has been created' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Your application has been created' })).toBeVisible()
   await page.getByRole('button', { name: 'Start application' }).click()
 
-  await page.getByLabel(/Choose the synthetic policy cohort/).selectOption('SYN-POLICY-COHORT-A')
-  await page.getByLabel(/Choose the synthetic passport class/).selectOption('SYNTHETIC_STANDARD_PASSPORT')
-  await page.getByLabel(/Choose the fictional planned arrival date/).selectOption('2099-04-14')
-  await page.getByLabel(/Confirm the synthetic Medical treatment intent/).selectOption('SYNTHETIC_MEDICAL_TREATMENT')
-  await page.getByLabel(/Choose the fictional proposed admission date/).selectOption('2099-04-18')
+  await page.getByLabel('Country of nationality').selectOption('SYN-POLICY-COHORT-A')
+  await page.getByLabel('Passport type').selectOption('SYNTHETIC_STANDARD_PASSPORT')
+  await page.getByLabel('Expected date of arrival').selectOption('2099-04-14')
+  await page.getByLabel('Purpose of medical visit').selectOption('SYNTHETIC_MEDICAL_TREATMENT')
+  await page.getByLabel('Proposed hospital admission date').selectOption('2099-04-18')
   await page.getByRole('radio', { name: 'Yes' }).check()
   await page.getByRole('button', { name: 'Continue to documents' }).click()
   await page.getByRole('link', { name: 'Prepare documents' }).click()
   await expect(page).toHaveURL('/application/SYN-CASE-MED-001/documents')
 
   for (const documentName of [
-    'Synthetic portrait',
-    'Synthetic passport page',
-    'Synthetic hospital letter',
+    'Recent photograph',
+    'Passport bio page',
+    'Hospital letter',
   ]) {
     const card = page.locator('article').filter({
       has: page.getByRole('heading', { level: 3, name: documentName }),
     })
-    await card.getByRole('button', { name: 'Run technical check' }).click()
+    await card.getByRole('button', { name: 'Check document' }).click()
   }
   await page.getByRole('link', { name: 'Review application' }).click()
   await expect(page).toHaveURL('/application/SYN-CASE-MED-001/review')
   await page.getByRole('checkbox', {
-    name: 'I confirm these synthetic demo details are ready for simulated submission.',
+    name: 'I confirm these application details are complete and ready to submit.',
   }).check()
-  await page.getByRole('button', { name: 'Submit demo application' }).click()
+  await page.getByRole('button', { name: 'Submit application' }).click()
   await expect(page).toHaveURL('/application/SYN-CASE-MED-001/payment')
 
-  await page.getByRole('button', { name: 'Start mock payment' }).click()
-  await expect(page.getByRole('heading', { name: 'Mock payment is pending. No real payment was made.' })).toBeVisible()
-  await page.getByRole('button', { name: 'Check mock payment status' }).click()
+  await page.getByRole('button', { name: 'Pay visa fee' }).click()
+  await expect(page.getByRole('heading', { name: 'Payment status pending' })).toBeVisible()
+  await page.getByRole('button', { name: 'Check payment status' }).click()
   await expect(page.getByRole('heading', { name: 'Payment confirmed' })).toBeVisible()
   await page.getByRole('link', { name: 'Continue to status' }).click()
   await expect(page).toHaveURL('/application/SYN-CASE-MED-001/status')
-  await page.getByRole('button', { name: 'Begin synthetic review' }).click()
+  await page.getByRole('button', { name: 'Begin review' }).click()
 
   await expect(page.getByRole('heading', { name: 'Under review' })).toBeVisible()
-  await page.getByText('Demo review control').click()
-  await page.getByRole('button', { name: 'Simulate hospital-letter review outcome' }).click()
+  await page.getByText('Review update').click()
+  await page.getByRole('button', { name: 'Check application status' }).click()
   await expect(page.getByRole('heading', { name: 'Action required' })).toBeVisible()
   await page.getByRole('link', { name: 'Replace hospital letter' }).click()
   await expect(page).toHaveURL('/application/SYN-CASE-MED-001/correction')
-  await page.getByRole('button', { name: 'Use corrected demo letter' }).click()
+  await page.getByRole('button', { name: 'Use corrected letter' }).click()
   await page.getByRole('button', { name: 'Submit correction' }).click()
   await expect(page).toHaveURL('/application/SYN-CASE-MED-001/status')
 
   await expect(page.getByRole('heading', { name: 'Under review' })).toBeVisible()
-  await page.getByText('Demo review control').click()
-  await page.getByRole('button', { name: 'Complete synthetic review' }).click()
+  await page.getByText('Review update').click()
+  await page.getByRole('button', { name: 'Check application status' }).click()
 
   await expect(page).toHaveURL('/application/SYN-CASE-MED-001/eta')
-  await expect(page.getByRole('heading', { name: 'Synthetic ETA issued' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Electronic Travel Authorization issued' })).toBeVisible()
   await expect(page.getByText(
-    'SYNTHETIC — NOT VALID. This is not a visa or travel document.',
+    'SAMPLE — NOT VALID. This is not a visa or travel document.',
   )).toBeVisible()
 })

@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test'
 
 const P0_STORAGE_KEY = 'india-evisa-reimagined:p0'
 const PROTOTYPE_NOTICE =
-  'UNOFFICIAL HACKATHON PROTOTYPE — SYNTHETIC DATA ONLY — CANNOT SUBMIT A VISA APPLICATION'
+  'UNOFFICIAL HACKATHON PROTOTYPE — NO REAL APPLICATIONS OR PAYMENTS'
 
 type SnapshotEvidence = Readonly<{
   currentStep: string
@@ -59,7 +59,7 @@ async function openFreshApp(page: Page) {
 async function startApplication(page: Page, scenario: 'Medical treatment' | 'Tourism') {
   await page.getByText(scenario, { exact: true }).click()
   await page.getByRole('link', { name: 'Continue' }).click()
-  await page.getByRole('button', { name: 'Continue with this demo' }).click()
+  await page.getByRole('button', { name: 'Continue application' }).click()
   await page.getByRole('button', { name: 'Start application' }).click()
   await expect(page.getByRole('heading', { name: 'Tell us about this trip' })).toBeVisible()
 }
@@ -67,25 +67,25 @@ async function startApplication(page: Page, scenario: 'Medical treatment' | 'Tou
 async function expectSharedApplicantShell(page: Page) {
   await expect(page.getByText(PROTOTYPE_NOTICE, { exact: true })).toBeVisible()
   await expect(page.getByText('EV', { exact: true })).toBeVisible()
-  await expect(page.getByText('Applicant prototype', { exact: true })).toBeVisible()
+  await expect(page.getByText('e-Visa service', { exact: true })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'India e-Visa Reimagined' })).toBeVisible()
 }
 
 async function answerMedicalApplication(page: Page) {
-  await page.getByLabel(/Choose the synthetic policy cohort/).selectOption('SYN-POLICY-COHORT-A')
-  await page.getByLabel(/Choose the synthetic passport class/).selectOption('SYNTHETIC_STANDARD_PASSPORT')
-  await page.getByLabel(/Choose the fictional planned arrival date/).selectOption('2099-04-14')
-  await page.getByLabel(/Confirm the synthetic Medical treatment intent/).selectOption('SYNTHETIC_MEDICAL_TREATMENT')
-  await page.getByLabel(/Choose the fictional proposed admission date/).selectOption('2099-04-18')
+  await page.getByLabel('Country of nationality').selectOption('SYN-POLICY-COHORT-A')
+  await page.getByLabel('Passport type').selectOption('SYNTHETIC_STANDARD_PASSPORT')
+  await page.getByLabel('Expected date of arrival').selectOption('2099-04-14')
+  await page.getByLabel('Purpose of medical visit').selectOption('SYNTHETIC_MEDICAL_TREATMENT')
+  await page.getByLabel('Proposed hospital admission date').selectOption('2099-04-18')
   await page.getByRole('radio', { name: 'Yes' }).check()
 }
 
 async function answerTouristApplication(page: Page) {
-  await page.getByLabel(/Choose the synthetic policy cohort/).selectOption('SYN-POLICY-COHORT-A')
-  await page.getByLabel(/Choose the synthetic passport class/).selectOption('SYNTHETIC_STANDARD_PASSPORT')
-  await page.getByLabel(/Choose the fictional planned arrival date/).selectOption('2099-05-10')
-  await page.getByLabel(/Confirm the synthetic tourism intent/).selectOption('SYNTHETIC_TOURISM')
-  await page.getByLabel(/Choose the fictional planned exit date/).selectOption('2099-05-17')
+  await page.getByLabel('Country of nationality').selectOption('SYN-POLICY-COHORT-A')
+  await page.getByLabel('Passport type').selectOption('SYNTHETIC_STANDARD_PASSPORT')
+  await page.getByLabel('Expected date of arrival').selectOption('2099-05-10')
+  await page.getByLabel('Purpose of visit').selectOption('SYNTHETIC_TOURISM')
+  await page.getByLabel('Expected date of departure').selectOption('2099-05-17')
 }
 
 async function loadApplicationEvidence(page: Page): Promise<ApplicationEvidence> {
@@ -156,8 +156,8 @@ test('Medical A03 autosaves controlled answers and ends at the Documents handoff
   await startApplication(page, 'Medical treatment')
   await expectSharedApplicantShell(page)
   await expect(page.getByText(PROTOTYPE_NOTICE, { exact: true })).toBeInViewport()
-  await expect(page.getByText('Choose the fictional proposed admission date.', { exact: true })).toBeVisible()
-  await expect(page.getByText('Show synthetic attendant guidance?', { exact: true })).toBeVisible()
+  await expect(page.getByText('Proposed hospital admission date', { exact: true })).toBeVisible()
+  await expect(page.getByText('Will a medical attendant travel with you?', { exact: true })).toBeVisible()
   await answerMedicalApplication(page)
   await expect(page.getByText('Saved in this browser', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Continue to documents' }).click()
@@ -189,8 +189,8 @@ test('Medical A03 autosaves controlled answers and ends at the Documents handoff
 test('Medical partial answers survive reload without duplicate Case or draft evidence', async ({ page }) => {
   await openFreshApp(page)
   await startApplication(page, 'Medical treatment')
-  await page.getByLabel(/Choose the synthetic policy cohort/).selectOption('SYN-POLICY-COHORT-A')
-  await page.getByLabel(/Choose the synthetic passport class/).selectOption('SYNTHETIC_STANDARD_PASSPORT')
+  await page.getByLabel('Country of nationality').selectOption('SYN-POLICY-COHORT-A')
+  await page.getByLabel('Passport type').selectOption('SYNTHETIC_STANDARD_PASSPORT')
   const beforeReload = await loadApplicationEvidence(page)
 
   await page.reload()
@@ -198,16 +198,16 @@ test('Medical partial answers survive reload without duplicate Case or draft evi
   expect(afterPageLoad.raw).toBe(beforeReload.raw)
   await expect(page.getByRole('heading', { name: 'Tell us about this trip' })).toBeVisible()
   await expectSharedApplicantShell(page)
-  await expect(page.getByLabel(/Choose the synthetic policy cohort/)).toHaveValue('SYN-POLICY-COHORT-A')
-  await expect(page.getByLabel(/Choose the synthetic passport class/)).toHaveValue('SYNTHETIC_STANDARD_PASSPORT')
-  await expect(page.getByLabel(/Choose the fictional planned arrival date/)).toHaveValue('')
+  await expect(page.getByLabel('Country of nationality')).toHaveValue('SYN-POLICY-COHORT-A')
+  await expect(page.getByLabel('Passport type')).toHaveValue('SYNTHETIC_STANDARD_PASSPORT')
+  await expect(page.getByLabel('Expected date of arrival')).toHaveValue('')
 
   const afterResume = await loadApplicationEvidence(page)
   expect(afterResume.raw).toBe(beforeReload.raw)
   expect(afterResume.caseCount).toBe(1)
   expect(afterResume.snapshots).toHaveLength(2)
   expect(afterResume.eventTypes.filter((eventType) => eventType === 'DraftCreated')).toHaveLength(1)
-  await page.getByLabel(/Choose the fictional planned arrival date/).selectOption('2099-04-14')
+  await page.getByLabel('Expected date of arrival').selectOption('2099-04-14')
   await expect(page.getByText('Saved in this browser', { exact: true })).toBeVisible()
 })
 
@@ -216,10 +216,10 @@ test('Tourist adapts through the same A03 renderer and completes without Medical
   await startApplication(page, 'Tourism')
   await expectSharedApplicantShell(page)
 
-  await expect(page.getByText('Confirm the synthetic tourism intent.', { exact: true })).toBeVisible()
-  await expect(page.getByText('Choose the fictional planned exit date.', { exact: true })).toBeVisible()
-  await expect(page.getByText('Choose the fictional proposed admission date.', { exact: true })).toHaveCount(0)
-  await expect(page.getByText('Show synthetic attendant guidance?', { exact: true })).toHaveCount(0)
+  await expect(page.getByText('Purpose of visit', { exact: true })).toBeVisible()
+  await expect(page.getByText('Expected date of departure', { exact: true })).toBeVisible()
+  await expect(page.getByText('Proposed hospital admission date', { exact: true })).toHaveCount(0)
+  await expect(page.getByText('Will a medical attendant travel with you?', { exact: true })).toHaveCount(0)
   await answerTouristApplication(page)
   await page.getByRole('button', { name: 'Continue to documents' }).click()
   await expect(page.getByRole('heading', { name: 'Application details saved' })).toBeVisible()
@@ -238,7 +238,7 @@ test('required-answer validation blocks the Documents snapshot and focuses the f
   await expect(page.getByRole('heading', { name: 'Check your answers' })).toBeVisible()
   await expectSharedApplicantShell(page)
   await expect(page.getByText('6 required answers need attention.', { exact: true })).toBeVisible()
-  await expect(page.getByLabel(/Choose the synthetic policy cohort/)).toBeFocused()
+  await expect(page.getByLabel('Country of nationality')).toBeFocused()
   await expect(page.getByRole('heading', { name: 'Application details saved' })).toHaveCount(0)
   const evidence = await loadApplicationEvidence(page)
   expect(evidence.snapshots).toEqual([])
@@ -249,8 +249,8 @@ test('A03 remains usable without horizontal overflow at 360x800', async ({ page 
   await page.setViewportSize({ width: 360, height: 800 })
   await openFreshApp(page)
   await startApplication(page, 'Medical treatment')
-  await page.getByLabel(/Choose the synthetic policy cohort/).selectOption('SYN-POLICY-COHORT-A')
-  await page.getByLabel(/Choose the fictional planned arrival date/).selectOption('2099-04-14')
+  await page.getByLabel('Country of nationality').selectOption('SYN-POLICY-COHORT-A')
+  await page.getByLabel('Expected date of arrival').selectOption('2099-04-14')
   await page.getByRole('radio', { name: 'No' }).check()
 
   const layout = await page.evaluate(() => ({

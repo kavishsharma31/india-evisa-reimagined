@@ -1,11 +1,12 @@
 import { useState, type FormEvent } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 
 import type { SyntheticId } from '../domain'
 import type { RuntimeReviewSummary } from '../runtime'
 import {
   applicantAnswerLabel,
-  DOCUMENT_FIXTURE_LABELS,
+  applicantQuestionPrompt,
+  applicantReference,
   DOCUMENT_NAMES,
   PURPOSE_NAMES,
 } from './applicant-labels'
@@ -35,6 +36,8 @@ function readReview(
 }
 
 export function ReviewApplication(props: ReviewApplicationProps) {
+  const location = useLocation()
+  const demoEnabled = new URLSearchParams(location.search).get('demo') === '1'
   const [review, setReview] = useState(() => readReview(props.services, props.caseId))
   const [confirmed, setConfirmed] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -42,7 +45,7 @@ export function ReviewApplication(props: ReviewApplicationProps) {
   function submitDemoApplication(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!confirmed || review === null) {
-      setError('Confirm the synthetic demo declaration before submitting.')
+      setError('Confirm the declaration before submitting.')
       document.getElementById('demo-submission-confirmation')?.focus()
       return
     }
@@ -61,7 +64,7 @@ export function ReviewApplication(props: ReviewApplicationProps) {
       result.status !== 'APPLICATION_ALREADY_SUBMITTED'
     ) {
       setError(
-        'This demo application could not be submitted safely. Review your saved details and documents before trying again.',
+        'This application could not be submitted safely. Review your saved details and documents before trying again.',
       )
       document.getElementById('review-heading')?.focus()
       return
@@ -69,7 +72,7 @@ export function ReviewApplication(props: ReviewApplicationProps) {
 
     const refreshed = readReview(props.services, props.caseId)
     if (refreshed === null) {
-      setError('The submitted demo application could not be reloaded safely.')
+      setError('The submitted application could not be reloaded safely.')
       return
     }
     setReview(refreshed)
@@ -83,7 +86,7 @@ export function ReviewApplication(props: ReviewApplicationProps) {
         <p className={styles.eyebrow}>Review · Step 4 of 6</p>
         <h2 id="review-heading" tabIndex={-1}>Review is unavailable</h2>
         <p role="alert">
-          The saved demo application could not produce a complete, policy-consistent review.
+          The saved application could not produce a complete review.
         </p>
       </section>
     )
@@ -100,24 +103,22 @@ export function ReviewApplication(props: ReviewApplicationProps) {
       >
         <div className={styles.completionMarker} aria-hidden="true">✓</div>
         <p className={styles.eyebrow}>Review · Step 4 of 6</p>
-        <h2 id="review-heading" tabIndex={-1}>Application submitted in demo</h2>
-        <p>
-          This synthetic application was submitted and locked locally. Nothing was sent to a government system.
-        </p>
+        <h2 id="review-heading" tabIndex={-1}>Application submitted</h2>
+        <p>Your application has been submitted and is now read-only.</p>
         <dl className={styles.submissionFacts}>
           <div>
             <dt>Purpose</dt>
             <dd>{purposeName}</dd>
           </div>
           <div>
-            <dt>Synthetic case reference</dt>
-            <dd>{review.caseId}</dd>
+            <dt>Application reference</dt>
+            <dd>{applicantReference(review.caseId)}</dd>
           </div>
         </dl>
         <div className={styles.nextStep}>
           <span>Next</span>
           <strong>Payment</strong>
-          <p>The next step will use a local simulated payment. No money or payment details are involved.</p>
+          <p>Continue to the visa fee step.</p>
           <Link className={styles.nextStepButton} to={props.paymentPath}>
             Continue to payment <span aria-hidden="true">→</span>
           </Link>
@@ -133,9 +134,9 @@ export function ReviewApplication(props: ReviewApplicationProps) {
       </Link>
       <header className={styles.reviewHeader}>
         <p className={styles.eyebrow}>Review · Step 4 of 6</p>
-        <h2 id="review-heading" tabIndex={-1}>Review your demo application</h2>
-        <p>Check the synthetic application details before simulated submission.</p>
-        <p className={styles.caseReference}>Synthetic case {review.caseId}</p>
+        <h2 id="review-heading" tabIndex={-1}>Review your application</h2>
+        <p>Check your application details before submitting.</p>
+        <p className={styles.caseReference}>Application reference {applicantReference(review.caseId)}</p>
       </header>
 
       <div className={styles.summaryList}>
@@ -146,14 +147,14 @@ export function ReviewApplication(props: ReviewApplicationProps) {
               <h3 id="review-purpose-heading">{purposeName}</h3>
             </div>
           </div>
-          <p className={styles.policyLine}>Pinned demo policy {review.policyQualifiedVersion}</p>
+          {demoEnabled ? <p className={styles.policyLine}>Policy version {review.policyQualifiedVersion}</p> : null}
         </section>
 
         <section className={styles.summarySection} aria-labelledby="review-answers-heading">
           <div className={styles.sectionHeading}>
             <div>
               <p className={styles.sectionLabel}>Application details</p>
-              <h3 id="review-answers-heading">Your synthetic answers</h3>
+              <h3 id="review-answers-heading">Your answers</h3>
             </div>
             <Link className={styles.editButton} to={props.applicationPath}>
               Edit application details
@@ -162,7 +163,7 @@ export function ReviewApplication(props: ReviewApplicationProps) {
           <dl className={styles.answerList}>
             {review.answers.map((answer) => (
               <div key={answer.questionId}>
-                <dt>{answer.prompt}</dt>
+                <dt>{applicantQuestionPrompt(answer.questionId, answer.prompt)}</dt>
                 <dd>{applicantAnswerLabel(answer.answerValue)}</dd>
               </div>
             ))}
@@ -173,7 +174,7 @@ export function ReviewApplication(props: ReviewApplicationProps) {
           <div className={styles.sectionHeading}>
             <div>
               <p className={styles.sectionLabel}>Documents</p>
-              <h3 id="review-documents-heading">Required demo documents</h3>
+              <h3 id="review-documents-heading">Required documents</h3>
             </div>
             <Link className={styles.editButton} to={props.documentsPath} state={{ editDocuments: true }}>
               Edit documents
@@ -183,8 +184,7 @@ export function ReviewApplication(props: ReviewApplicationProps) {
             {review.documents.map((document) => (
               <li key={document.requirementId}>
                 <div>
-                  <strong>{DOCUMENT_NAMES[document.documentType] ?? 'Synthetic document'}</strong>
-                  <span>{DOCUMENT_FIXTURE_LABELS[document.fixtureId] ?? 'Bundled synthetic fixture'}</span>
+                  <strong>{DOCUMENT_NAMES[document.documentType] ?? 'Document'}</strong>
                 </div>
                 <span className={styles.readyStatus}>Ready</span>
               </li>
@@ -194,20 +194,18 @@ export function ReviewApplication(props: ReviewApplicationProps) {
 
         <section className={styles.feePanel} aria-labelledby="review-fee-heading">
           <div>
-            <p className={styles.sectionLabel}>Demo fee</p>
-            <h3 id="review-fee-heading">
-              {review.syntheticFee.amount} {review.syntheticFee.unit}
-            </h3>
+            <p className={styles.sectionLabel}>Visa fee</p>
+            <h3 id="review-fee-heading">Calculated before payment</h3>
           </div>
-          <strong>{review.syntheticFee.label}</strong>
+          <strong>The amount depends on nationality and visa category.</strong>
         </section>
       </div>
 
       <form className={styles.confirmationPanel} onSubmit={submitDemoApplication}>
         <div>
           <p className={styles.sectionLabel}>Final confirmation</p>
-          <h3>Ready for simulated submission?</h3>
-          <p>This action is local to the prototype and will lock ordinary editing.</p>
+          <h3>Ready to submit your application?</h3>
+          <p>Submitting will lock your application details and documents.</p>
         </div>
         <label className={styles.confirmationControl}>
           <input
@@ -222,15 +220,15 @@ export function ReviewApplication(props: ReviewApplicationProps) {
               }
             }}
           />
-          <span>I confirm these synthetic demo details are ready for simulated submission.</span>
+          <span>I confirm these application details are complete and ready to submit.</span>
         </label>
         {error ? (
           <p className={styles.inlineError} id="submission-error" role="alert">{error}</p>
         ) : null}
         <button className={styles.submitButton} type="submit" disabled={!confirmed}>
-          Submit demo application <span aria-hidden="true">→</span>
+          Submit application <span aria-hidden="true">→</span>
         </button>
-        <p className={styles.submissionNote}>Synthetic submission only. Nothing is sent.</p>
+        <p className={styles.submissionNote}>You can review your submitted application before payment.</p>
       </form>
     </section>
   )

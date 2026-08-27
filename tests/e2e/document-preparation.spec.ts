@@ -26,27 +26,27 @@ async function completeA03(
 ) {
   await page.getByText(scenario, { exact: true }).click()
   await page.getByRole('link', { name: 'Continue' }).click()
-  await page.getByRole('button', { name: 'Continue with this demo' }).click()
+  await page.getByRole('button', { name: 'Continue application' }).click()
   await page.getByRole('button', { name: 'Start application' }).click()
-  await page.getByLabel(/Choose the synthetic policy cohort/).selectOption('SYN-POLICY-COHORT-A')
-  await page.getByLabel(/Choose the synthetic passport class/).selectOption('SYNTHETIC_STANDARD_PASSPORT')
+  await page.getByLabel('Country of nationality').selectOption('SYN-POLICY-COHORT-A')
+  await page.getByLabel('Passport type').selectOption('SYNTHETIC_STANDARD_PASSPORT')
   await page
-    .getByLabel(/Choose the fictional planned arrival date/)
+    .getByLabel('Expected date of arrival')
     .selectOption(scenario === 'Medical treatment' ? '2099-04-14' : '2099-05-10')
   await page
-    .getByLabel(/Confirm the synthetic (?:Medical treatment|tourism) intent/)
+    .getByLabel(scenario === 'Medical treatment' ? 'Purpose of medical visit' : 'Purpose of visit')
     .selectOption(
       scenario === 'Medical treatment' ? 'SYNTHETIC_MEDICAL_TREATMENT' : 'SYNTHETIC_TOURISM',
     )
   if (scenario === 'Medical treatment') {
-    await page.getByLabel(/Choose the fictional proposed admission date/).selectOption('2099-04-18')
+    await page.getByLabel('Proposed hospital admission date').selectOption('2099-04-18')
     await page.getByRole('radio', { name: 'Yes' }).check()
   } else {
-    await page.getByLabel(/Choose the fictional planned exit date/).selectOption('2099-05-17')
+    await page.getByLabel('Expected date of departure').selectOption('2099-05-17')
   }
   await page.getByRole('button', { name: 'Continue to documents' }).click()
   await page.getByRole('link', { name: 'Prepare documents' }).click()
-  await expect(page.getByRole('heading', { name: 'Prepare your demo documents' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Prepare your documents' })).toBeVisible()
 }
 
 function documentCard(page: Page, name: string): Locator {
@@ -57,7 +57,7 @@ function documentCard(page: Page, name: string): Locator {
 
 async function checkCurrentFixture(page: Page, name: string) {
   await documentCard(page, name)
-    .getByRole('button', { name: /Run technical check|Check replacement/ })
+    .getByRole('button', { name: /Check document|Check replacement/ })
     .click()
 }
 
@@ -124,15 +124,15 @@ test('Medical A04 prepares all policy-required bundled files and hands off to Re
   await openFreshApp(page)
   await completeA03(page)
   await expect(page.getByRole('heading', { level: 3 })).toHaveCount(3)
-  await expect(page.getByRole('option', { name: 'Bundled demo hospital letter' })).toHaveCount(1)
+  await expect(page.getByRole('option', { name: 'Provided hospital letter' })).toHaveCount(1)
   await expect(page.getByText(/hospital letter V2/i)).toHaveCount(0)
 
-  await checkCurrentFixture(page, 'Synthetic portrait')
-  await checkCurrentFixture(page, 'Synthetic passport page')
-  await checkCurrentFixture(page, 'Synthetic hospital letter')
+  await checkCurrentFixture(page, 'Recent photograph')
+  await checkCurrentFixture(page, 'Passport bio page')
+  await checkCurrentFixture(page, 'Hospital letter')
 
   await expect(page.getByRole('heading', { name: 'Documents ready' })).toBeVisible()
-  await expect(page.getByText('All required demo documents passed the local technical check.')).toBeVisible()
+  await expect(page.getByText('All required documents are ready.')).toBeVisible()
   await expect(page.getByRole('link', { name: 'Review Available' })).toBeVisible()
   await expect(page.getByRole('heading', { name: /Review your application/i })).toHaveCount(0)
   const evidence = await loadDocumentEvidence(page)
@@ -151,23 +151,23 @@ test('unclear passport fails locally and the clear replacement preserves version
   await openFreshApp(page)
   await completeA03(page)
 
-  const passport = documentCard(page, 'Synthetic passport page')
-  await passport.getByRole('combobox', { name: 'Bundled demo file' }).selectOption(
+  const passport = documentCard(page, 'Passport bio page')
+  await passport.getByRole('combobox', { name: 'Sample document' }).selectOption(
     'SYN-FIXTURE-PASSPORT-UNCLEAR-001',
   )
-  await checkCurrentFixture(page, 'Synthetic passport page')
+  await checkCurrentFixture(page, 'Passport bio page')
   await expect(passport.getByText('Needs attention')).toBeVisible()
   await expect(
     passport.getByText(
-      'This demo passport page is too unclear to check. Choose the clearer bundled file and try again.',
+      'This passport bio page is too unclear to check. Choose the clearer copy and try again.',
     ),
   ).toBeVisible()
 
-  await passport.getByRole('combobox', { name: 'Bundled demo file' }).selectOption(
+  await passport.getByRole('combobox', { name: 'Sample document' }).selectOption(
     'SYN-FIXTURE-PASSPORT-VALID-001',
   )
-  await checkCurrentFixture(page, 'Synthetic passport page')
-  await expect(passport.getByText('Ready')).toBeVisible()
+  await checkCurrentFixture(page, 'Passport bio page')
+  await expect(passport.getByText('Ready', { exact: true })).toBeVisible()
 
   const evidence = await loadDocumentEvidence(page)
   const passportEvidence = evidence.documents.find(
@@ -180,12 +180,12 @@ test('unclear passport fails locally and the clear replacement preserves version
 test('prepared A04 state survives reload without another version or event', async ({ page }) => {
   await openFreshApp(page)
   await completeA03(page)
-  await checkCurrentFixture(page, 'Synthetic portrait')
+  await checkCurrentFixture(page, 'Recent photograph')
   const beforeReload = await loadDocumentEvidence(page)
 
   await page.reload()
-  await expect(page.getByRole('heading', { name: 'Prepare your demo documents' })).toBeVisible()
-  await expect(documentCard(page, 'Synthetic portrait').getByText('Ready')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Prepare your documents' })).toBeVisible()
+  await expect(documentCard(page, 'Recent photograph').getByText('Ready', { exact: true })).toBeVisible()
   const afterReload = await loadDocumentEvidence(page)
   expect(afterReload.raw).toBe(beforeReload.raw)
   expect(afterReload.caseCount).toBe(1)
@@ -197,10 +197,10 @@ test('Tourist reuses A04 with portrait and passport only', async ({ page }) => {
   await openFreshApp(page)
   await completeA03(page, 'Tourism')
   await expect(page.getByRole('heading', { level: 3 })).toHaveCount(2)
-  await expect(page.getByRole('heading', { level: 3, name: 'Synthetic hospital letter' })).toHaveCount(0)
+  await expect(page.getByRole('heading', { level: 3, name: 'Hospital letter' })).toHaveCount(0)
 
-  await checkCurrentFixture(page, 'Synthetic portrait')
-  await checkCurrentFixture(page, 'Synthetic passport page')
+  await checkCurrentFixture(page, 'Recent photograph')
+  await checkCurrentFixture(page, 'Passport bio page')
   await expect(page.getByRole('heading', { name: 'Documents ready' })).toBeVisible()
 })
 
@@ -208,11 +208,11 @@ test('A04 controls remain usable without horizontal overflow at 360x800', async 
   await page.setViewportSize({ width: 360, height: 800 })
   await openFreshApp(page)
   await completeA03(page)
-  const passport = documentCard(page, 'Synthetic passport page')
-  await passport.getByRole('combobox', { name: 'Bundled demo file' }).selectOption(
+  const passport = documentCard(page, 'Passport bio page')
+  await passport.getByRole('combobox', { name: 'Sample document' }).selectOption(
     'SYN-FIXTURE-PASSPORT-UNCLEAR-001',
   )
-  await checkCurrentFixture(page, 'Synthetic passport page')
+  await checkCurrentFixture(page, 'Passport bio page')
 
   const layout = await page.evaluate(() => ({
     clientWidth: document.documentElement.clientWidth,

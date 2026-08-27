@@ -27,46 +27,46 @@ async function reachSubmittedApplication(
 ) {
   await page.getByText(scenario, { exact: true }).click()
   await page.getByRole('link', { name: 'Continue' }).click()
-  await page.getByRole('button', { name: 'Continue with this demo' }).click()
+  await page.getByRole('button', { name: 'Continue application' }).click()
   await page.getByRole('button', { name: 'Start application' }).click()
-  await page.getByLabel(/Choose the synthetic policy cohort/).selectOption('SYN-POLICY-COHORT-A')
-  await page.getByLabel(/Choose the synthetic passport class/).selectOption('SYNTHETIC_STANDARD_PASSPORT')
+  await page.getByLabel('Country of nationality').selectOption('SYN-POLICY-COHORT-A')
+  await page.getByLabel('Passport type').selectOption('SYNTHETIC_STANDARD_PASSPORT')
   await page
-    .getByLabel(/Choose the fictional planned arrival date/)
+    .getByLabel('Expected date of arrival')
     .selectOption(scenario === 'Medical treatment' ? '2099-04-14' : '2099-05-10')
   await page
-    .getByLabel(/Confirm the synthetic (?:Medical treatment|tourism) intent/)
+    .getByLabel(scenario === 'Medical treatment' ? 'Purpose of medical visit' : 'Purpose of visit')
     .selectOption(
       scenario === 'Medical treatment'
         ? 'SYNTHETIC_MEDICAL_TREATMENT'
         : 'SYNTHETIC_TOURISM',
     )
   if (scenario === 'Medical treatment') {
-    await page.getByLabel(/Choose the fictional proposed admission date/).selectOption('2099-04-18')
+    await page.getByLabel('Proposed hospital admission date').selectOption('2099-04-18')
     await page.getByRole('radio', { name: 'Yes' }).check()
   } else {
-    await page.getByLabel(/Choose the fictional planned exit date/).selectOption('2099-05-17')
+    await page.getByLabel('Expected date of departure').selectOption('2099-05-17')
   }
   await page.getByRole('button', { name: 'Continue to documents' }).click()
   await page.getByRole('link', { name: 'Prepare documents' }).click()
 
   const documentNames = [
-    'Synthetic portrait',
-    'Synthetic passport page',
-    ...(scenario === 'Medical treatment' ? ['Synthetic hospital letter'] : []),
+    'Recent photograph',
+    'Passport bio page',
+    ...(scenario === 'Medical treatment' ? ['Hospital letter'] : []),
   ]
   for (const documentName of documentNames) {
     const card = page.locator('article').filter({
       has: page.getByRole('heading', { level: 3, name: documentName }),
     })
-    await card.getByRole('button', { name: 'Run technical check' }).click()
+    await card.getByRole('button', { name: 'Check document' }).click()
   }
   await page.getByRole('link', { name: 'Review application' }).click()
   await page.getByRole('checkbox', {
-    name: 'I confirm these synthetic demo details are ready for simulated submission.',
+    name: 'I confirm these application details are complete and ready to submit.',
   }).check()
-  await page.getByRole('button', { name: 'Submit demo application' }).click()
-  await expect(page.getByRole('heading', { name: 'Complete the demo payment' })).toBeVisible()
+  await page.getByRole('button', { name: 'Submit application' }).click()
+  await expect(page.getByRole('heading', { name: 'Pay visa fee' })).toBeVisible()
 }
 
 async function reachPayment(
@@ -74,7 +74,7 @@ async function reachPayment(
   scenario: 'Medical treatment' | 'Tourism' = 'Medical treatment',
 ) {
   await reachSubmittedApplication(page, scenario)
-  await expect(page.getByRole('heading', { name: 'Complete the demo payment' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Pay visa fee' })).toBeVisible()
 }
 
 async function loadPaymentEvidence(page: Page) {
@@ -128,18 +128,18 @@ test('Medical A06 recovers one ambiguous payment to confirmed without a duplicat
 
   await openFreshApp(page)
   await reachPayment(page)
-  await expect(page.getByText('73 SYNTHETIC_DEMO_CREDITS')).toBeVisible()
-  await expect(page.getByText('SYNTHETIC — NOT PAYABLE')).toBeVisible()
+  await expect(page.getByText('Not calculated in this prototype')).toBeVisible()
+  await expect(page.getByText('No real payment will be processed in this prototype.')).toBeVisible()
   expect((await loadPaymentEvidence(page)).paymentState).toBe('NOT_STARTED')
 
-  await page.getByRole('button', { name: 'Start mock payment' }).click()
+  await page.getByRole('button', { name: 'Pay visa fee' }).click()
   await expect(page.getByRole('heading', {
-    name: 'Mock payment is pending. No real payment was made.',
+    name: 'Payment status pending',
   })).toBeVisible()
   await expect(page.getByText(
-    'Do not start another mock payment. Check mock payment status instead.',
+    'Do not make another payment.',
   )).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Start mock payment' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Pay visa fee' })).toHaveCount(0)
 
   const uncertain = await loadPaymentEvidence(page)
   expect(uncertain.caseCount).toBe(1)
@@ -152,7 +152,7 @@ test('Medical A06 recovers one ambiguous payment to confirmed without a duplicat
     'PaymentReconciliationRequired',
   ])
 
-  await page.getByRole('button', { name: 'Check mock payment status' }).click()
+  await page.getByRole('button', { name: 'Check payment status' }).click()
   await expect(page.getByRole('heading', { name: 'Payment confirmed' })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Continue to status' })).toBeVisible()
   await expect(page.getByRole('heading', { name: /scrutiny|case status/i })).toHaveCount(0)
@@ -170,42 +170,42 @@ test('Medical A06 recovers one ambiguous payment to confirmed without a duplicat
 test('uncertain payment reload preserves the same attempt and does not reconcile automatically', async ({ page }) => {
   await openFreshApp(page)
   await reachPayment(page)
-  await page.getByRole('button', { name: 'Start mock payment' }).click()
+  await page.getByRole('button', { name: 'Pay visa fee' }).click()
   const beforeReload = await loadPaymentEvidence(page)
 
   await page.reload()
   await expect(page.getByRole('heading', {
-    name: 'Mock payment is pending. No real payment was made.',
+    name: 'Payment status pending',
   })).toBeVisible()
   const afterReload = await loadPaymentEvidence(page)
   expect(afterReload).toEqual(beforeReload)
 
-  await page.getByRole('button', { name: 'Check mock payment status' }).click()
+  await page.getByRole('button', { name: 'Check payment status' }).click()
   await expect(page.getByRole('heading', { name: 'Payment confirmed' })).toBeVisible()
 })
 
 test('confirmed payment reload is byte-stable and does not repeat reconciliation', async ({ page }) => {
   await openFreshApp(page)
   await reachPayment(page)
-  await page.getByRole('button', { name: 'Start mock payment' }).click()
-  await page.getByRole('button', { name: 'Check mock payment status' }).click()
+  await page.getByRole('button', { name: 'Pay visa fee' }).click()
+  await page.getByRole('button', { name: 'Check payment status' }).click()
   const beforeReload = await loadPaymentEvidence(page)
 
   await page.reload()
   await expect(page.getByRole('heading', { name: 'Payment confirmed' })).toBeVisible()
-  await expect(page.getByRole('button', { name: /Start mock payment|Check mock payment status/ })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /Pay visa fee|Check payment status/ })).toHaveCount(0)
   expect(await loadPaymentEvidence(page)).toEqual(beforeReload)
 })
 
 test('Tourist reuses A06 with the policy-derived 41-credit ambiguous recovery', async ({ page }) => {
   await openFreshApp(page)
   await reachPayment(page, 'Tourism')
-  await expect(page.getByText('41 SYNTHETIC_DEMO_CREDITS')).toBeVisible()
-  await page.getByRole('button', { name: 'Start mock payment' }).click()
+  await expect(page.getByText('Not calculated in this prototype')).toBeVisible()
+  await page.getByRole('button', { name: 'Pay visa fee' }).click()
   await expect(page.getByText(
-    'Do not start another mock payment. Check mock payment status instead.',
+    'Do not make another payment.',
   )).toBeVisible()
-  await page.getByRole('button', { name: 'Check mock payment status' }).click()
+  await page.getByRole('button', { name: 'Check payment status' }).click()
   await expect(page.getByRole('heading', { name: 'Payment confirmed' })).toBeVisible()
 })
 
@@ -214,7 +214,7 @@ test('A06 uses the mobile width well and stays axe-clean in every payment state'
   await openFreshApp(page)
   await reachPayment(page)
 
-  const paymentPage = page.getByRole('region', { name: 'Complete the demo payment' })
+  const paymentPage = page.getByRole('region', { name: 'Pay visa fee' })
   const summary = page.getByRole('region', { name: 'Application submitted' })
   const paymentBox = await paymentPage.boundingBox()
   const summaryBox = await summary.boundingBox()
@@ -224,12 +224,12 @@ test('A06 uses the mobile width well and stays axe-clean in every payment state'
   expect(Math.abs((paymentBox?.width ?? 0) - (summaryBox?.width ?? 0))).toBeLessThan(2)
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
 
-  await page.getByRole('button', { name: 'Start mock payment' }).click()
+  await page.getByRole('button', { name: 'Pay visa fee' }).click()
   const uncertainPanel = page.getByRole('region', {
-    name: 'Mock payment is pending. No real payment was made.',
+    name: 'Payment status pending',
   })
   const uncertainBox = await uncertainPanel.boundingBox()
-  const statusButton = page.getByRole('button', { name: 'Check mock payment status' })
+  const statusButton = page.getByRole('button', { name: 'Check payment status' })
   const buttonBox = await statusButton.boundingBox()
   expect(uncertainBox?.width ?? 0).toBeGreaterThan(310)
   expect(buttonBox?.width ?? 0).toBeGreaterThan((uncertainBox?.width ?? 0) - 55)

@@ -79,9 +79,9 @@ test('shared shell fills every target viewport without overflow and centers cons
 test('Medical Documents renders each required document and the footer exactly once', async ({ page }) => {
   await loadSeed(page, 'SEED-MEDICAL-INTERRUPTED-DRAFT')
 
-  await expect(page.getByRole('heading', { level: 3, name: 'Synthetic portrait' })).toHaveCount(1)
-  await expect(page.getByRole('heading', { level: 3, name: 'Synthetic passport page' })).toHaveCount(1)
-  await expect(page.getByRole('heading', { level: 3, name: 'Synthetic hospital letter' })).toHaveCount(1)
+  await expect(page.getByRole('heading', { level: 3, name: 'Recent photograph' })).toHaveCount(1)
+  await expect(page.getByRole('heading', { level: 3, name: 'Passport bio page' })).toHaveCount(1)
+  await expect(page.getByRole('heading', { level: 3, name: 'Hospital letter' })).toHaveCount(1)
   await expect(page.locator('footer')).toHaveCount(1)
 })
 
@@ -89,9 +89,9 @@ test('ambiguous Payment renders one recovery panel and one footer', async ({ pag
   await loadSeed(page, 'SEED-MEDICAL-AMBIGUOUS-PAYMENT')
 
   await expect(page.getByRole('heading', {
-    name: 'Mock payment is pending. No real payment was made.',
+    name: 'Payment status pending',
   })).toHaveCount(1)
-  await expect(page.getByRole('button', { name: 'Check mock payment status' })).toHaveCount(1)
+  await expect(page.getByRole('button', { name: 'Check payment status' })).toHaveCount(1)
   await expect(page.locator('footer')).toHaveCount(1)
 })
 
@@ -108,7 +108,7 @@ test('Action Required reason and correction CTA remain separated inside the stat
 
   const currentStatus = page.getByRole('region', { name: 'Action required' })
   const reason = currentStatus.getByText(
-    'The admission date on the demo hospital letter could not be confirmed during synthetic review.',
+    'The admission date on the hospital letter could not be confirmed during review.',
     { exact: true },
   )
   const correctionLink = currentStatus.getByRole('link', { name: 'Replace hospital letter' })
@@ -145,11 +145,12 @@ test('Action Required reason and correction CTA remain separated inside the stat
   }
 })
 
-test('Correction renders one Synthetic re-upload boundary and one footer', async ({ page }) => {
+test('Correction renders one corrected replacement and one footer', async ({ page }) => {
   await loadSeed(page, 'SEED-MEDICAL-REUPLOAD-REQUESTED')
   await page.getByRole('link', { name: 'Replace hospital letter' }).click()
 
-  await expect(page.getByText('Synthetic re-upload', { exact: true })).toHaveCount(1)
-  await expect(page.getByRole('complementary', { name: 'Synthetic re-upload boundary' })).toHaveCount(1)
+  await expect(page.getByText('Corrected hospital letter', { exact: true })).toHaveCount(1)
+  await expect(page.getByText('For this prototype, a sample corrected document is provided.')).toHaveCount(1)
+  await expect(page.getByText('Synthetic re-upload', { exact: true })).toHaveCount(0)
   await expect(page.locator('footer')).toHaveCount(1)
 })

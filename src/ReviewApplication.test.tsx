@@ -1,6 +1,6 @@
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import App from './App'
 import { createAppRuntime } from './app/create-app-runtime'
@@ -10,7 +10,14 @@ import {
   type StoragePort,
 } from './persistence'
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  window.history.replaceState(null, '', '/')
+})
+
+beforeEach(() => {
+  window.history.replaceState(null, '', '/')
+})
 
 class MemoryStorage implements StoragePort {
   readonly #values = new Map<string, string>()
@@ -48,9 +55,12 @@ async function reachA05(
   user: ReturnType<typeof userEvent.setup>,
   scenario: 'Medical treatment' | 'Tourism' = 'Medical treatment',
 ) {
+  window.history.replaceState(null, '', '/')
+  window.dispatchEvent(new PopStateEvent('popstate'))
+  await waitFor(() => expect(screen.getByRole('heading', { name: 'Why are you travelling to India?' })).toBeInTheDocument())
   await user.click(screen.getByRole('radio', { name: new RegExp(scenario, 'i') }))
   await user.click(screen.getByRole('link', { name: 'Continue' }))
-  await user.click(screen.getByRole('button', { name: 'Continue with this demo' }))
+  await user.click(screen.getByRole('button', { name: 'Continue application' }))
   await user.click(screen.getByRole('button', { name: 'Start application' }))
 
   const selects = screen.getAllByRole('combobox')
@@ -74,11 +84,11 @@ async function reachA05(
   await user.click(screen.getByRole('button', { name: 'Continue to documents' }))
   await user.click(screen.getByRole('link', { name: 'Prepare documents' }))
 
-  for (const button of screen.getAllByRole('button', { name: 'Run technical check' })) {
+  for (const button of screen.getAllByRole('button', { name: 'Check document' })) {
     await user.click(button)
   }
   await user.click(screen.getByRole('link', { name: 'Review application' }))
-  expect(screen.getByRole('heading', { name: 'Review your demo application' })).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: 'Review your application' })).toBeInTheDocument()
 }
 
 describe('A05 review and simulated submission', () => {
@@ -89,11 +99,10 @@ describe('A05 review and simulated submission', () => {
     await reachA05(user)
 
     expect(screen.getByRole('heading', { name: 'Medical treatment' })).toBeInTheDocument()
-    expect(screen.getByText('Confirm the synthetic Medical treatment intent.')).toBeInTheDocument()
-    expect(screen.getByText('18 April 2099 (fictional)')).toBeInTheDocument()
+    expect(screen.getByText('Purpose of medical visit')).toBeInTheDocument()
+    expect(screen.getByText('18 April 2099')).toBeInTheDocument()
     expect(screen.getAllByText('Ready')).toHaveLength(3)
-    expect(screen.getByText('73 SYNTHETIC_DEMO_CREDITS')).toBeInTheDocument()
-    expect(screen.getByText('SYNTHETIC — NOT PAYABLE')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Calculated before payment' })).toBeInTheDocument()
     expect(requireCase(store).application.state).toBe('IN_PROGRESS')
   })
 
@@ -103,11 +112,11 @@ describe('A05 review and simulated submission', () => {
     await reachA05(user, 'Tourism')
 
     expect(screen.getByRole('heading', { name: 'Tourism' })).toBeInTheDocument()
-    expect(screen.getByText('Confirm the synthetic tourism intent.')).toBeInTheDocument()
+    expect(screen.getByText('Purpose of visit')).toBeInTheDocument()
     expect(screen.queryByText(/Medical treatment intent/i)).not.toBeInTheDocument()
-    expect(screen.queryByText('Synthetic hospital letter')).not.toBeInTheDocument()
+    expect(screen.queryByText('Hospital letter')).not.toBeInTheDocument()
     expect(screen.getAllByText('Ready')).toHaveLength(2)
-    expect(screen.getByText('41 SYNTHETIC_DEMO_CREDITS')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Calculated before payment' })).toBeInTheDocument()
   })
 
   it('edits application details without recreating the Case and refreshes the review', async () => {
@@ -140,9 +149,9 @@ describe('A05 review and simulated submission', () => {
     const versionCount = before.documents.reduce((total, document) => total + document.versions.length, 0)
 
     await user.click(screen.getByRole('link', { name: 'Edit documents' }))
-    expect(screen.getByRole('heading', { name: 'Prepare your demo documents' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Prepare your documents' })).toBeInTheDocument()
     await user.click(screen.getByRole('link', { name: 'Return to review' }))
-    expect(screen.getByRole('heading', { name: 'Review your demo application' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Review your application' })).toBeInTheDocument()
     const after = requireCase(store)
     expect(after.documents.reduce((total, document) => total + document.versions.length, 0)).toBe(versionCount)
   })
@@ -153,18 +162,18 @@ describe('A05 review and simulated submission', () => {
     render(<App services={createAppRuntime({ store })} />)
     await reachA05(user)
 
-    const submitButton = screen.getByRole('button', { name: 'Submit demo application' })
+    const submitButton = screen.getByRole('button', { name: 'Submit application' })
     expect(submitButton).toBeDisabled()
     await user.click(
       screen.getByRole('checkbox', {
-        name: 'I confirm these synthetic demo details are ready for simulated submission.',
+        name: 'I confirm these application details are complete and ready to submit.',
       }),
     )
     await user.dblClick(submitButton)
 
-    expect(screen.getByRole('heading', { name: 'Complete the demo payment' })).toBeInTheDocument()
-    window.history.back()
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'Application submitted in demo' })).toBeInTheDocument())
+    expect(screen.getByRole('heading', { name: 'Pay visa fee' })).toBeInTheDocument()
+    await user.click(screen.getByRole('link', { name: 'Back to review' }))
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Application submitted' })).toBeInTheDocument())
     expect(screen.getAllByText('Payment', { exact: true }).length).toBeGreaterThanOrEqual(1)
     expect(screen.queryByRole('button', { name: /Edit application details|Edit documents/ })).not.toBeInTheDocument()
     const persistedCase = requireCase(store)
@@ -177,17 +186,18 @@ describe('A05 review and simulated submission', () => {
     const user = userEvent.setup()
     const storage = new MemoryStorage()
     const store = createPersistenceStore(storage)
+    window.history.replaceState(null, '', '/')
     const firstRender = render(<App services={createAppRuntime({ store })} />)
     await reachA05(user)
     await user.click(screen.getByRole('checkbox'))
-    await user.click(screen.getByRole('button', { name: 'Submit demo application' }))
-    window.history.back()
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'Application submitted in demo' })).toBeInTheDocument())
+    await user.click(screen.getByRole('button', { name: 'Submit application' }))
+    await user.click(screen.getByRole('link', { name: 'Back to review' }))
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Application submitted' })).toBeInTheDocument())
     const beforeReload = JSON.stringify(requireCase(store))
 
     firstRender.unmount()
     render(<App services={createAppRuntime({ store: createPersistenceStore(storage) })} />)
-    expect(screen.getByRole('heading', { name: 'Application submitted in demo' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Application submitted' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Edit application details|Edit documents/ })).not.toBeInTheDocument()
     expect(JSON.stringify(requireCase(createPersistenceStore(storage)))).toBe(beforeReload)
   })

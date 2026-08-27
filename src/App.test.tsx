@@ -17,7 +17,7 @@ import {
 } from './persistence'
 
 const PROTOTYPE_NOTICE =
-  'UNOFFICIAL HACKATHON PROTOTYPE — SYNTHETIC DATA ONLY — CANNOT SUBMIT A VISA APPLICATION'
+  'UNOFFICIAL HACKATHON PROTOTYPE — NO REAL APPLICATIONS OR PAYMENTS'
 
 afterEach(() => {
   cleanup()
@@ -88,16 +88,13 @@ describe('applicant slice A00 and A01', () => {
     await openMedicalGuidance(user)
 
     expect(
-      screen.getByText(
-        'This purpose is supported by the selected demo scenario. It is not a legal eligibility decision.',
-        { exact: true },
-      ),
+      screen.getByText('Requirements shown here are simplified and do not determine eligibility.', { exact: true }),
     ).toBeInTheDocument()
-    expect(screen.getByText('Synthetic portrait', { exact: true })).toBeInTheDocument()
-    expect(screen.getByText('Synthetic passport page', { exact: true })).toBeInTheDocument()
-    expect(screen.getByText('Synthetic hospital letter', { exact: true })).toBeInTheDocument()
-    expect(screen.getByText('73 SYNTHETIC_DEMO_CREDITS', { exact: true })).toBeInTheDocument()
-    expect(screen.getByText('SYNTHETIC — NOT PAYABLE', { exact: true })).toBeInTheDocument()
+    expect(screen.getByText('Recent photograph', { exact: true })).toBeInTheDocument()
+    expect(screen.getByText('Passport bio page', { exact: true })).toBeInTheDocument()
+    expect(screen.getByText('Hospital letter', { exact: true })).toBeInTheDocument()
+    expect(screen.getByText('Calculated before payment', { exact: true })).toBeInTheDocument()
+    expect(screen.queryByText(/SYNTHETIC_DEMO_CREDITS/)).not.toBeInTheDocument()
     expect(screen.getByText(PROTOTYPE_NOTICE, { exact: true })).toBeInTheDocument()
   })
 
@@ -110,10 +107,10 @@ describe('applicant slice A00 and A01', () => {
     await user.click(screen.getByRole('link', { name: 'Continue' }))
 
     expect(screen.getByRole('heading', { level: 2, name: 'Tourism' })).toBeInTheDocument()
-    expect(screen.getByText('Synthetic portrait', { exact: true })).toBeInTheDocument()
-    expect(screen.getByText('Synthetic passport page', { exact: true })).toBeInTheDocument()
-    expect(screen.queryByText('Synthetic hospital letter', { exact: true })).not.toBeInTheDocument()
-    expect(screen.getByText('41 SYNTHETIC_DEMO_CREDITS', { exact: true })).toBeInTheDocument()
+    expect(screen.getByText('Recent photograph', { exact: true })).toBeInTheDocument()
+    expect(screen.getByText('Passport bio page', { exact: true })).toBeInTheDocument()
+    expect(screen.queryByText('Hospital letter', { exact: true })).not.toBeInTheDocument()
+    expect(screen.getByText('Calculated before payment', { exact: true })).toBeInTheDocument()
   })
 
   it('does not offer continuation when policy evaluation rejects the selection', async () => {
@@ -138,9 +135,9 @@ describe('applicant slice A00 and A01', () => {
     await user.click(screen.getByRole('radio', { name: /Medical treatment/i }))
 
     expect(screen.getByRole('alert')).toHaveTextContent(
-      'We could not confirm support for that demo scenario.',
+      'We could not confirm that purpose.',
     )
-    expect(screen.queryByRole('button', { name: 'Continue with this demo' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Continue application' })).not.toBeInTheDocument()
   })
 })
 
@@ -151,10 +148,10 @@ describe('applicant slice A02 and resume', () => {
     render(<App services={services} />)
 
     await openMedicalGuidance(user)
-    await user.click(screen.getByRole('button', { name: 'Continue with this demo' }))
+    await user.click(screen.getByRole('button', { name: 'Continue application' }))
 
     expect(
-      screen.getByRole('heading', { name: 'Your synthetic application has been created' }),
+      screen.getByRole('heading', { name: 'Your application has been created' }),
     ).toBeInTheDocument()
     expect(requireValidState(store).cases).toHaveLength(1)
     expect(requireValidState(store).cases[0]?.application.state).toBe('DRAFT_CREATED')
@@ -180,7 +177,7 @@ describe('applicant slice A02 and resume', () => {
     const firstRender = render(<App services={createAppRuntime({ store: firstStore })} />)
 
     await openMedicalGuidance(firstUser)
-    await firstUser.click(screen.getByRole('button', { name: 'Continue with this demo' }))
+    await firstUser.click(screen.getByRole('button', { name: 'Continue application' }))
     await firstUser.click(screen.getByRole('button', { name: 'Start application' }))
     const beforeReload = storage.getItem(P0_STORAGE_KEY)
     firstRender.unmount()
@@ -235,12 +232,12 @@ describe('applicant slice A02 and resume', () => {
 
     render(<App services={services} />)
 
-    expect(screen.getByRole('heading', { name: 'Saved demo data cannot be read' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Saved application data cannot be read' })).toBeInTheDocument()
     expect(resetCalls).toBe(0)
     expect(storage.getItem(P0_STORAGE_KEY)).toBe(corruptValue)
     expect(document.body).not.toHaveTextContent('SYN-MALFORMED-CONTENT')
 
-    await user.click(screen.getByRole('button', { name: 'Reset demo data' }))
+    await user.click(screen.getByRole('button', { name: 'Clear saved application data' }))
 
     expect(resetCalls).toBe(1)
     expect(screen.getByRole('heading', { name: 'Why are you travelling to India?' })).toBeInTheDocument()
@@ -273,8 +270,8 @@ describe('applicant slice A02 and resume', () => {
         name: 'Progress cannot be saved in this browser',
       }),
     ).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Reset demo data' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Continue with this demo' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Clear saved application data' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Continue application' })).not.toBeInTheDocument()
   })
 })
 
@@ -315,7 +312,7 @@ describe('D01 deterministic demo controls', () => {
     const canonicalReuploadBytes = storage.getItem(P0_STORAGE_KEY)
 
     await user.selectOptions(seedSelect, 'SEED-MEDICAL-AMBIGUOUS-PAYMENT')
-    expect(await screen.findByRole('heading', { name: 'Complete the demo payment' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Pay visa fee' })).toBeInTheDocument()
     expect(requireValidState(store).cases).toHaveLength(1)
     await user.selectOptions(seedSelect, 'SEED-MEDICAL-REUPLOAD-REQUESTED')
     expect(storage.getItem(P0_STORAGE_KEY)).toBe(canonicalReuploadBytes)

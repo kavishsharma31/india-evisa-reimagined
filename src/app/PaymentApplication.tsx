@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 
 import type { SyntheticId } from '../domain'
 import type { RuntimePaymentSummary } from '../runtime'
-import { PURPOSE_NAMES } from './applicant-labels'
+import { applicantReference, PURPOSE_NAMES } from './applicant-labels'
 import type { AppRuntimeServices } from './create-app-runtime'
 import styles from './PaymentApplication.module.css'
 
@@ -31,7 +31,7 @@ export function PaymentApplication(props: PaymentApplicationProps) {
   function refreshPayment(): boolean {
     const refreshed = readPayment(props.services, props.caseId)
     if (refreshed === null) {
-      setError('The saved mock payment state could not be reloaded safely.')
+      setError('The saved payment status could not be reloaded safely.')
       return false
     }
     setPayment(refreshed)
@@ -49,11 +49,11 @@ export function PaymentApplication(props: PaymentApplicationProps) {
       result.status !== 'PAYMENT_RECONCILIATION_REQUIRED' &&
       result.status !== 'PAYMENT_EXISTING'
     ) {
-      setError('The local payment simulation could not start safely. No payment details or money were involved.')
+      setError('The payment step could not start safely. No payment details were processed.')
       return
     }
     if (refreshPayment()) {
-      setAnnouncement('Mock payment status changed. Check the existing payment instead of starting again.')
+      setAnnouncement('Payment status pending. Check the existing payment instead of starting again.')
       document.getElementById('payment-status-heading')?.focus()
     }
   }
@@ -66,11 +66,11 @@ export function PaymentApplication(props: PaymentApplicationProps) {
       return
     }
     if (result.status !== 'PAYMENT_CONFIRMED' && result.status !== 'PAYMENT_EXISTING') {
-      setError('The existing mock payment could not be reconciled. No second attempt was created.')
+      setError('The existing payment status could not be checked. No second attempt was created.')
       return
     }
     if (refreshPayment()) {
-      setAnnouncement('Payment confirmed in the local simulation. No money was transferred.')
+      setAnnouncement('Payment confirmed. No real payment was processed.')
       document.getElementById('payment-status-heading')?.focus()
     }
   }
@@ -79,8 +79,8 @@ export function PaymentApplication(props: PaymentApplicationProps) {
     return (
       <section className={styles.paymentPage} aria-labelledby="payment-heading">
         <p className={styles.eyebrow}>Payment · Step 5 of 6</p>
-        <h2 id="payment-heading" tabIndex={-1}>Mock payment is unavailable</h2>
-        <p role="alert">The authoritative synthetic Case could not provide a safe payment summary.</p>
+        <h2 id="payment-heading" tabIndex={-1}>Payment is unavailable</h2>
+        <p role="alert">The application could not provide a payment summary.</p>
       </section>
     )
   }
@@ -98,9 +98,9 @@ export function PaymentApplication(props: PaymentApplicationProps) {
       </Link>
       <header className={styles.pageHeader}>
         <p className={styles.eyebrow}>Payment · Step 5 of 6</p>
-        <h2 id="payment-heading" tabIndex={-1}>Complete the demo payment</h2>
-        <p>This step uses a local payment simulation. No money or payment details are involved.</p>
-        <p className={styles.caseReference}>Synthetic case {payment.caseId}</p>
+        <h2 id="payment-heading" tabIndex={-1}>Pay visa fee</h2>
+        <p>No real payment will be processed in this prototype.</p>
+        <p className={styles.caseReference}>Application reference {applicantReference(payment.caseId)}</p>
       </header>
 
       <section className={styles.summaryPanel} aria-labelledby="payment-summary-heading">
@@ -114,11 +114,11 @@ export function PaymentApplication(props: PaymentApplicationProps) {
             <dd>{purposeName}</dd>
           </div>
           <div>
-            <dt>Demo fee</dt>
-            <dd>{payment.syntheticFee.amount} {payment.syntheticFee.unit}</dd>
+            <dt>Visa fee</dt>
+            <dd>Not calculated in this prototype</dd>
           </div>
         </dl>
-        <strong className={styles.nonPayable}>{payment.syntheticFee.label}</strong>
+        <strong className={styles.nonPayable}>No real payment will be processed</strong>
       </section>
 
       <div className={styles.statusAnnouncement} aria-live="polite" aria-atomic="true">
@@ -127,12 +127,12 @@ export function PaymentApplication(props: PaymentApplicationProps) {
 
       {isNotStarted ? (
         <section className={styles.actionPanel} aria-labelledby="payment-action-heading">
-          <p className={styles.sectionLabel}>Local simulation</p>
-          <h3 id="payment-action-heading">Start one mock payment attempt</h3>
+          <p className={styles.sectionLabel}>Visa fee</p>
+          <h3 id="payment-action-heading">Continue to payment</h3>
           <p>No card, bank account, or payment information is required.</p>
           {error ? <p className={styles.inlineError} role="alert">{error}</p> : null}
           <button className={styles.primaryButton} type="button" onClick={startPayment}>
-            Start mock payment <span aria-hidden="true">→</span>
+            Pay visa fee <span aria-hidden="true">→</span>
           </button>
           <Link className={styles.secondaryButton} to={props.reviewPath}>
             Back to submitted application
@@ -143,16 +143,16 @@ export function PaymentApplication(props: PaymentApplicationProps) {
       {isUncertain ? (
         <section className={styles.uncertainPanel} aria-labelledby="payment-status-heading">
           <div className={styles.statusMarker} aria-hidden="true">!</div>
-          <p className={styles.sectionLabel}>Result needs a status check</p>
-          <h3 id="payment-status-heading" tabIndex={-1}>Mock payment is pending. No real payment was made.</h3>
-          <p>Your submitted demo application is safe while this local result is reconciled.</p>
-          <p className={styles.duplicateGuidance}>Do not start another mock payment. Check mock payment status instead.</p>
+          <p className={styles.sectionLabel}>Payment update</p>
+          <h3 id="payment-status-heading" tabIndex={-1}>Payment status pending</h3>
+          <p>We have not yet confirmed this payment.</p>
+          <p className={styles.duplicateGuidance}>Do not make another payment.</p>
           {payment.syntheticReference ? (
-            <p className={styles.paymentReference}>Synthetic payment reference {payment.syntheticReference}</p>
+            <p className={styles.paymentReference}>Payment reference {applicantReference(payment.syntheticReference)}</p>
           ) : null}
           {error ? <p className={styles.inlineError} role="alert">{error}</p> : null}
           <button className={styles.primaryButton} type="button" onClick={checkPaymentStatus}>
-            Check mock payment status <span aria-hidden="true">→</span>
+            Check payment status <span aria-hidden="true">→</span>
           </button>
         </section>
       ) : null}
@@ -160,9 +160,9 @@ export function PaymentApplication(props: PaymentApplicationProps) {
       {isIntermediate ? (
         <section className={styles.uncertainPanel} aria-labelledby="payment-status-heading">
           <div className={styles.statusMarker} aria-hidden="true">…</div>
-          <p className={styles.sectionLabel}>Existing mock payment</p>
-          <h3 id="payment-status-heading" tabIndex={-1}>Mock payment status is still pending</h3>
-          <p>Do not start another mock payment. The existing synthetic attempt must be resolved first.</p>
+          <p className={styles.sectionLabel}>Payment update</p>
+          <h3 id="payment-status-heading" tabIndex={-1}>Payment status pending</h3>
+          <p>We have not yet confirmed this payment. Do not make another payment.</p>
           {error ? <p className={styles.inlineError} role="alert">{error}</p> : null}
         </section>
       ) : null}
@@ -170,19 +170,19 @@ export function PaymentApplication(props: PaymentApplicationProps) {
       {isConfirmed ? (
         <section className={styles.confirmedPanel} aria-labelledby="payment-status-heading" aria-live="polite">
           <div className={styles.completionMarker} aria-hidden="true">✓</div>
-          <p className={styles.sectionLabel}>Local result</p>
+          <p className={styles.sectionLabel}>Payment update</p>
           <h3 id="payment-status-heading" tabIndex={-1}>Payment confirmed</h3>
-          <p>This payment was confirmed only inside the local simulation. No money was transferred.</p>
+          <p>Your application can now move to the review status stage.</p>
           <dl className={styles.confirmedFacts}>
             <div>
-              <dt>Demo fee</dt>
-              <dd>{payment.syntheticFee.amount} {payment.syntheticFee.unit}</dd>
+              <dt>Visa fee</dt>
+              <dd>Payment confirmed</dd>
             </div>
           </dl>
           <div className={styles.nextStep}>
             <span>Next</span>
             <strong>Status</strong>
-            <p>Your synthetic application can now move to the status and review stage.</p>
+            <p>Track your application and review its current status.</p>
           </div>
           <Link className={styles.primaryButton} to={props.statusPath}>
             Continue to status <span aria-hidden="true">→</span>

@@ -50,7 +50,7 @@ async function reachA04(
 ) {
   await user.click(screen.getByRole('radio', { name: new RegExp(scenario, 'i') }))
   await user.click(screen.getByRole('link', { name: 'Continue' }))
-  await user.click(screen.getByRole('button', { name: 'Continue with this demo' }))
+  await user.click(screen.getByRole('button', { name: 'Continue application' }))
   await user.click(screen.getByRole('button', { name: 'Start application' }))
 
   const selects = screen.getAllByRole('combobox')
@@ -73,7 +73,7 @@ async function reachA04(
   }
   await user.click(screen.getByRole('button', { name: 'Continue to documents' }))
   await user.click(screen.getByRole('link', { name: 'Prepare documents' }))
-  expect(screen.getByRole('heading', { name: 'Prepare your demo documents' })).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: 'Prepare your documents' })).toBeInTheDocument()
 }
 
 function documentCard(name: string): HTMLElement {
@@ -89,7 +89,7 @@ async function checkCurrentFixture(
   user: ReturnType<typeof userEvent.setup>,
   name: string,
 ) {
-  await user.click(within(documentCard(name)).getByRole('button', { name: /Run technical check|Check replacement/ }))
+  await user.click(within(documentCard(name)).getByRole('button', { name: /Check document|Check replacement/ }))
 }
 
 describe('A04 document preparation', () => {
@@ -99,18 +99,18 @@ describe('A04 document preparation', () => {
     render(<App services={createAppRuntime({ store })} />)
     await reachA04(user)
 
-    expect(screen.getByRole('heading', { level: 3, name: 'Synthetic portrait' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { level: 3, name: 'Synthetic passport page' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { level: 3, name: 'Synthetic hospital letter' })).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: 'Bundled demo hospital letter' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 3, name: 'Recent photograph' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 3, name: 'Passport bio page' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 3, name: 'Hospital letter' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Provided hospital letter' })).toBeInTheDocument()
     expect(screen.queryByText(/hospital letter V2/i)).not.toBeInTheDocument()
 
-    await checkCurrentFixture(user, 'Synthetic portrait')
-    await checkCurrentFixture(user, 'Synthetic passport page')
-    await checkCurrentFixture(user, 'Synthetic hospital letter')
+    await checkCurrentFixture(user, 'Recent photograph')
+    await checkCurrentFixture(user, 'Passport bio page')
+    await checkCurrentFixture(user, 'Hospital letter')
 
     expect(screen.getByRole('heading', { name: 'Documents ready' })).toBeInTheDocument()
-    expect(screen.getByText('All required demo documents passed the local technical check.')).toBeInTheDocument()
+    expect(screen.getByText('All required documents are ready.')).toBeInTheDocument()
     expect(screen.getAllByText('Review', { exact: true }).length).toBeGreaterThanOrEqual(1)
     expect(screen.queryByRole('heading', { name: /Review your application/i })).not.toBeInTheDocument()
     expect(requireCase(store).application.state).toBe('IN_PROGRESS')
@@ -123,12 +123,12 @@ describe('A04 document preparation', () => {
     await reachA04(user, 'Tourism')
 
     expect(screen.getAllByRole('heading', { level: 3 })).toHaveLength(2)
-    expect(screen.getByRole('heading', { level: 3, name: 'Synthetic portrait' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { level: 3, name: 'Synthetic passport page' })).toBeInTheDocument()
-    expect(screen.queryByRole('heading', { level: 3, name: 'Synthetic hospital letter' })).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 3, name: 'Recent photograph' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 3, name: 'Passport bio page' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { level: 3, name: 'Hospital letter' })).not.toBeInTheDocument()
 
-    await checkCurrentFixture(user, 'Synthetic portrait')
-    await checkCurrentFixture(user, 'Synthetic passport page')
+    await checkCurrentFixture(user, 'Recent photograph')
+    await checkCurrentFixture(user, 'Passport bio page')
     expect(screen.getByRole('heading', { name: 'Documents ready' })).toBeInTheDocument()
   })
 
@@ -138,21 +138,21 @@ describe('A04 document preparation', () => {
     render(<App services={createAppRuntime({ store })} />)
     await reachA04(user)
 
-    const passportCard = documentCard('Synthetic passport page')
-    const selector = within(passportCard).getByRole('combobox', { name: 'Bundled demo file' })
+    const passportCard = documentCard('Passport bio page')
+    const selector = within(passportCard).getByRole('combobox', { name: 'Sample document' })
     await user.selectOptions(selector, 'SYN-FIXTURE-PASSPORT-UNCLEAR-001')
-    await checkCurrentFixture(user, 'Synthetic passport page')
+    await checkCurrentFixture(user, 'Passport bio page')
 
-    expect(within(documentCard('Synthetic passport page')).getByText('Needs attention')).toBeInTheDocument()
+    expect(within(documentCard('Passport bio page')).getByText('Needs attention')).toBeInTheDocument()
     expect(
       screen.getByText(
-        'This demo passport page is too unclear to check. Choose the clearer bundled file and try again.',
+        'This passport bio page is too unclear to check. Choose the clearer copy and try again.',
       ),
     ).toBeInTheDocument()
 
     await user.selectOptions(selector, 'SYN-FIXTURE-PASSPORT-VALID-001')
-    await checkCurrentFixture(user, 'Synthetic passport page')
-    expect(within(documentCard('Synthetic passport page')).getByText('Ready')).toBeInTheDocument()
+    await checkCurrentFixture(user, 'Passport bio page')
+    expect(within(documentCard('Passport bio page')).getByText('Ready')).toBeInTheDocument()
 
     const passport = requireCase(store).documents.find(
       ({ requirementId }) => requirementId === 'REQ-PASSPORT-PAGE-1',
@@ -170,14 +170,14 @@ describe('A04 document preparation', () => {
     const store = createPersistenceStore(storage)
     const firstRender = render(<App services={createAppRuntime({ store })} />)
     await reachA04(user)
-    await checkCurrentFixture(user, 'Synthetic portrait')
+    await checkCurrentFixture(user, 'Recent photograph')
 
     const beforeReload = JSON.stringify(requireCase(store))
     firstRender.unmount()
     render(<App services={createAppRuntime({ store: createPersistenceStore(storage) })} />)
 
-    expect(screen.getByRole('heading', { name: 'Prepare your demo documents' })).toBeInTheDocument()
-    expect(within(documentCard('Synthetic portrait')).getByText('Ready')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Prepare your documents' })).toBeInTheDocument()
+    expect(within(documentCard('Recent photograph')).getByText('Ready')).toBeInTheDocument()
     expect(JSON.stringify(requireCase(createPersistenceStore(storage)))).toBe(beforeReload)
   })
 
@@ -186,14 +186,14 @@ describe('A04 document preparation', () => {
     const store = createPersistenceStore(new MemoryStorage())
     render(<App services={createAppRuntime({ store })} />)
     await reachA04(user)
-    await checkCurrentFixture(user, 'Synthetic portrait')
+    await checkCurrentFixture(user, 'Recent photograph')
 
     const prepared = requireCase(store)
     const revision = prepared.revision
     const eventCount = prepared.auditEvents.length
     expect(
-      within(documentCard('Synthetic portrait')).getByRole('button', {
-        name: 'Technical check complete',
+      within(documentCard('Recent photograph')).getByRole('button', {
+        name: 'Document checked',
       }),
     ).toBeDisabled()
     expect(requireCase(store).revision).toBe(revision)
@@ -222,11 +222,11 @@ describe('A04 document preparation', () => {
     render(<App services={services} />)
     await reachA04(user)
 
-    await checkCurrentFixture(user, 'Synthetic portrait')
+    await checkCurrentFixture(user, 'Recent photograph')
     expect(
-      screen.getByText('The local demo technical check is unavailable. Nothing was marked Ready.'),
+      screen.getByText('The document check is unavailable. Nothing was marked Ready.'),
     ).toBeInTheDocument()
-    expect(within(documentCard('Synthetic portrait')).getByText('Not checked')).toBeInTheDocument()
+    expect(within(documentCard('Recent photograph')).getByText('Not checked')).toBeInTheDocument()
     expect(requireCase(store).documents).toEqual([])
   })
 })

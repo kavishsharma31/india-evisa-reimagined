@@ -62,22 +62,22 @@ describe('A08 document correction', () => {
     renderCorrection()
 
     expect(screen.getByRole('heading', { name: 'Replace your hospital letter' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Hospital letter V1' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Current hospital letter' })).toBeInTheDocument()
     expect(screen.getByText('Needs correction')).toBeInTheDocument()
-    expect(screen.getByText('Hospital letter V2 — corrected demo')).toBeInTheDocument()
-    expect(screen.getByText('SYNTHETIC — NOT VALID')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Use corrected demo letter' })).toBeInTheDocument()
+    expect(screen.getByText('Corrected hospital letter')).toBeInTheDocument()
+    expect(screen.queryByText('SYNTHETIC — NOT VALID')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Use corrected letter' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /V1/ })).not.toBeInTheDocument()
     expect(document.querySelector('input[type="file"]')).toBeNull()
   })
 
   it('prepares V2 through local preflight while retaining superseded V1 history', async () => {
     const { store } = renderCorrection()
-    await userEvent.click(screen.getByRole('button', { name: 'Use corrected demo letter' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Use corrected letter' }))
 
     expect(screen.getByText('Correction ready')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Submit correction' })).toBeInTheDocument()
-    expect(screen.getByText(/V1 remains preserved in version history as superseded/)).toBeInTheDocument()
+    expect(screen.getByText('The previous hospital letter remains in the application history.')).toBeInTheDocument()
     const hospital = requireCase(store).documents.find(
       ({ requirementId }) => requirementId === 'REQ-HOSPITAL-LETTER-1',
     )
@@ -89,7 +89,7 @@ describe('A08 document correction', () => {
 
   it('submits the prepared correction and returns control to unified status', async () => {
     const { services, store, onCorrectionSubmitted } = renderCorrection()
-    await userEvent.click(screen.getByRole('button', { name: 'Use corrected demo letter' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Use corrected letter' }))
     await userEvent.click(screen.getByRole('button', { name: 'Submit correction' }))
 
     expect(onCorrectionSubmitted).toHaveBeenCalledOnce()
@@ -103,7 +103,7 @@ describe('A08 document correction', () => {
       status: 'STATUS_INSPECTED',
       headline: 'Under review',
       applicantActionRequired: false,
-      waitMessage: 'No action is needed now. Synthetic scrutiny is continuing.',
+      waitMessage: 'We will update this page when the review is complete or if we need more information.',
     })
   })
 })

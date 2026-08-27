@@ -136,11 +136,11 @@ describe('runtime A08 Medical correction and resubmission', () => {
     expect(runtime.inspectStatus({ caseId })).toMatchObject({
       status: 'STATUS_INSPECTED',
       headline: 'Action required',
-      explanation: 'Your synthetic hospital letter needs one correction.',
+      explanation: 'Your hospital letter needs one correction.',
       applicantActionRequired: true,
       nextAction: 'REPLACE_HOSPITAL_LETTER',
       actionGuidance:
-        'The admission date on the demo hospital letter could not be confirmed during synthetic review.',
+        'The admission date on the hospital letter could not be confirmed during review.',
     })
 
     const seedStorage = new MemoryStorage()
@@ -227,7 +227,7 @@ describe('runtime A08 Medical correction and resubmission', () => {
       applicantActionRequired: false,
       nextAction: null,
       demoReviewAction: 'COMPLETE_SYNTHETIC_REVIEW',
-      waitMessage: 'No action is needed now. Synthetic scrutiny is continuing.',
+      waitMessage: 'We will update this page when the review is complete or if we need more information.',
     })
   })
 

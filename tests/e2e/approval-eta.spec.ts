@@ -1,6 +1,8 @@
 import { AxeBuilder } from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
 
+import { applicantReference } from '../../src/app/applicant-labels.js'
+
 const P0_STORAGE_KEY = 'india-evisa-reimagined:p0'
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
@@ -27,63 +29,63 @@ async function reachStatus(
 ) {
   await page.getByText(scenario, { exact: true }).click()
   await page.getByRole('link', { name: 'Continue' }).click()
-  await page.getByRole('button', { name: 'Continue with this demo' }).click()
+  await page.getByRole('button', { name: 'Continue application' }).click()
   await page.getByRole('button', { name: 'Start application' }).click()
-  await page.getByLabel(/Choose the synthetic policy cohort/).selectOption('SYN-POLICY-COHORT-A')
-  await page.getByLabel(/Choose the synthetic passport class/).selectOption(
+  await page.getByLabel('Country of nationality').selectOption('SYN-POLICY-COHORT-A')
+  await page.getByLabel('Passport type').selectOption(
     'SYNTHETIC_STANDARD_PASSPORT',
   )
-  await page.getByLabel(/Choose the fictional planned arrival date/).selectOption(
+  await page.getByLabel('Expected date of arrival').selectOption(
     scenario === 'Medical treatment' ? '2099-04-14' : '2099-05-10',
   )
-  await page.getByLabel(/Confirm the synthetic (?:Medical treatment|tourism) intent/).selectOption(
+  await page.getByLabel(scenario === 'Medical treatment' ? 'Purpose of medical visit' : 'Purpose of visit').selectOption(
     scenario === 'Medical treatment' ? 'SYNTHETIC_MEDICAL_TREATMENT' : 'SYNTHETIC_TOURISM',
   )
   if (scenario === 'Medical treatment') {
-    await page.getByLabel(/Choose the fictional proposed admission date/).selectOption('2099-04-18')
+    await page.getByLabel('Proposed hospital admission date').selectOption('2099-04-18')
     await page.getByRole('radio', { name: 'Yes' }).check()
   } else {
-    await page.getByLabel(/Choose the fictional planned exit date/).selectOption('2099-05-17')
+    await page.getByLabel('Expected date of departure').selectOption('2099-05-17')
   }
   await page.getByRole('button', { name: 'Continue to documents' }).click()
   await page.getByRole('link', { name: 'Prepare documents' }).click()
   const documentNames = [
-    'Synthetic portrait',
-    'Synthetic passport page',
-    ...(scenario === 'Medical treatment' ? ['Synthetic hospital letter'] : []),
+    'Recent photograph',
+    'Passport bio page',
+    ...(scenario === 'Medical treatment' ? ['Hospital letter'] : []),
   ]
   for (const documentName of documentNames) {
     const card = page.locator('article').filter({
       has: page.getByRole('heading', { level: 3, name: documentName }),
     })
-    await card.getByRole('button', { name: 'Run technical check' }).click()
+    await card.getByRole('button', { name: 'Check document' }).click()
   }
   await page.getByRole('link', { name: 'Review application' }).click()
   await page.getByRole('checkbox', {
-    name: 'I confirm these synthetic demo details are ready for simulated submission.',
+    name: 'I confirm these application details are complete and ready to submit.',
   }).check()
-  await page.getByRole('button', { name: 'Submit demo application' }).click()
-  await page.getByRole('button', { name: 'Start mock payment' }).click()
-  await page.getByRole('button', { name: 'Check mock payment status' }).click()
+  await page.getByRole('button', { name: 'Submit application' }).click()
+  await page.getByRole('button', { name: 'Pay visa fee' }).click()
+  await page.getByRole('button', { name: 'Check payment status' }).click()
   await page.getByRole('link', { name: 'Continue to status' }).click()
-  await page.getByRole('button', { name: 'Begin synthetic review' }).click()
+  await page.getByRole('button', { name: 'Begin review' }).click()
   await expect(page.getByRole('heading', { name: 'Under review' })).toBeVisible()
 }
 
 async function correctMedicalHospitalLetter(page: Page) {
-  await page.getByText('Demo review control').click()
-  await page.getByRole('button', { name: 'Simulate hospital-letter review outcome' }).click()
+  await page.getByText('Review update').click()
+  await page.getByRole('button', { name: 'Check application status' }).click()
   await page.getByRole('link', { name: 'Replace hospital letter' }).click()
-  await page.getByRole('button', { name: 'Use corrected demo letter' }).click()
+  await page.getByRole('button', { name: 'Use corrected letter' }).click()
   await page.getByRole('button', { name: 'Submit correction' }).click()
   await expect(page.getByRole('heading', { name: 'Under review' })).toBeVisible()
 }
 
 async function completeSyntheticReview(page: Page) {
-  await page.getByText('Demo review control').click()
-  await page.getByRole('button', { name: 'Complete synthetic review' }).click()
+  await page.getByText('Review update').click()
+  await page.getByRole('button', { name: 'Check application status' }).click()
   await expect(page).toHaveURL(/\/application\/[^/]+\/eta(?:\?demo=1)?$/)
-  await expect(page.getByRole('heading', { name: 'Synthetic ETA issued' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Electronic Travel Authorization issued' })).toBeVisible()
 }
 
 async function loadApprovalEvidence(page: Page) {
@@ -148,12 +150,12 @@ test('Medical A09 accepts corrected documents, approves scrutiny, and issues the
   await completeSyntheticReview(page)
 
   await expect(page.getByText(
-    'SYNTHETIC — NOT VALID. This is not a visa or travel document.',
+    'SAMPLE — NOT VALID. This is not a visa or travel document.',
   )).toBeVisible()
   await expect(page.getByText(
     'Entry into India is decided separately at the border.',
   )).toBeVisible()
-  await expect(page.getByText('SYN-ETA-MED-001')).toBeVisible()
+  await expect(page.getByText('ETA-MED-001')).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Under review' })).toHaveCount(0)
   await expect(page.getByRole('heading', { name: 'Action required' })).toHaveCount(0)
   const evidence = await loadApprovalEvidence(page)
@@ -183,8 +185,8 @@ test('A09 issued reload is mutation-free and returns the same deterministic ETA'
 
   await page.reload()
 
-  await expect(page.getByRole('heading', { name: 'Synthetic ETA issued' })).toBeVisible()
-  await expect(page.getByText(String(issued.etaReference))).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Electronic Travel Authorization issued' })).toBeVisible()
+  await expect(page.getByText(applicantReference(String(issued.etaReference)))).toBeVisible()
   expect(await loadApprovalEvidence(page)).toEqual(issued)
 })
 
@@ -194,11 +196,11 @@ test('Tourist reuses the same A09 approval and ETA outcome with two accepted doc
   await completeSyntheticReview(page)
 
   await expect(
-    page.getByRole('region', { name: 'Synthetic ETA issued' }).getByText('Tourism'),
+    page.getByRole('region', { name: 'Electronic Travel Authorization issued' }).getByText('Tourism'),
   ).toBeVisible()
-  await expect(page.getByText('SYN-ETA-TOURIST-001')).toBeVisible()
+  await expect(page.getByText('ETA-TOURIST-001')).toBeVisible()
   await expect(page.getByText(
-    'SYNTHETIC — NOT VALID. This is not a visa or travel document.',
+    'SAMPLE — NOT VALID. This is not a visa or travel document.',
   )).toBeVisible()
   const evidence = await loadApprovalEvidence(page)
   expect(evidence.documents.map(({ activeState }) => activeState)).toEqual([
@@ -218,12 +220,15 @@ test('A09 issued outcome stays full-width, readable, overflow-free, and axe-clea
 
   for (const width of [360, 390, 430, 768, 1280]) {
     await page.setViewportSize({ width, height: width < 768 ? 900 : 960 })
-    const etaPanel = page.getByRole('region', { name: 'Synthetic ETA details' })
-    const watermark = etaPanel.getByText('SYNTHETIC — NOT VALID', { exact: true })
+    const etaPanel = page.getByRole('region', {
+      name: 'Electronic Travel Authorization',
+      exact: true,
+    })
+    const watermark = etaPanel.getByText('SAMPLE — NOT VALID', { exact: true })
     const warning = page.getByText(
-      'SYNTHETIC — NOT VALID. This is not a visa or travel document.',
+      'SAMPLE — NOT VALID. This is not a visa or travel document.',
     )
-    const etaPageWidth = (await page.getByRole('region', { name: 'Synthetic ETA issued' }).boundingBox())?.width ?? 0
+    const etaPageWidth = (await page.getByRole('region', { name: 'Electronic Travel Authorization issued' }).boundingBox())?.width ?? 0
     const etaWidth = (await etaPanel.boundingBox())?.width ?? 0
     expect(etaWidth).toBeGreaterThan(etaPageWidth - 2)
     await expect(watermark).toBeVisible()

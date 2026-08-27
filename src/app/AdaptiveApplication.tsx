@@ -5,7 +5,7 @@ import type { SyntheticId } from '../domain'
 import type { PolicyEvaluationResult } from '../policy'
 import type { RuntimeResumeResult } from '../runtime'
 import type { AppRuntimeServices } from './create-app-runtime'
-import { applicantAnswerLabel } from './applicant-labels'
+import { applicantAnswerLabel, applicantQuestionPrompt } from './applicant-labels'
 import styles from './AdaptiveApplication.module.css'
 
 type ResumedCase = Extract<RuntimeResumeResult, { status: 'CASE_RESUMED' }>
@@ -98,7 +98,7 @@ export function AdaptiveApplication(props: AdaptiveApplicationProps) {
       result.status === 'STORAGE_UNAVAILABLE'
         ? 'Progress cannot currently be preserved in this browser.'
         : result.status === 'STORAGE_REQUIRES_RESET'
-          ? 'Saved demo data can no longer be read. Reset is required before progress can be preserved.'
+          ? 'Saved application data can no longer be read. Clear it before continuing.'
           : 'Could not save changes. Your current answer remains visible but is not preserved yet.',
     )
     return false
@@ -132,7 +132,7 @@ export function AdaptiveApplication(props: AdaptiveApplicationProps) {
       if (question.required && answer === undefined) {
         nextErrors[question.id] = 'Choose an answer for this required question.'
       } else if (answer !== undefined && !question.allowedValues.includes(answer)) {
-        nextErrors[question.id] = 'Choose one of the controlled synthetic options.'
+        nextErrors[question.id] = 'Choose one of the available options.'
       }
     }
 
@@ -155,7 +155,7 @@ export function AdaptiveApplication(props: AdaptiveApplicationProps) {
       <section className={styles.applicationPanel} aria-labelledby="application-heading">
         <p className={styles.eyebrow}>Application · Step 2 of 6</p>
         <h2 id="application-heading" tabIndex={-1}>Application questions are unavailable</h2>
-        <p role="alert">The pinned demo policy did not provide a question manifest. No answers were saved.</p>
+        <p role="alert">The application questions could not be loaded. No answers were saved.</p>
       </section>
     )
   }
@@ -166,11 +166,11 @@ export function AdaptiveApplication(props: AdaptiveApplicationProps) {
         <div className={styles.completionMarker} aria-hidden="true">✓</div>
         <p className={styles.eyebrow}>Application · Step 2 of 6</p>
         <h2 id="application-heading" tabIndex={-1}>Application details saved</h2>
-        <p>Your synthetic trip details are saved in this browser.</p>
+        <p>Your application details are saved in this browser.</p>
         <div className={styles.nextStep}>
           <span>Next</span>
           <strong>Documents</strong>
-          <p>Use bundled synthetic demo files to prepare the policy-required documents.</p>
+          <p>Check the required documents before reviewing your application.</p>
         </div>
         <div className={styles.formActions}>
           <Link className={styles.primaryButton} to={props.documentsPath}>
@@ -194,13 +194,13 @@ export function AdaptiveApplication(props: AdaptiveApplicationProps) {
       <div className={styles.applicationHeader}>
         <p className={styles.eyebrow}>Application · Step 2 of 6</p>
         <h2 id="application-heading" tabIndex={-1}>Tell us about this trip</h2>
-        <p>Answer only the synthetic demo questions needed for this purpose.</p>
+        <p>Provide the information requested for this travel purpose.</p>
         <div className={styles.purposeContext}>
           <span>Selected purpose</span>
           <strong>{props.purposeName}</strong>
         </div>
         <p className={styles.syntheticReminder}>
-          No real personal details are required. Use only the controlled synthetic choices shown here.
+          This prototype shows a simplified application flow.
         </p>
       </div>
 
@@ -217,7 +217,7 @@ export function AdaptiveApplication(props: AdaptiveApplicationProps) {
                 : [
                     <li key={question.id}>
                       <button type="button" onClick={() => focusQuestion(index)}>
-                        {question.prompt}
+                        {applicantQuestionPrompt(question.id, question.prompt)}
                       </button>
                     </li>,
                   ],
@@ -240,7 +240,7 @@ export function AdaptiveApplication(props: AdaptiveApplicationProps) {
               >
                 <legend>
                   <span className={styles.questionNumber}>{String(index + 1).padStart(2, '0')}</span>
-                  <span>{question.prompt}</span>
+                  <span>{applicantQuestionPrompt(question.id, question.prompt)}</span>
                   {question.required ? <span className={styles.required}>Required</span> : null}
                 </legend>
                 <div className={styles.choiceGrid}>
@@ -265,7 +265,7 @@ export function AdaptiveApplication(props: AdaptiveApplicationProps) {
               <div className={styles.questionGroup} key={question.id}>
                 <label htmlFor={controlId(index)}>
                   <span className={styles.questionNumber}>{String(index + 1).padStart(2, '0')}</span>
-                  <span>{question.prompt}</span>
+                  <span>{applicantQuestionPrompt(question.id, question.prompt)}</span>
                   {question.required ? <span className={styles.required}>Required</span> : null}
                 </label>
                 <select
@@ -277,7 +277,7 @@ export function AdaptiveApplication(props: AdaptiveApplicationProps) {
                   aria-describedby={describedBy}
                   onChange={(changeEvent) => changeAnswer(question, changeEvent.currentTarget.value)}
                 >
-                  <option value="">Choose a synthetic option</option>
+                  <option value="">Choose an option</option>
                   {question.allowedValues.map((value) => (
                     <option value={value} key={value}>{applicantAnswerLabel(value)}</option>
                   ))}

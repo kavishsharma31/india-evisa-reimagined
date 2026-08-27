@@ -55,7 +55,7 @@ async function startApplication(
 ) {
   await user.click(screen.getByRole('radio', { name: new RegExp(scenarioName, 'i') }))
   await user.click(screen.getByRole('link', { name: 'Continue' }))
-  await user.click(screen.getByRole('button', { name: 'Continue with this demo' }))
+  await user.click(screen.getByRole('button', { name: 'Continue application' }))
   await user.click(screen.getByRole('button', { name: 'Start application' }))
   expect(screen.getByRole('heading', { name: 'Tell us about this trip' })).toBeInTheDocument()
 }
@@ -88,8 +88,8 @@ describe('A03 adaptive application', () => {
     await startApplication(user)
 
     expect(screen.getByText('Application · Step 2 of 6', { exact: true })).toBeInTheDocument()
-    expect(screen.getByText('Choose the fictional proposed admission date.', { exact: true })).toBeInTheDocument()
-    expect(screen.getByText('Show synthetic attendant guidance?', { exact: true })).toBeInTheDocument()
+    expect(screen.getByText('Proposed hospital admission date', { exact: true })).toBeInTheDocument()
+    expect(screen.getByText('Will a medical attendant travel with you?', { exact: true })).toBeInTheDocument()
     expect(screen.queryByText('QM-MEDICAL-1', { exact: true })).not.toBeInTheDocument()
     expect(screen.queryByText('SYN-MEDICAL-001', { exact: true })).not.toBeInTheDocument()
   })
@@ -101,10 +101,10 @@ describe('A03 adaptive application', () => {
 
     await startApplication(user, 'Tourism')
 
-    expect(screen.getByText('Confirm the synthetic tourism intent.', { exact: true })).toBeInTheDocument()
-    expect(screen.getByText('Choose the fictional planned exit date.', { exact: true })).toBeInTheDocument()
-    expect(screen.queryByText('Choose the fictional proposed admission date.', { exact: true })).not.toBeInTheDocument()
-    expect(screen.queryByText('Show synthetic attendant guidance?', { exact: true })).not.toBeInTheDocument()
+    expect(screen.getByText('Purpose of visit', { exact: true })).toBeInTheDocument()
+    expect(screen.getByText('Expected date of departure', { exact: true })).toBeInTheDocument()
+    expect(screen.queryByText('Proposed hospital admission date', { exact: true })).not.toBeInTheDocument()
+    expect(screen.queryByText('Will a medical attendant travel with you?', { exact: true })).not.toBeInTheDocument()
   })
 
   it('autosaves each changed answer once and does not duplicate an already-saved selection', async () => {

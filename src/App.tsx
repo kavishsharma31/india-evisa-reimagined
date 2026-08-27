@@ -21,7 +21,7 @@ import { PaymentApplication } from './app/PaymentApplication'
 import { ReviewApplication } from './app/ReviewApplication'
 import { StatusApplication } from './app/StatusApplication'
 import { SyntheticEta } from './app/SyntheticEta'
-import { DOCUMENT_NAMES, PURPOSE_NAMES } from './app/applicant-labels'
+import { applicantQuestionPrompt, applicantReference, DOCUMENT_NAMES, PURPOSE_NAMES } from './app/applicant-labels'
 import { createAppRuntime, type AppRuntimeServices } from './app/create-app-runtime'
 import {
   SCENARIOS,
@@ -41,7 +41,7 @@ import type { PolicyEvaluationResult } from './policy'
 import styles from './App.module.css'
 
 const PROTOTYPE_NOTICE =
-  'UNOFFICIAL HACKATHON PROTOTYPE — SYNTHETIC DATA ONLY — CANNOT SUBMIT A VISA APPLICATION'
+  'UNOFFICIAL HACKATHON PROTOTYPE — NO REAL APPLICATIONS OR PAYMENTS'
 
 type AppProps = Readonly<{ services?: AppRuntimeServices }>
 
@@ -56,7 +56,6 @@ function beginDraftIdempotencyKey(caseId: SyntheticId): SyntheticId {
 function PrototypeNotice() {
   return (
     <p className={styles.prototypeNotice} role="note">
-      <span className={styles.noticeMarker} aria-hidden="true">Demo</span>
       <span>{PROTOTYPE_NOTICE}</span>
     </p>
   )
@@ -84,7 +83,7 @@ function ScenarioSelection({ services }: { services: AppRuntimeServices }) {
       </div>
 
       <fieldset className={styles.scenarioFieldset}>
-        <legend className={styles.visuallyHidden}>Choose one synthetic travel purpose</legend>
+        <legend className={styles.visuallyHidden}>Choose one travel purpose</legend>
         {SCENARIOS.map((scenario) => (
           <label
             className={styles.scenarioCard}
@@ -101,7 +100,7 @@ function ScenarioSelection({ services }: { services: AppRuntimeServices }) {
                 setSelectionError(
                   result.status === 'POLICY_EVALUATED'
                     ? null
-                    : 'We could not confirm support for that demo scenario. No application has been created.',
+                    : 'We could not confirm that purpose. No application has been created.',
                 )
               }}
             />
@@ -114,7 +113,7 @@ function ScenarioSelection({ services }: { services: AppRuntimeServices }) {
             <span className={styles.radioIndicator} aria-hidden="true" />
           </label>
         ))}
-        <p className={styles.selectionHint}>Select a purpose, then continue to its demo-policy guidance.</p>
+        <p className={styles.selectionHint}>Select a purpose, then continue to view the requirements.</p>
         {selectionError ? <p className={styles.inlineError} role="alert">{selectionError}</p> : null}
         {continuePath === null ? (
           <button className={styles.primaryButton} type="button" disabled>Continue</button>
@@ -125,10 +124,6 @@ function ScenarioSelection({ services }: { services: AppRuntimeServices }) {
         )}
       </fieldset>
 
-      <div className={styles.safetyNote}>
-        <span aria-hidden="true">✓</span>
-        <p>No real details, documents, or payment information are requested.</p>
-      </div>
     </section>
   )
 }
@@ -140,12 +135,14 @@ function PurposeGuidance(props: {
   error: string | null
   onContinue(): void
 }) {
+  const location = useLocation()
+  const demoEnabled = new URLSearchParams(location.search).get('demo') === '1'
   const purposeName = props.evaluation.suggestedPurposeFamily
     ? PURPOSE_NAMES[props.evaluation.suggestedPurposeFamily]
     : 'Selected purpose'
   const questions = props.evaluation.questionManifest?.questions ?? []
   const requirements = props.evaluation.documentManifest?.requirements ?? []
-  const fee = props.evaluation.syntheticFee
+  const feeAvailable = props.evaluation.syntheticFee !== undefined
 
   return (
     <section className={styles.guidance} aria-labelledby="guidance-heading">
@@ -158,24 +155,22 @@ function PurposeGuidance(props: {
         <p><strong>{props.scenario.officialCategory}</strong></p>
         <p>{props.scenario.description}</p>
         <p className={styles.demoDisclaimer}>{props.scenario.scopeNote}</p>
-        <p className={styles.demoDisclaimer}>
-          This purpose is supported by the selected demo scenario. It is not a legal eligibility decision.
-        </p>
+        <p className={styles.demoDisclaimer}>Requirements shown here are simplified and do not determine eligibility.</p>
       </div>
 
       <div className={styles.guidanceGrid}>
         <section className={styles.guidanceSection} aria-labelledby="questions-heading">
           <div className={styles.sectionHeading}>
             <span className={styles.sectionNumber} aria-hidden="true">01</span>
-            <div><h3 id="questions-heading">What we’ll ask</h3><p>Only bounded synthetic choices from this demo policy.</p></div>
+            <div><h3 id="questions-heading">What you’ll need to provide</h3><p>Information about your travel plans and the purpose of your visit.</p></div>
           </div>
-          <ul className={styles.plainList}>{questions.map((question) => <li key={question.id}>{question.prompt}</li>)}</ul>
+          <ul className={styles.plainList}>{questions.map((question) => <li key={question.id}>{applicantQuestionPrompt(question.id, question.prompt)}</li>)}</ul>
         </section>
 
         <section className={styles.guidanceSection} aria-labelledby="documents-heading">
           <div className={styles.sectionHeading}>
             <span className={styles.sectionNumber} aria-hidden="true">02</span>
-            <div><h3 id="documents-heading">Demo documents</h3><p>Bundled project-created fixtures only.</p></div>
+            <div><h3 id="documents-heading">Required documents</h3><p>Prepare clear copies of each document before you continue.</p></div>
           </div>
           <ul className={styles.requirementList}>
             {requirements.map((requirement) => (
@@ -184,27 +179,32 @@ function PurposeGuidance(props: {
           </ul>
         </section>
 
-        {fee ? (
+        {feeAvailable ? (
           <section className={styles.feePanel} aria-labelledby="fee-heading">
-            <div><p className={styles.feeLabel} id="fee-heading">Synthetic demo fee</p><p className={styles.feeAmount}>{fee.amount} {fee.unit}</p></div>
-            <strong>{fee.label}</strong>
+            <div>
+              <p className={styles.feeLabel} id="fee-heading">Visa fee</p>
+              <p className={styles.feeAmount}>Calculated before payment</p>
+            </div>
+            <strong>The applicable visa fee depends on your nationality and visa category. The amount will be shown before payment.</strong>
           </section>
         ) : null}
       </div>
 
-      <details className={styles.policyDetails}>
-        <summary>Why am I seeing this?</summary>
-        <div className={styles.policyDetailBody}>
-          <p>This guidance comes from demo policy <strong>{props.evaluation.policy.qualifiedVersion}</strong>.</p>
-          <ul>{props.evaluation.reasons.map((reason) => <li key={reason.code}>{reason.explanation}</li>)}</ul>
-          <p className={styles.provenanceLine}>Sources: {props.evaluation.provenance.map(({ sourceLabel }) => sourceLabel).join(' · ')}</p>
-        </div>
-      </details>
+      {demoEnabled ? (
+        <details className={styles.policyDetails}>
+          <summary>Demo policy details</summary>
+          <div className={styles.policyDetailBody}>
+            <p>Policy version <strong>{props.evaluation.policy.qualifiedVersion}</strong></p>
+            <ul>{props.evaluation.reasons.map((reason) => <li key={reason.code}>{reason.explanation}</li>)}</ul>
+            <p className={styles.provenanceLine}>Sources: {props.evaluation.provenance.map(({ sourceLabel }) => sourceLabel).join(' · ')}</p>
+          </div>
+        </details>
+      ) : null}
 
       {props.error ? <p className={styles.inlineError} role="alert">{props.error}</p> : null}
       <div className={styles.actions}>
         <button className={styles.primaryButton} type="button" onClick={props.onContinue}>
-          Continue with this demo <span aria-hidden="true">→</span>
+          Continue application <span aria-hidden="true">→</span>
         </button>
         <Link className={styles.secondaryButton} to={props.backPath}>Choose a different purpose</Link>
       </div>
@@ -218,16 +218,18 @@ function CaseStart(props: {
   error: string | null
   onStart(): void
 }) {
+  const location = useLocation()
+  const demoEnabled = new URLSearchParams(location.search).get('demo') === '1'
   return (
     <section className={props.created ? styles.outcomePanel : styles.resumePanel} aria-labelledby="case-created-heading">
       {props.created ? <div className={styles.outcomeMarker} aria-hidden="true">✓</div> : null}
       <p className={styles.eyebrow}>Application · Step 2 of 6</p>
-      <h2 id="case-created-heading" tabIndex={-1}>{props.created ? 'Your synthetic application has been created' : 'Continue your application'}</h2>
-      <p>Your {props.projection.scenario.name.toLowerCase()} demo case is saved in this browser and pinned to its policy.</p>
+      <h2 id="case-created-heading" tabIndex={-1}>{props.created ? 'Your application has been created' : 'Continue your application'}</h2>
+      <p>Your {props.projection.scenario.name.toLowerCase()} application is saved in this browser.</p>
       <dl className={styles.caseFacts}>
         <div><dt>Purpose</dt><dd>{props.projection.scenario.name}</dd></div>
-        <div><dt>Synthetic case reference</dt><dd>{props.projection.caseId}</dd></div>
-        <div><dt>Demo policy</dt><dd>{props.projection.resumedCase.policyQualifiedVersion}</dd></div>
+        <div><dt>Application reference</dt><dd>{applicantReference(props.projection.caseId)}</dd></div>
+        {demoEnabled ? <div><dt>Policy version</dt><dd>{props.projection.resumedCase.policyQualifiedVersion}</dd></div> : null}
       </dl>
       {props.error ? <p className={styles.inlineError} role="alert">{props.error}</p> : null}
       <button className={styles.primaryButton} type="button" onClick={props.onStart}>Start application <span aria-hidden="true">→</span></button>
@@ -239,13 +241,13 @@ function CaseStart(props: {
 function RecoveryPanel(props: { storageUnavailable: boolean; error?: string | null; onReset(): void }) {
   return (
     <section className={styles.recoveryPanel} aria-labelledby="recovery-heading">
-      <p className={styles.eyebrow}>Local demo storage</p>
-      <h2 id="recovery-heading" tabIndex={-1}>{props.storageUnavailable ? 'Progress cannot be saved in this browser' : 'Saved demo data cannot be read'}</h2>
+      <p className={styles.eyebrow}>Saved application</p>
+      <h2 id="recovery-heading" tabIndex={-1}>{props.storageUnavailable ? 'Progress cannot be saved in this browser' : 'Saved application data cannot be read'}</h2>
       <p>{props.storageUnavailable
-        ? 'This prototype requires local browser storage to preserve synthetic progress. Storage is currently unavailable.'
-        : 'The local synthetic demo state is incompatible or corrupted. It has not been trusted or changed.'}</p>
+        ? 'This browser cannot save your progress right now.'
+        : 'The saved application data is incompatible or corrupted. It has not been trusted or changed.'}</p>
       {props.error ? <p className={styles.inlineError} role="alert">{props.error}</p> : null}
-      {!props.storageUnavailable ? <button className={styles.primaryButton} type="button" onClick={props.onReset}>Reset demo data</button> : null}
+      {!props.storageUnavailable ? <button className={styles.primaryButton} type="button" onClick={props.onReset}>Clear saved application data</button> : null}
     </section>
   )
 }
@@ -258,7 +260,7 @@ function pageTitle(pathname: string): string {
   if (pathname.endsWith('/payment')) return 'Payment — India e-Visa Reimagined'
   if (pathname.endsWith('/correction')) return 'Correction — India e-Visa Reimagined'
   if (pathname.endsWith('/status')) return 'Status — India e-Visa Reimagined'
-  if (pathname.endsWith('/eta')) return 'Synthetic ETA — India e-Visa Reimagined'
+  if (pathname.endsWith('/eta')) return 'Electronic Travel Authorization — India e-Visa Reimagined'
   if (pathname.startsWith('/application/')) return 'Application — India e-Visa Reimagined'
   return 'India e-Visa Reimagined'
 }
@@ -302,7 +304,7 @@ function CaseBoundary(props: {
       <section className={styles.recoveryPanel} aria-labelledby="case-not-found-heading">
         <p className={styles.eyebrow}>Application lookup</p>
         <h2 id="case-not-found-heading" tabIndex={-1}>Application not found</h2>
-        <p>No saved synthetic application matches this address. Nothing was created or changed.</p>
+        <p>No saved application matches this address. Nothing was created or changed.</p>
         <Link className={styles.primaryButton} to={withPreservedDemo('/', location.search)}>
           Back to visa purposes
         </Link>
@@ -334,7 +336,7 @@ function PurposeRoute(props: { services: AppRuntimeServices }) {
       navigate(withPreservedDemo(applicationPath(result.caseId), location.search), { state: { created: result.status === 'COMMAND_ACCEPTED' } })
       return
     }
-    setError('The synthetic case could not be created safely. Your saved demo data was not changed.')
+    setError('The application could not be created safely. Your saved data was not changed.')
   }
 
   return <PurposeGuidance scenario={scenario} evaluation={evaluated.evaluation} backPath={withPreservedDemo('/', location.search)} error={error} onContinue={createCase} />
@@ -376,7 +378,7 @@ function ApplicationRoute(props: SharedRouteProps) {
           }} />
         }
         const evaluated = props.services.runtime.evaluateScenario({ scenarioId: projection.scenario.id })
-        if (evaluated.status !== 'POLICY_EVALUATED') return <p role="alert">The pinned demo policy could not safely provide this application form.</p>
+        if (evaluated.status !== 'POLICY_EVALUATED') return <p role="alert">The application form could not be loaded safely.</p>
         return <AdaptiveApplication
           services={props.services}
           resumedCase={projection.resumedCase}
@@ -545,7 +547,7 @@ function RoutedApp({ services }: { services: AppRuntimeServices }) {
         <PrototypeNotice />
         <div className={styles.headerInner}>
           <div className={styles.wordmark} aria-hidden="true">EV</div>
-          <div><p className={styles.headerLabel}>Applicant prototype</p><h1>India e-Visa Reimagined</h1><p>A simpler way to understand, prepare and track a synthetic e-Visa application.</p></div>
+          <div><p className={styles.headerLabel}>e-Visa service</p><h1>India e-Visa Reimagined</h1><p>A simpler way to understand, prepare and track an e-Visa application.</p></div>
         </div>
       </header>
       {demoEnabled ? <DemoControls feedback={demoControlFeedback} onLoadSeed={loadDemoSeed} onReset={resetDemoData} /> : null}
@@ -565,7 +567,7 @@ function RoutedApp({ services }: { services: AppRuntimeServices }) {
       </main>
       <footer className={styles.siteFooter}>
         <div className={styles.footerInner}>
-          <p>Hackathon proof of concept · Synthetic policy and local mock boundaries only</p>
+          <p>Hackathon prototype. Not an official Government of India service.</p>
         </div>
       </footer>
     </div>

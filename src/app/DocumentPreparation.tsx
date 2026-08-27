@@ -9,6 +9,7 @@ import type {
 import type { AppRuntimeServices } from './create-app-runtime'
 import {
   DOCUMENT_FIXTURE_LABELS,
+  DOCUMENT_GUIDANCE,
   DOCUMENT_NAMES,
 } from './applicant-labels'
 import styles from './DocumentPreparation.module.css'
@@ -28,7 +29,7 @@ type RequirementMessages = Readonly<Record<string, string>>
 type FixtureSelections = Readonly<Record<string, SyntheticId>>
 
 function documentName(requirement: RuntimeDocumentRequirementView): string {
-  return DOCUMENT_NAMES[requirement.documentType] ?? 'Synthetic document'
+  return DOCUMENT_NAMES[requirement.documentType] ?? 'Document'
 }
 
 function initialSelections(documents: RuntimeDocumentsInspected): FixtureSelections {
@@ -66,10 +67,10 @@ function inspectionMessage(requirement: RuntimeDocumentRequirementView): string 
     requirement.currentVersion?.inspectionReasonCode ===
     'DOC_PREFLIGHT_UNCLEAR_SYNTHETIC'
   ) {
-    return 'This demo passport page is too unclear to check. Choose the clearer bundled file and try again.'
+    return 'This passport bio page is too unclear to check. Choose the clearer copy and try again.'
   }
   if (requirement.status === 'READY') {
-    return 'This bundled synthetic file passed the local technical check.'
+    return 'This document is ready.'
   }
   return null
 }
@@ -115,7 +116,7 @@ export function DocumentPreparation(props: DocumentPreparationProps) {
       setReviewPrepared(true)
       return true
     }
-    setMessages({ general: 'The authoritative demo review could not be prepared safely.' })
+    setMessages({ general: 'The review could not be prepared safely.' })
     return false
   }
 
@@ -134,7 +135,7 @@ export function DocumentPreparation(props: DocumentPreparationProps) {
     if (fixtureId === undefined) {
       setMessages((currentMessages) => ({
         ...currentMessages,
-        [requirement.requirementId]: 'Choose a bundled synthetic file before checking it.',
+        [requirement.requirementId]: 'Choose a provided document before checking it.',
       }))
       return
     }
@@ -172,8 +173,8 @@ export function DocumentPreparation(props: DocumentPreparationProps) {
     const message =
       result.status === 'COMMAND_REJECTED' &&
       result.reasonCode === 'DOCUMENT_INSPECTION_UNAVAILABLE'
-        ? 'The local demo technical check is unavailable. Nothing was marked Ready.'
-        : 'This bundled file could not be prepared safely. No document state was forced.'
+        ? 'The document check is unavailable. Nothing was marked Ready.'
+        : 'This document could not be checked safely. Its status was not changed.'
     setMessages((currentMessages) => ({
       ...currentMessages,
       [requirement.requirementId]: message,
@@ -186,7 +187,7 @@ export function DocumentPreparation(props: DocumentPreparationProps) {
       <section className={styles.documentsPanel} aria-labelledby="documents-heading">
         <p className={styles.eyebrow}>Documents · Step 3 of 6</p>
         <h2 id="documents-heading" tabIndex={-1}>Document preparation is unavailable</h2>
-        <p role="alert">The saved Case could not provide a safe document checklist.</p>
+        <p role="alert">The saved application could not provide a document checklist.</p>
         <Link className={styles.secondaryButton} to={props.applicationPath}>
           Back to application details
         </Link>
@@ -200,7 +201,7 @@ export function DocumentPreparation(props: DocumentPreparationProps) {
         <div className={styles.completionMarker} aria-hidden="true">✓</div>
         <p className={styles.eyebrow}>Documents · Step 3 of 6</p>
         <h2 id="documents-heading" tabIndex={-1}>Documents ready</h2>
-        <p>All required demo documents passed the local technical check.</p>
+        <p>All required documents are ready.</p>
         <div className={styles.nextStep}>
           <span>Next</span>
           <strong>Review</strong>
@@ -232,16 +233,15 @@ export function DocumentPreparation(props: DocumentPreparationProps) {
 
       <header className={styles.documentsHeader}>
         <p className={styles.eyebrow}>Documents · Step 3 of 6</p>
-        <h2 id="documents-heading" tabIndex={-1}>Prepare your demo documents</h2>
-        <p>
-          Choose from bundled synthetic demo files. Nothing is selected from your device.
-        </p>
+        <h2 id="documents-heading" tabIndex={-1}>Prepare your documents</h2>
+        <p>Check each required document before continuing.</p>
+        <p>For this prototype, sample documents are provided instead of real uploads.</p>
         <div className={styles.purposeContext}>
           <span>Selected purpose</span>
           <strong>{props.purposeName}</strong>
         </div>
         <p className={styles.progressSummary} aria-live="polite">
-          {documents.readyCount} of {documents.requiredCount} required demo documents ready
+          {documents.readyCount} of {documents.requiredCount} required documents ready
         </p>
       </header>
 
@@ -268,10 +268,10 @@ export function DocumentPreparation(props: DocumentPreparationProps) {
                   {statusLabel(requirement.status)}
                 </span>
               </div>
-              <p className={styles.guidance}>{requirement.guidance}</p>
+              <p className={styles.guidance}>{DOCUMENT_GUIDANCE[requirement.documentType] ?? 'Provide a clear copy of this document.'}</p>
 
               <label className={styles.fixtureLabel} htmlFor={`document-fixture-${index + 1}`}>
-                Bundled demo file
+                Sample document
               </label>
               <select
                 id={`document-fixture-${index + 1}`}
@@ -292,8 +292,6 @@ export function DocumentPreparation(props: DocumentPreparationProps) {
                   </option>
                 ))}
               </select>
-              <p className={styles.watermark}>SYNTHETIC — NOT VALID</p>
-
               {currentMessage ? (
                 <p
                   className={requirement.status === 'NEEDS_ATTENTION' ? styles.attention : styles.readyMessage}
@@ -313,10 +311,10 @@ export function DocumentPreparation(props: DocumentPreparationProps) {
                   ? 'Checking…'
                   : selectedAlreadyChecked
                     ? requirement.status === 'READY'
-                      ? 'Technical check complete'
+                      ? 'Document checked'
                       : 'Choose a replacement to retry'
                     : requirement.currentVersion === null
-                      ? 'Run technical check'
+                      ? 'Check document'
                       : 'Check replacement'}
               </button>
             </article>
@@ -325,7 +323,7 @@ export function DocumentPreparation(props: DocumentPreparationProps) {
       </div>
       {documents.allReady ? (
         <div className={styles.returnToReview}>
-          <p>All required demo documents remain ready.</p>
+          <p>All required documents remain ready.</p>
           <Link className={styles.checkButton} to={props.reviewPath}>
             Return to review <span aria-hidden="true">→</span>
           </Link>

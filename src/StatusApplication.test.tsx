@@ -94,11 +94,11 @@ describe('A07 unified applicant status', () => {
   it('shows the Medical in-review projection and a prominent explicit wait', () => {
     renderStatus('SYN-MEDICAL-001')
 
-    expect(screen.getByRole('heading', { name: 'Track your demo application' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Track your application' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Under review' })).toBeInTheDocument()
-    expect(screen.getByText('Your synthetic application is being reviewed.')).toBeInTheDocument()
+    expect(screen.getByText('Your application is currently under review. No action is required.')).toBeInTheDocument()
     expect(screen.getByText('Nothing needed from you')).toBeInTheDocument()
-    expect(screen.getByText('No action is needed now. Synthetic scrutiny is continuing.')).toBeInTheDocument()
+    expect(screen.getByText('We will update this page when the review is complete or if we need more information.')).toBeInTheDocument()
     expect(screen.getByText('Application submitted')).toBeInTheDocument()
     expect(screen.getByText('Payment confirmed')).toBeInTheDocument()
     expect(screen.getByText('Documents under review')).toBeInTheDocument()
@@ -157,8 +157,8 @@ describe('A07 unified applicant status', () => {
     )
 
     expect(screen.getByRole('heading', { name: 'Action required' })).toBeInTheDocument()
-    expect(screen.getByText('Your synthetic hospital letter needs one correction.')).toBeInTheDocument()
-    expect(screen.getByText(/admission date on the demo hospital letter/)).toBeInTheDocument()
+    expect(screen.getByText('Your hospital letter needs one correction.')).toBeInTheDocument()
+    expect(screen.getByText(/admission date on the hospital letter/)).toBeInTheDocument()
     expect(screen.queryByText('DOC_HOSPITAL_ADMISSION_DATE_UNCLEAR_SYNTHETIC')).not.toBeInTheDocument()
     const action = screen.getByRole('link', { name: 'Replace hospital letter' })
     expect(action).toHaveAttribute('href', '/correction')
@@ -166,14 +166,14 @@ describe('A07 unified applicant status', () => {
 
   it('uses the low-priority demo control to record the deterministic Medical review outcome', async () => {
     renderStatus('SYN-MEDICAL-001')
-    await userEvent.click(screen.getByText('Demo review control'))
+    await userEvent.click(screen.getByText('Review update'))
     await userEvent.click(
-      screen.getByRole('button', { name: 'Simulate hospital-letter review outcome' }),
+      screen.getByRole('button', { name: 'Check application status' }),
     )
 
     expect(screen.getByRole('heading', { name: 'Action required' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Replace hospital letter' })).toBeInTheDocument()
-    expect(screen.getByText(/Simulated delivery failed/)).toBeInTheDocument()
+    expect(screen.getByText(/application status has been updated/)).toBeInTheDocument()
   })
 })
 
@@ -200,13 +200,13 @@ describe('A09 synthetic approval and ETA outcome', () => {
       </MemoryRouter>,
     )
 
-    await userEvent.click(screen.getByText('Demo review control'))
-    await userEvent.click(screen.getByRole('button', { name: 'Complete synthetic review' }))
+    await userEvent.click(screen.getByText('Review update'))
+    await userEvent.click(screen.getByRole('button', { name: 'Check application status' }))
 
-    const approvedHeading = screen.getByRole('heading', { name: 'Demo application approved' })
+    const approvedHeading = screen.getByRole('heading', { name: 'Application approved' })
     expect(approvedHeading).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Synthetic ETA available' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'View synthetic ETA' })).toHaveAttribute('href', '/eta')
+    expect(screen.getByRole('heading', { name: 'Electronic Travel Authorization available' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'View Electronic Travel Authorization' })).toHaveAttribute('href', '/eta')
     expect(prepared.services.runtime.inspectStatus({ caseId: prepared.caseId })).toMatchObject({
       etaState: 'ISSUED',
       syntheticEtaReference: 'SYN-ETA-MED-001',
@@ -217,15 +217,15 @@ describe('A09 synthetic approval and ETA outcome', () => {
 
   it('renders Tourist through the same issued-outcome component with safe metadata only', async () => {
     const prepared = renderStatus('SYN-TOURIST-001')
-    await userEvent.click(screen.getByText('Demo review control'))
-    await userEvent.click(screen.getByRole('button', { name: 'Complete synthetic review' }))
+    await userEvent.click(screen.getByText('Review update'))
+    await userEvent.click(screen.getByRole('button', { name: 'Check application status' }))
 
     expect(screen.getAllByText('Tourism')).toHaveLength(1)
     expect(prepared.services.runtime.inspectStatus({ caseId: prepared.caseId })).toMatchObject({
       etaState: 'ISSUED',
       syntheticEtaReference: 'SYN-ETA-TOURIST-001',
     })
-    expect(screen.getAllByText(/SYN-EVISA-POLICY@2\.0\.0/)).toHaveLength(1)
+    expect(screen.queryByText(/SYN-EVISA-POLICY@2\.0\.0/)).not.toBeInTheDocument()
     expect(screen.queryByText(/passport number/i)).not.toBeInTheDocument()
   })
 })

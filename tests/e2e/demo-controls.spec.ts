@@ -121,20 +121,20 @@ test('D01 loads all seven canonical seeds, switches byte-stably, reloads, and re
   await expect(page.getByText('Tourism', { exact: true })).toBeVisible()
 
   const interruptedDraft = await chooseSeed(page, 'SEED-MEDICAL-INTERRUPTED-DRAFT')
-  await expect(page.getByRole('heading', { name: 'Prepare your demo documents' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Prepare your documents' })).toBeVisible()
   expect(interruptedDraft.latestAnswers).toMatchObject({
     'Q-SHARED-POLICY-COHORT': 'SYN-POLICY-COHORT-A',
     'Q-MEDICAL-ADMISSION-DATE': '2099-04-18',
   })
 
   await chooseSeed(page, 'SEED-MEDICAL-DOCUMENT-DEFECT')
-  await expect(page.getByRole('heading', { name: 'Prepare your demo documents' })).toBeVisible()
-  await expect(page.getByText(/passport page is too unclear to check/i)).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Prepare your documents' })).toBeVisible()
+  await expect(page.getByText(/passport bio page is too unclear to check/i)).toBeVisible()
   await expect(page.getByRole('button', { name: 'Choose a replacement to retry' })).toBeVisible()
 
   await chooseSeed(page, 'SEED-MEDICAL-AMBIGUOUS-PAYMENT')
-  await expect(page.getByRole('heading', { name: 'Complete the demo payment' })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Mock payment is pending. No real payment was made.' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Pay visa fee' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Payment status pending' })).toBeVisible()
 
   await chooseSeed(page, 'SEED-MEDICAL-REUPLOAD-REQUESTED')
   await expect(page.getByRole('heading', { name: 'Action required' })).toBeVisible()

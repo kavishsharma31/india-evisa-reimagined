@@ -26,41 +26,41 @@ async function reachReview(
 ) {
   await page.getByText(scenario, { exact: true }).click()
   await page.getByRole('link', { name: 'Continue' }).click()
-  await page.getByRole('button', { name: 'Continue with this demo' }).click()
+  await page.getByRole('button', { name: 'Continue application' }).click()
   await page.getByRole('button', { name: 'Start application' }).click()
-  await page.getByLabel(/Choose the synthetic policy cohort/).selectOption('SYN-POLICY-COHORT-A')
-  await page.getByLabel(/Choose the synthetic passport class/).selectOption('SYNTHETIC_STANDARD_PASSPORT')
+  await page.getByLabel('Country of nationality').selectOption('SYN-POLICY-COHORT-A')
+  await page.getByLabel('Passport type').selectOption('SYNTHETIC_STANDARD_PASSPORT')
   await page
-    .getByLabel(/Choose the fictional planned arrival date/)
+    .getByLabel('Expected date of arrival')
     .selectOption(scenario === 'Medical treatment' ? '2099-04-14' : '2099-05-10')
   await page
-    .getByLabel(/Confirm the synthetic (?:Medical treatment|tourism) intent/)
+    .getByLabel(scenario === 'Medical treatment' ? 'Purpose of medical visit' : 'Purpose of visit')
     .selectOption(
       scenario === 'Medical treatment'
         ? 'SYNTHETIC_MEDICAL_TREATMENT'
         : 'SYNTHETIC_TOURISM',
     )
   if (scenario === 'Medical treatment') {
-    await page.getByLabel(/Choose the fictional proposed admission date/).selectOption('2099-04-18')
+    await page.getByLabel('Proposed hospital admission date').selectOption('2099-04-18')
     await page.getByRole('radio', { name: 'Yes' }).check()
   } else {
-    await page.getByLabel(/Choose the fictional planned exit date/).selectOption('2099-05-17')
+    await page.getByLabel('Expected date of departure').selectOption('2099-05-17')
   }
   await page.getByRole('button', { name: 'Continue to documents' }).click()
   await page.getByRole('link', { name: 'Prepare documents' }).click()
   const documentNames = [
-    'Synthetic portrait',
-    'Synthetic passport page',
-    ...(scenario === 'Medical treatment' ? ['Synthetic hospital letter'] : []),
+    'Recent photograph',
+    'Passport bio page',
+    ...(scenario === 'Medical treatment' ? ['Hospital letter'] : []),
   ]
   for (const documentName of documentNames) {
     const documentCard = page.locator('article').filter({
       has: page.getByRole('heading', { level: 3, name: documentName }),
     })
-    await documentCard.getByRole('button', { name: 'Run technical check' }).click()
+    await documentCard.getByRole('button', { name: 'Check document' }).click()
   }
   await page.getByRole('link', { name: 'Review application' }).click()
-  await expect(page.getByRole('heading', { name: 'Review your demo application' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Review your application' })).toBeVisible()
 }
 
 async function loadCaseEvidence(page: Page) {
@@ -118,13 +118,13 @@ async function loadCaseEvidence(page: Page) {
 async function submitReview(page: Page) {
   await page
     .getByRole('checkbox', {
-      name: 'I confirm these synthetic demo details are ready for simulated submission.',
+      name: 'I confirm these application details are complete and ready to submit.',
     })
     .check()
-  await page.getByRole('button', { name: 'Submit demo application' }).click()
-  await expect(page.getByRole('heading', { name: 'Complete the demo payment' })).toBeVisible()
+  await page.getByRole('button', { name: 'Submit application' }).click()
+  await expect(page.getByRole('heading', { name: 'Pay visa fee' })).toBeVisible()
   await page.goBack()
-  await expect(page.getByRole('heading', { name: 'Application submitted in demo' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Application submitted' })).toBeVisible()
 }
 
 test('Medical A05 reviews authoritative details and reaches one locked simulated submission', async ({ page }) => {
@@ -141,10 +141,10 @@ test('Medical A05 reviews authoritative details and reaches one locked simulated
   await openFreshApp(page)
   await reachReview(page)
   await expect(page.getByRole('heading', { name: 'Medical treatment' })).toBeVisible()
-  await expect(page.getByText('73 SYNTHETIC_DEMO_CREDITS')).toBeVisible()
-  await expect(page.getByText('SYNTHETIC — NOT PAYABLE')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Calculated before payment' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Calculated before payment' })).toBeVisible()
   await expect(page.getByText('Ready', { exact: true })).toHaveCount(3)
-  await expect(page.getByText('Confirm the synthetic Medical treatment intent.')).toBeVisible()
+  await expect(page.getByText('Purpose of medical visit')).toBeVisible()
 
   await submitReview(page)
   await expect(page.getByRole('link', { name: 'Continue to payment' })).toBeVisible()
@@ -184,9 +184,9 @@ test('A05 edit paths preserve the Case and refresh authoritative review values',
   await expect(page.getByText('No', { exact: true })).toBeVisible()
 
   await page.getByRole('link', { name: 'Edit documents' }).click()
-  await expect(page.getByRole('heading', { name: 'Prepare your demo documents' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Prepare your documents' })).toBeVisible()
   await page.getByRole('link', { name: 'Return to review' }).click()
-  await expect(page.getByRole('heading', { name: 'Review your demo application' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Review your application' })).toBeVisible()
 
   const after = await loadCaseEvidence(page)
   expect(after.caseCount).toBe(1)
@@ -203,7 +203,7 @@ test('locked A05 reload is read-only and does not duplicate the submission seque
   const before = await loadCaseEvidence(page)
 
   await page.reload()
-  await expect(page.getByRole('heading', { name: 'Application submitted in demo' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Application submitted' })).toBeVisible()
   await expect(page.getByRole('link', { name: /Edit application details|Edit documents/ })).toHaveCount(0)
   const after = await loadCaseEvidence(page)
   expect(after.raw).toBe(before.raw)
@@ -216,10 +216,10 @@ test('Tourist reuses A05 with five answers, two documents, and 41 credits', asyn
   await openFreshApp(page)
   await reachReview(page, 'Tourism')
   await expect(page.getByRole('heading', { name: 'Tourism' })).toBeVisible()
-  await expect(page.getByText('41 SYNTHETIC_DEMO_CREDITS')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Calculated before payment' })).toBeVisible()
   await expect(page.getByText('Ready', { exact: true })).toHaveCount(2)
   await expect(page.getByText(/Medical treatment intent/i)).toHaveCount(0)
-  await expect(page.getByText('Synthetic hospital letter')).toHaveCount(0)
+  await expect(page.getByText('Hospital letter')).toHaveCount(0)
   await submitReview(page)
   await expect(page.getByRole('link', { name: 'Continue to payment' })).toBeVisible()
 })
@@ -229,14 +229,14 @@ test('A05 review and submission remain usable without horizontal overflow at 360
   await openFreshApp(page)
   await reachReview(page)
 
-  const reviewPanel = page.getByRole('region', { name: 'Review your demo application' })
-  const feePanel = page.getByRole('region', { name: '73 SYNTHETIC_DEMO_CREDITS' })
+  const reviewPanel = page.getByRole('region', { name: 'Review your application' })
+  const feePanel = page.getByRole('region', { name: 'Calculated before payment' })
   const confirmationPanel = page.locator('form').filter({
-    has: page.getByRole('heading', { name: 'Ready for simulated submission?' }),
+    has: page.getByRole('heading', { name: 'Ready to submit your application?' }),
   })
-  const submitButton = page.getByRole('button', { name: 'Submit demo application' })
+  const submitButton = page.getByRole('button', { name: 'Submit application' })
   const checkbox = page.getByRole('checkbox', {
-    name: 'I confirm these synthetic demo details are ready for simulated submission.',
+    name: 'I confirm these application details are complete and ready to submit.',
   })
 
   const [reviewBox, feeBox, confirmationBox, submitBox] = await Promise.all([
@@ -274,7 +274,7 @@ test('A05 review and submission remain usable without horizontal overflow at 360
 
   await page
     .getByText(
-      'I confirm these synthetic demo details are ready for simulated submission.',
+      'I confirm these application details are complete and ready to submit.',
       { exact: true },
     )
     .click()
@@ -282,7 +282,7 @@ test('A05 review and submission remain usable without horizontal overflow at 360
   await expect(submitButton).toBeEnabled()
   await submitButton.click()
   await page.goBack()
-  await expect(page.getByRole('heading', { name: 'Application submitted in demo' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Application submitted' })).toBeVisible()
   const after = await page.evaluate(() => ({
     clientWidth: document.documentElement.clientWidth,
     scrollWidth: document.documentElement.scrollWidth,

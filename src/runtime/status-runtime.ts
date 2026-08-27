@@ -61,7 +61,7 @@ function statusContent(input: {
   if (input.scrutinyState === 'NOT_STARTED') {
     return Object.freeze({
       headline: 'Ready for review',
-      explanation: 'Your confirmed synthetic application can enter local review.',
+      explanation: 'Your application is ready to be reviewed.',
       applicantActionRequired: false,
       nextAction: 'BEGIN_SCRUTINY',
       actionGuidance: null,
@@ -72,22 +72,22 @@ function statusContent(input: {
     return Object.freeze({
       headline: 'Action required',
       explanation: input.replacementReady
-        ? 'Your corrected synthetic hospital letter is ready to submit.'
-        : 'Your synthetic hospital letter needs one correction.',
+        ? 'Your corrected hospital letter is ready to submit.'
+        : 'Your hospital letter needs one correction.',
       applicantActionRequired: true,
       nextAction: 'REPLACE_HOSPITAL_LETTER',
       actionGuidance:
-        'The admission date on the demo hospital letter could not be confirmed during synthetic review.',
+        'The admission date on the hospital letter could not be confirmed during review.',
       waitMessage: null,
     })
   }
   if (input.scrutinyState === 'APPROVED') {
     return Object.freeze({
-      headline: 'Demo application approved',
+      headline: 'Application approved',
       explanation:
         input.etaState === 'ISSUED'
-          ? 'Local synthetic review is complete and a non-valid prototype ETA is available below.'
-          : 'Local synthetic review is complete. This is not a government decision.',
+          ? 'Your application has been approved and your Electronic Travel Authorization is available.'
+          : 'Your application has been approved.',
       applicantActionRequired: false,
       nextAction: null,
       actionGuidance: null,
@@ -96,11 +96,11 @@ function statusContent(input: {
   }
   return Object.freeze({
     headline: 'Under review',
-    explanation: 'Your synthetic application is being reviewed.',
+    explanation: 'Your application is currently under review. No action is required.',
     applicantActionRequired: false,
     nextAction: null,
     actionGuidance: null,
-    waitMessage: 'No action is needed now. Synthetic scrutiny is continuing.',
+    waitMessage: 'We will update this page when the review is complete or if we need more information.',
   })
 }
 
@@ -234,8 +234,8 @@ export function buildStatusSummary(
             persistedCase.eta.state === 'NOT_READY'
               ? 'ETA not ready'
               : persistedCase.eta.state === 'READY_TO_ISSUE'
-                ? 'Synthetic ETA ready to issue'
-                : 'Synthetic ETA issued',
+                ? 'Electronic Travel Authorization ready'
+                : 'Electronic Travel Authorization issued',
           state: persistedCase.eta.state === 'ISSUED' ? 'COMPLETE' : 'WAITING',
         },
       ],

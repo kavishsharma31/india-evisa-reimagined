@@ -155,10 +155,10 @@ describe('runtime A07 unified status and scrutiny entry', () => {
     expect(runtime.inspectStatus({ caseId })).toMatchObject({
       status: 'STATUS_INSPECTED',
       headline: 'Under review',
-      explanation: 'Your synthetic application is being reviewed.',
+      explanation: 'Your application is currently under review. No action is required.',
       applicantActionRequired: false,
       nextAction: null,
-      waitMessage: 'No action is needed now. Synthetic scrutiny is continuing.',
+      waitMessage: 'We will update this page when the review is complete or if we need more information.',
       scrutinyState: 'IN_REVIEW',
       etaState: 'NOT_READY',
     })
@@ -230,7 +230,7 @@ describe('runtime A07 unified status and scrutiny entry', () => {
       headline: 'Under review',
       applicantActionRequired: false,
       nextAction: null,
-      waitMessage: 'No action is needed now. Synthetic scrutiny is continuing.',
+      waitMessage: 'We will update this page when the review is complete or if we need more information.',
     })
   })
 })

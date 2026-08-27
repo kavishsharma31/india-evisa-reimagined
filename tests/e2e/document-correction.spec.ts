@@ -27,50 +27,50 @@ async function reachStatus(
 ) {
   await page.getByText(scenario, { exact: true }).click()
   await page.getByRole('link', { name: 'Continue' }).click()
-  await page.getByRole('button', { name: 'Continue with this demo' }).click()
+  await page.getByRole('button', { name: 'Continue application' }).click()
   await page.getByRole('button', { name: 'Start application' }).click()
-  await page.getByLabel(/Choose the synthetic policy cohort/).selectOption('SYN-POLICY-COHORT-A')
-  await page.getByLabel(/Choose the synthetic passport class/).selectOption('SYNTHETIC_STANDARD_PASSPORT')
-  await page.getByLabel(/Choose the fictional planned arrival date/).selectOption(
+  await page.getByLabel('Country of nationality').selectOption('SYN-POLICY-COHORT-A')
+  await page.getByLabel('Passport type').selectOption('SYNTHETIC_STANDARD_PASSPORT')
+  await page.getByLabel('Expected date of arrival').selectOption(
     scenario === 'Medical treatment' ? '2099-04-14' : '2099-05-10',
   )
-  await page.getByLabel(/Confirm the synthetic (?:Medical treatment|tourism) intent/).selectOption(
+  await page.getByLabel(scenario === 'Medical treatment' ? 'Purpose of medical visit' : 'Purpose of visit').selectOption(
     scenario === 'Medical treatment' ? 'SYNTHETIC_MEDICAL_TREATMENT' : 'SYNTHETIC_TOURISM',
   )
   if (scenario === 'Medical treatment') {
-    await page.getByLabel(/Choose the fictional proposed admission date/).selectOption('2099-04-18')
+    await page.getByLabel('Proposed hospital admission date').selectOption('2099-04-18')
     await page.getByRole('radio', { name: 'Yes' }).check()
   } else {
-    await page.getByLabel(/Choose the fictional planned exit date/).selectOption('2099-05-17')
+    await page.getByLabel('Expected date of departure').selectOption('2099-05-17')
   }
   await page.getByRole('button', { name: 'Continue to documents' }).click()
   await page.getByRole('link', { name: 'Prepare documents' }).click()
   const documentNames = [
-    'Synthetic portrait',
-    'Synthetic passport page',
-    ...(scenario === 'Medical treatment' ? ['Synthetic hospital letter'] : []),
+    'Recent photograph',
+    'Passport bio page',
+    ...(scenario === 'Medical treatment' ? ['Hospital letter'] : []),
   ]
   for (const documentName of documentNames) {
     const card = page.locator('article').filter({
       has: page.getByRole('heading', { level: 3, name: documentName }),
     })
-    await card.getByRole('button', { name: 'Run technical check' }).click()
+    await card.getByRole('button', { name: 'Check document' }).click()
   }
   await page.getByRole('link', { name: 'Review application' }).click()
   await page.getByRole('checkbox', {
-    name: 'I confirm these synthetic demo details are ready for simulated submission.',
+    name: 'I confirm these application details are complete and ready to submit.',
   }).check()
-  await page.getByRole('button', { name: 'Submit demo application' }).click()
-  await page.getByRole('button', { name: 'Start mock payment' }).click()
-  await page.getByRole('button', { name: 'Check mock payment status' }).click()
+  await page.getByRole('button', { name: 'Submit application' }).click()
+  await page.getByRole('button', { name: 'Pay visa fee' }).click()
+  await page.getByRole('button', { name: 'Check payment status' }).click()
   await page.getByRole('link', { name: 'Continue to status' }).click()
-  await page.getByRole('button', { name: 'Begin synthetic review' }).click()
+  await page.getByRole('button', { name: 'Begin review' }).click()
   await expect(page.getByRole('heading', { name: 'Under review' })).toBeVisible()
 }
 
 async function triggerMedicalCorrection(page: Page) {
-  await page.getByText('Demo review control').click()
-  await page.getByRole('button', { name: 'Simulate hospital-letter review outcome' }).click()
+  await page.getByText('Review update').click()
+  await page.getByRole('button', { name: 'Check application status' }).click()
   await expect(page.getByRole('heading', { name: 'Action required' })).toBeVisible()
 }
 
@@ -131,8 +131,8 @@ test('Medical A08 preserves V1, prepares only V2, and resumes unified no-action 
   await reachStatus(page)
   await triggerMedicalCorrection(page)
 
-  await expect(page.getByText('Your synthetic hospital letter needs one correction.')).toBeVisible()
-  await expect(page.getByText(/admission date on the demo hospital letter/)).toBeVisible()
+  await expect(page.getByText('Your hospital letter needs one correction.')).toBeVisible()
+  await expect(page.getByText(/admission date on the hospital letter/)).toBeVisible()
   await expect(page.getByRole('link', { name: 'Replace hospital letter' })).toHaveCount(1)
   const requested = await loadCorrectionEvidence(page)
   expect(requested.scrutinyState).toBe('ACTION_REQUIRED')
@@ -141,9 +141,9 @@ test('Medical A08 preserves V1, prepares only V2, and resumes unified no-action 
 
   await page.getByRole('link', { name: 'Replace hospital letter' }).click()
   await expect(page.getByRole('heading', { name: 'Replace your hospital letter' })).toBeVisible()
-  await expect(page.getByText('Hospital letter V2 — corrected demo')).toHaveCount(1)
-  await expect(page.getByRole('button', { name: 'Use corrected demo letter' })).toBeVisible()
-  await page.getByRole('button', { name: 'Use corrected demo letter' }).click()
+  await expect(page.getByText('Corrected hospital letter')).toHaveCount(1)
+  await expect(page.getByRole('button', { name: 'Use corrected letter' })).toBeVisible()
+  await page.getByRole('button', { name: 'Use corrected letter' }).click()
   await expect(page.getByText('Correction ready')).toBeVisible()
   const ready = await loadCorrectionEvidence(page)
   expect(ready.versions.map(({ state }) => state)).toEqual(['SUPERSEDED', 'PREFLIGHT_PASSED'])
@@ -151,8 +151,8 @@ test('Medical A08 preserves V1, prepares only V2, and resumes unified no-action 
   await page.getByRole('button', { name: 'Submit correction' }).click()
   await expect(page.getByRole('heading', { name: 'Under review' })).toBeVisible()
   await expect(page.getByText('Nothing needed from you')).toBeVisible()
-  await expect(page.getByText('No action is needed now. Synthetic scrutiny is continuing.')).toBeVisible()
-  await expect(page.getByText('Demo review control')).toHaveCount(1)
+  await expect(page.getByText(/review is complete or if we need more information/)).toBeVisible()
+  await expect(page.getByText('Review update')).toHaveCount(1)
   const resumed = await loadCorrectionEvidence(page)
   expect(resumed.scrutinyState).toBe('IN_REVIEW')
   expect(resumed.versions.map(({ state }) => state)).toEqual(['SUPERSEDED', 'UNDER_REVIEW'])
@@ -173,7 +173,7 @@ test('A08 reloads action-required, V2-ready, and resumed states without mutation
   expect(await loadCorrectionEvidence(page)).toEqual(actionRequired)
 
   await page.getByRole('link', { name: 'Replace hospital letter' }).click()
-  await page.getByRole('button', { name: 'Use corrected demo letter' }).click()
+  await page.getByRole('button', { name: 'Use corrected letter' }).click()
   const ready = await loadCorrectionEvidence(page)
   await page.reload()
   await expect(page.getByText('Correction ready')).toBeVisible()
@@ -193,7 +193,7 @@ test('Tourist remains in the ordinary A07 no-action status without Medical corre
   await expect(page.getByText('Tourism')).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Under review' })).toBeVisible()
   await expect(page.getByText('Nothing needed from you')).toBeVisible()
-  await expect(page.getByText('Demo review control')).toHaveCount(1)
+  await expect(page.getByText('Review update')).toHaveCount(1)
   await expect(page.getByRole('link', { name: 'Replace hospital letter' })).toHaveCount(0)
 })
 
@@ -203,7 +203,7 @@ test('A08 action, correction, ready, and resumed states use the mobile width and
   await reachStatus(page)
   await triggerMedicalCorrection(page)
 
-  const statusPage = page.getByRole('region', { name: 'Track your demo application' })
+  const statusPage = page.getByRole('region', { name: 'Track your application' })
   const actionPanel = page.getByRole('region', { name: 'Action required' })
   expect((await statusPage.boundingBox())?.width ?? 0).toBeGreaterThan(310)
   expect((await actionPanel.boundingBox())?.width ?? 0).toBeGreaterThan(310)
@@ -211,7 +211,7 @@ test('A08 action, correction, ready, and resumed states use the mobile width and
 
   await page.getByRole('link', { name: 'Replace hospital letter' }).click()
   const correctionPage = page.getByRole('region', { name: 'Replace your hospital letter' })
-  const replacementButton = page.getByRole('button', { name: 'Use corrected demo letter' })
+  const replacementButton = page.getByRole('button', { name: 'Use corrected letter' })
   const correctionPageWidth = (await correctionPage.boundingBox())?.width ?? 0
   const replacementPanelWidth = (await replacementButton.locator('..').boundingBox())?.width ?? 0
   const replacementButtonWidth = (await replacementButton.boundingBox())?.width ?? 0

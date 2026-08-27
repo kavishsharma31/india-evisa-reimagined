@@ -27,42 +27,42 @@ async function reachConfirmedPayment(
 ) {
   await page.getByText(scenario, { exact: true }).click()
   await page.getByRole('link', { name: 'Continue' }).click()
-  await page.getByRole('button', { name: 'Continue with this demo' }).click()
+  await page.getByRole('button', { name: 'Continue application' }).click()
   await page.getByRole('button', { name: 'Start application' }).click()
-  await page.getByLabel(/Choose the synthetic policy cohort/).selectOption('SYN-POLICY-COHORT-A')
-  await page.getByLabel(/Choose the synthetic passport class/).selectOption('SYNTHETIC_STANDARD_PASSPORT')
-  await page.getByLabel(/Choose the fictional planned arrival date/).selectOption(
+  await page.getByLabel('Country of nationality').selectOption('SYN-POLICY-COHORT-A')
+  await page.getByLabel('Passport type').selectOption('SYNTHETIC_STANDARD_PASSPORT')
+  await page.getByLabel('Expected date of arrival').selectOption(
     scenario === 'Medical treatment' ? '2099-04-14' : '2099-05-10',
   )
-  await page.getByLabel(/Confirm the synthetic (?:Medical treatment|tourism) intent/).selectOption(
+  await page.getByLabel(scenario === 'Medical treatment' ? 'Purpose of medical visit' : 'Purpose of visit').selectOption(
     scenario === 'Medical treatment' ? 'SYNTHETIC_MEDICAL_TREATMENT' : 'SYNTHETIC_TOURISM',
   )
   if (scenario === 'Medical treatment') {
-    await page.getByLabel(/Choose the fictional proposed admission date/).selectOption('2099-04-18')
+    await page.getByLabel('Proposed hospital admission date').selectOption('2099-04-18')
     await page.getByRole('radio', { name: 'Yes' }).check()
   } else {
-    await page.getByLabel(/Choose the fictional planned exit date/).selectOption('2099-05-17')
+    await page.getByLabel('Expected date of departure').selectOption('2099-05-17')
   }
   await page.getByRole('button', { name: 'Continue to documents' }).click()
   await page.getByRole('link', { name: 'Prepare documents' }).click()
   const documentNames = [
-    'Synthetic portrait',
-    'Synthetic passport page',
-    ...(scenario === 'Medical treatment' ? ['Synthetic hospital letter'] : []),
+    'Recent photograph',
+    'Passport bio page',
+    ...(scenario === 'Medical treatment' ? ['Hospital letter'] : []),
   ]
   for (const documentName of documentNames) {
     const card = page.locator('article').filter({
       has: page.getByRole('heading', { level: 3, name: documentName }),
     })
-    await card.getByRole('button', { name: 'Run technical check' }).click()
+    await card.getByRole('button', { name: 'Check document' }).click()
   }
   await page.getByRole('link', { name: 'Review application' }).click()
   await page.getByRole('checkbox', {
-    name: 'I confirm these synthetic demo details are ready for simulated submission.',
+    name: 'I confirm these application details are complete and ready to submit.',
   }).check()
-  await page.getByRole('button', { name: 'Submit demo application' }).click()
-  await page.getByRole('button', { name: 'Start mock payment' }).click()
-  await page.getByRole('button', { name: 'Check mock payment status' }).click()
+  await page.getByRole('button', { name: 'Submit application' }).click()
+  await page.getByRole('button', { name: 'Pay visa fee' }).click()
+  await page.getByRole('button', { name: 'Check payment status' }).click()
   await expect(page.getByRole('heading', { name: 'Payment confirmed' })).toBeVisible()
 }
 
@@ -72,8 +72,8 @@ async function reachStatus(
 ) {
   await reachConfirmedPayment(page, scenario)
   await page.getByRole('link', { name: 'Continue to status' }).click()
-  await expect(page.getByRole('heading', { name: 'Track your demo application' })).toBeVisible()
-  await page.getByRole('button', { name: 'Begin synthetic review' }).click()
+  await expect(page.getByRole('heading', { name: 'Track your application' })).toBeVisible()
+  await page.getByRole('button', { name: 'Begin review' }).click()
   await expect(page.getByRole('heading', { name: 'Under review' })).toBeVisible()
 }
 
@@ -138,9 +138,9 @@ test('Medical A07 enters one legal scrutiny review and projects an explicit no-a
   await openFreshApp(page)
   await reachStatus(page)
   await expect(page.getByRole('heading', { name: 'Under review' })).toBeVisible()
-  await expect(page.getByText('Your synthetic application is being reviewed.')).toBeVisible()
+  await expect(page.getByText('Your application is currently under review. No action is required.')).toBeVisible()
   await expect(page.getByText('Nothing needed from you')).toBeVisible()
-  await expect(page.getByText('No action is needed now. Synthetic scrutiny is continuing.')).toBeVisible()
+  await expect(page.getByText(/review is complete or if we need more information/)).toBeVisible()
   await expect(page.getByRole('link', { name: 'Replace hospital letter' })).toHaveCount(0)
   const evidence = await loadStatusEvidence(page)
   expect(evidence.applicationState).toBe('LOCKED')
@@ -162,7 +162,7 @@ test('A07 reload is byte-stable and does not queue or start scrutiny again', asy
 
   await page.reload()
   await expect(page.getByRole('heading', { name: 'Under review' })).toBeVisible()
-  await expect(page.getByText('No action is needed now. Synthetic scrutiny is continuing.')).toBeVisible()
+  await expect(page.getByText(/review is complete or if we need more information/)).toBeVisible()
   expect(await loadStatusEvidence(page)).toEqual(before)
 })
 
@@ -182,7 +182,7 @@ test('A07 uses the mobile width well and remains axe-clean at 360x800', async ({
   await openFreshApp(page)
   await reachStatus(page)
 
-  const statusPage = page.getByRole('region', { name: 'Track your demo application' })
+  const statusPage = page.getByRole('region', { name: 'Track your application' })
   const currentStatus = page.getByRole('region', { name: 'Under review' })
   const statusBox = await statusPage.boundingBox()
   const currentBox = await currentStatus.boundingBox()

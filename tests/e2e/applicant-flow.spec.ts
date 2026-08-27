@@ -3,7 +3,7 @@ import { expect, test, type Page } from '@playwright/test'
 const P0_STORAGE_KEY = 'india-evisa-reimagined:p0'
 
 const PROTOTYPE_NOTICE =
-  'UNOFFICIAL HACKATHON PROTOTYPE — SYNTHETIC DATA ONLY — CANNOT SUBMIT A VISA APPLICATION'
+  'UNOFFICIAL HACKATHON PROTOTYPE — NO REAL APPLICATIONS OR PAYMENTS'
 
 async function openFreshApp(page: Page) {
   await page.goto('/')
@@ -22,9 +22,9 @@ async function chooseMedical(page: Page) {
 
 async function createAndStartMedical(page: Page) {
   await chooseMedical(page)
-  await page.getByRole('button', { name: 'Continue with this demo' }).click()
+  await page.getByRole('button', { name: 'Continue application' }).click()
   await expect(
-    page.getByRole('heading', { name: 'Your synthetic application has been created' }),
+    page.getByRole('heading', { name: 'Your application has been created' }),
   ).toBeVisible()
   await page.getByRole('button', { name: 'Start application' }).click()
   await expect(
@@ -105,13 +105,13 @@ test('Medical fresh-start reaches A03 without external requests or console error
   await openFreshApp(page)
   await expect(page.getByText(PROTOTYPE_NOTICE, { exact: true })).toBeVisible()
   await chooseMedical(page)
-  await expect(page.getByText('Synthetic hospital letter')).toBeVisible()
-  await expect(page.getByText('73 SYNTHETIC_DEMO_CREDITS', { exact: true })).toBeVisible()
-  await expect(page.getByText('SYNTHETIC — NOT PAYABLE', { exact: true })).toBeVisible()
+  await expect(page.getByText('Hospital letter')).toBeVisible()
+  await expect(page.getByText('Calculated before payment', { exact: true })).toBeVisible()
+  await expect(page.getByText(/SYNTHETIC_DEMO_CREDITS/)).toHaveCount(0)
 
-  await page.getByRole('button', { name: 'Continue with this demo' }).click()
+  await page.getByRole('button', { name: 'Continue application' }).click()
   await expect(
-    page.getByRole('heading', { name: 'Your synthetic application has been created' }),
+    page.getByRole('heading', { name: 'Your application has been created' }),
   ).toBeVisible()
   await page.getByRole('button', { name: 'Start application' }).click()
   await expect(
@@ -163,13 +163,13 @@ test('Tourist reuses the applicant path with Tourist policy guidance', async ({ 
   await page.getByRole('link', { name: 'Continue' }).click()
 
   await expect(page.getByRole('heading', { level: 2, name: 'Tourism' })).toBeVisible()
-  await expect(page.getByText('41 SYNTHETIC_DEMO_CREDITS', { exact: true })).toBeVisible()
-  await expect(page.getByText('Synthetic portrait')).toBeVisible()
-  await expect(page.getByText('Synthetic passport page')).toBeVisible()
-  await expect(page.getByText('Synthetic hospital letter')).toHaveCount(0)
-  await page.getByRole('button', { name: 'Continue with this demo' }).click()
+  await expect(page.getByText('Calculated before payment', { exact: true })).toBeVisible()
+  await expect(page.getByText('Recent photograph')).toBeVisible()
+  await expect(page.getByText('Passport bio page')).toBeVisible()
+  await expect(page.getByText('Hospital letter')).toHaveCount(0)
+  await page.getByRole('button', { name: 'Continue application' }).click()
   await expect(
-    page.getByRole('heading', { name: 'Your synthetic application has been created' }),
+    page.getByRole('heading', { name: 'Your application has been created' }),
   ).toBeVisible()
 
   const state = await loadPersistedEvidence(page)

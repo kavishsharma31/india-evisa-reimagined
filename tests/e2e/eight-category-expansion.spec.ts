@@ -3,12 +3,12 @@ import { expect, test, type Page } from '@playwright/test'
 const STORAGE_KEY = 'india-evisa-reimagined:p0'
 
 const NEW_SCENARIOS = [
-  { name: 'Business', slug: 'business', caseId: 'SYN-CASE-BUSINESS-001', category: 'e-Business Visa', documents: ['Synthetic portrait', 'Synthetic passport page', 'Synthetic business card'] },
-  { name: 'Accompanying a medical patient', slug: 'medical-attendant', caseId: 'SYN-CASE-MEDICAL-ATTENDANT-001', category: 'e-Medical Attendant Visa', documents: ['Synthetic portrait', 'Synthetic passport page'] },
-  { name: 'Study', slug: 'student', caseId: 'SYN-CASE-STUDENT-001', category: 'e-Student Visa', documents: ['Synthetic portrait', 'Synthetic passport page', 'Synthetic admission letter', 'Synthetic financial-support evidence'] },
-  { name: 'Joining a student family member', slug: 'family', caseId: 'SYN-CASE-FAMILY-001', category: 'e-Family Visa', documents: ['Synthetic portrait', 'Synthetic passport page'] },
-  { name: 'Transit through India', slug: 'transit', caseId: 'SYN-CASE-TRANSIT-001', category: 'e-Transit Visa', documents: ['Synthetic portrait', 'Synthetic passport page', 'Synthetic confirmed journey tickets', 'Synthetic destination-entry evidence'] },
-  { name: 'Entry / another eligible purpose', slug: 'miscellaneous', caseId: 'SYN-CASE-MISCELLANEOUS-001', category: 'e-Miscellaneous Visa', documents: ['Synthetic portrait', 'Synthetic passport page', 'Synthetic relationship or Indian-status evidence', 'Synthetic birth or marriage certificate'] },
+  { name: 'Business', slug: 'business', caseId: 'SYN-CASE-BUSINESS-001', category: 'e-Business Visa', documents: ['Recent photograph', 'Passport bio page', 'Business card'] },
+  { name: 'Accompanying a medical patient', slug: 'medical-attendant', caseId: 'SYN-CASE-MEDICAL-ATTENDANT-001', category: 'e-Medical Attendant Visa', documents: ['Recent photograph', 'Passport bio page'] },
+  { name: 'Study', slug: 'student', caseId: 'SYN-CASE-STUDENT-001', category: 'e-Student Visa', documents: ['Recent photograph', 'Passport bio page', 'Admission letter', 'Proof of financial support'] },
+  { name: 'Joining a student family member', slug: 'family', caseId: 'SYN-CASE-FAMILY-001', category: 'e-Family Visa', documents: ['Recent photograph', 'Passport bio page'] },
+  { name: 'Transit through India', slug: 'transit', caseId: 'SYN-CASE-TRANSIT-001', category: 'e-Transit Visa', documents: ['Recent photograph', 'Passport bio page', 'Confirmed travel tickets', 'Proof of permission to enter destination country'] },
+  { name: 'Entry / another eligible purpose', slug: 'miscellaneous', caseId: 'SYN-CASE-MISCELLANEOUS-001', category: 'e-Miscellaneous Visa', documents: ['Recent photograph', 'Passport bio page', 'Proof supporting your relationship or Indian/OCI status basis', 'Birth or marriage certificate'] },
 ] as const
 
 async function clearAndOpen(page: Page) {
@@ -38,7 +38,7 @@ for (const scenario of NEW_SCENARIOS) {
       await expect(page).toHaveURL('/apply/business')
     }
 
-    await page.getByRole('button', { name: 'Continue with this demo' }).click()
+    await page.getByRole('button', { name: 'Continue application' }).click()
     await expect(page).toHaveURL(`/application/${scenario.caseId}`)
     await page.getByRole('button', { name: 'Start application' }).click()
 
@@ -61,26 +61,26 @@ for (const scenario of NEW_SCENARIOS) {
         has: page.getByRole('heading', { level: 3, name: documentName }),
       })
       await expect(card).toHaveCount(1)
-      await card.getByRole('button', { name: 'Run technical check' }).click()
+      await card.getByRole('button', { name: 'Check document' }).click()
     }
     await page.getByRole('link', { name: 'Review application' }).click()
     await page.getByRole('checkbox', {
-      name: 'I confirm these synthetic demo details are ready for simulated submission.',
+      name: 'I confirm these application details are complete and ready to submit.',
     }).check()
-    await page.getByRole('button', { name: 'Submit demo application' }).click()
-    await page.getByRole('button', { name: 'Start mock payment' }).click()
-    await page.getByRole('button', { name: 'Check mock payment status' }).click()
+    await page.getByRole('button', { name: 'Submit application' }).click()
+    await page.getByRole('button', { name: 'Pay visa fee' }).click()
+    await page.getByRole('button', { name: 'Check payment status' }).click()
     await page.getByRole('link', { name: 'Continue to status' }).click()
-    await page.getByRole('button', { name: 'Begin synthetic review' }).click()
+    await page.getByRole('button', { name: 'Begin review' }).click()
     await expect(page.getByRole('heading', { name: 'Under review' })).toBeVisible()
     await expect(page.getByRole('link', { name: 'Replace hospital letter' })).toHaveCount(0)
-    await page.getByText('Demo review control').click()
-    await page.getByRole('button', { name: 'Complete synthetic review' }).click()
+    await page.getByText('Review update').click()
+    await page.getByRole('button', { name: 'Check application status' }).click()
 
     await expect(page).toHaveURL(`/application/${scenario.caseId}/eta`)
-    await expect(page.getByRole('heading', { name: 'Synthetic ETA issued' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Electronic Travel Authorization issued' })).toBeVisible()
     await expect(page.getByText(scenario.category, { exact: true })).toBeVisible()
-    await expect(page.getByText('SYNTHETIC — NOT VALID. This is not a visa or travel document.')).toBeVisible()
+    await expect(page.getByText('SAMPLE — NOT VALID. This is not a visa or travel document.')).toBeVisible()
   })
 }
 
@@ -96,11 +96,11 @@ test('all eight purpose deep links resolve through the same route tree', async (
   await page.goto('/apply/student')
   await expect(page.getByText(/medical or paramedical study can have additional official requirements/i)).toBeVisible()
   await page.goto('/apply/family')
-  await expect(page.getByText(/representative Student Dependent demo path/i)).toBeVisible()
-  await expect(page.getByText(/not a generic family-visiting category/i)).toBeVisible()
+  await expect(page.getByText(/Student Dependent category/i)).toBeVisible()
+  await expect(page.getByText(/not for general family visits/i)).toBeVisible()
   await page.goto('/apply/miscellaneous')
-  await expect(page.getByText(/representative relationship-based e-Entry demo/i)).toBeVisible()
-  await expect(page.getByText(/not a generic legal catch-all/i)).toBeVisible()
+  await expect(page.getByText(/relationship-based e-Entry route/i)).toBeVisible()
+  await expect(page.getByText(/not a general-purpose category/i)).toBeVisible()
 })
 
 test('eight-card service catalog is responsive and overflow-free at target widths', async ({ page }) => {

@@ -301,9 +301,9 @@ describe('runtime A09 synthetic approval and ETA issuance', () => {
 
     expect(runtime.inspectStatus({ caseId })).toMatchObject({
       status: 'STATUS_INSPECTED',
-      headline: 'Demo application approved',
+      headline: 'Application approved',
       explanation:
-        'Local synthetic review is complete and a non-valid prototype ETA is available below.',
+        'Your application has been approved and your Electronic Travel Authorization is available.',
       applicantActionRequired: false,
       nextAction: null,
       demoReviewAction: null,
