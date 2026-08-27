@@ -225,7 +225,7 @@ describe('A09 synthetic approval and ETA outcome', () => {
       etaState: 'ISSUED',
       syntheticEtaReference: 'SYN-ETA-TOURIST-001',
     })
-    expect(screen.getAllByText(/SYN-EVISA-POLICY@1\.0\.0/)).toHaveLength(1)
+    expect(screen.getAllByText(/SYN-EVISA-POLICY@2\.0\.0/)).toHaveLength(1)
     expect(screen.queryByText(/passport number/i)).not.toBeInTheDocument()
   })
 })

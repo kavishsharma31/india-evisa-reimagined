@@ -19,6 +19,13 @@ export {
 } from './cases'
 export {
   canonicalDocumentFixtures,
+  validBusinessCardFixture,
+  validStudentAdmissionLetterFixture,
+  validStudentFinancialSupportFixture,
+  validTransitTicketsFixture,
+  validDestinationEntryFixture,
+  validMiscRelationProofFixture,
+  validMiscCivilCertificateFixture,
   hospitalLetterV1Fixture,
   hospitalLetterV2Fixture,
   unclearPassportPageFixture,

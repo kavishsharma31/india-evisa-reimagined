@@ -10,7 +10,7 @@ import type {
   SyntheticId,
 } from '../domain'
 import { syntheticTimestampSchema } from '../domain/ids'
-import { ACTIVE_POLICY_QUALIFIED_VERSION, activePolicyBundle } from '../policy'
+import { LEGACY_POLICY_QUALIFIED_VERSION, legacyPolicyBundle } from '../policy'
 import { deepFreeze } from '../policy/schema'
 import {
   P0_FIXTURE_VERSION,
@@ -127,7 +127,7 @@ export function createDraftSnapshot(input: {
       sequence: input.sequence,
       currentStep: input.currentStep,
       answers: input.answers,
-      policyQualifiedVersion: ACTIVE_POLICY_QUALIFIED_VERSION,
+      policyQualifiedVersion: LEGACY_POLICY_QUALIFIED_VERSION,
       savedAt: controlledFixtureTimestamp(input.savedAtMinute),
     }),
   )
@@ -168,7 +168,7 @@ export function createSeedEventFactory(input: {
         aggregateId: definition.aggregateId,
         actor: definition.actor,
         syntheticTimestamp: controlledFixtureTimestamp(firstMinute + sequence - 1),
-        policyQualifiedVersion: ACTIVE_POLICY_QUALIFIED_VERSION,
+        policyQualifiedVersion: LEGACY_POLICY_QUALIFIED_VERSION,
         payload: definition.payload ?? {},
         ...(definition.previousState === undefined
           ? {}
@@ -195,8 +195,8 @@ export function createSeedCase(definition: SeedCaseDefinition): PersistedCase {
       createdAt: controlledFixtureTimestamp(1),
       updatedAt: controlledFixtureTimestamp(definition.updatedAtMinute),
       policyPin: {
-        qualifiedVersion: ACTIVE_POLICY_QUALIFIED_VERSION,
-        digest: activePolicyBundle.digest,
+        qualifiedVersion: LEGACY_POLICY_QUALIFIED_VERSION,
+        digest: legacyPolicyBundle.digest,
       },
       application: {
         applicationDraftId: definition.applicationDraftId,

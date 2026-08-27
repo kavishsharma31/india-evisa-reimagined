@@ -7,7 +7,7 @@ test('Medical completes the full applicant A00 through A09 journey without seed 
   await page.evaluate((storageKey) => localStorage.removeItem(storageKey), P0_STORAGE_KEY)
   await page.reload()
 
-  await expect(page.getByRole('heading', { name: 'What are you travelling to India for?' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Why are you travelling to India?' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Demo controls' })).toHaveCount(0)
   await page.getByText('Medical treatment', { exact: true }).click()
   await page.getByRole('link', { name: 'Continue' }).click()

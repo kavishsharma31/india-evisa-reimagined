@@ -116,7 +116,7 @@ describe('runtime A05 review and simulated submission', () => {
     expect(review).toMatchObject({
       status: 'REVIEW_INSPECTED',
       purposeFamily: 'SYNTHETIC_MEDICAL_PURPOSE',
-      policyQualifiedVersion: 'SYN-EVISA-POLICY@1.0.0',
+      policyQualifiedVersion: 'SYN-EVISA-POLICY@2.0.0',
       applicationState: 'IN_PROGRESS',
       locked: false,
       syntheticFee: {

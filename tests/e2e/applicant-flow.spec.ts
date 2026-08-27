@@ -10,7 +10,7 @@ async function openFreshApp(page: Page) {
   await page.evaluate((storageKey) => localStorage.removeItem(storageKey), P0_STORAGE_KEY)
   await page.reload()
   await expect(
-    page.getByRole('heading', { name: 'What are you travelling to India for?' }),
+    page.getByRole('heading', { name: 'Why are you travelling to India?' }),
   ).toBeVisible()
 }
 

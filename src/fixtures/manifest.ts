@@ -1,4 +1,4 @@
-import { activePolicyBundle, ACTIVE_POLICY_QUALIFIED_VERSION } from '../policy'
+import { legacyPolicyBundle, LEGACY_POLICY_QUALIFIED_VERSION } from '../policy'
 import { deepFreeze } from '../policy/schema'
 import { P0_FIXTURE_VERSION, P0_STORAGE_SCHEMA_VERSION } from '../persistence'
 import { canonicalApplicantFixtures } from './applicants'
@@ -18,8 +18,8 @@ const canonicalFixtureManifest = parseFixtureManifest({
   storageSchemaVersion: P0_STORAGE_SCHEMA_VERSION,
   persistenceFixtureVersion: P0_FIXTURE_VERSION,
   activePolicy: {
-    qualifiedVersion: ACTIVE_POLICY_QUALIFIED_VERSION,
-    digest: activePolicyBundle.digest,
+    qualifiedVersion: LEGACY_POLICY_QUALIFIED_VERSION,
+    digest: legacyPolicyBundle.digest,
   },
   provenance: {
     provenanceId: 'PROV-SYN-P0-FIXTURES-001',
@@ -33,7 +33,7 @@ const canonicalFixtureManifest = parseFixtureManifest({
       caseId: MEDICAL_CASE_ID,
       applicantId: 'SYN-APPLICANT-MED-001',
       orientation: 'PRIMARY',
-      policyQualifiedVersion: ACTIVE_POLICY_QUALIFIED_VERSION,
+      policyQualifiedVersion: LEGACY_POLICY_QUALIFIED_VERSION,
       questionManifestId: 'QM-MEDICAL-1',
       documentManifestId: 'DM-MEDICAL-1',
       purposeFamily: 'SYNTHETIC_MEDICAL_PURPOSE',
@@ -44,7 +44,7 @@ const canonicalFixtureManifest = parseFixtureManifest({
       caseId: TOURIST_CASE_ID,
       applicantId: 'SYN-APPLICANT-TOURIST-001',
       orientation: 'SHARED_CONTRACT_VALIDATION',
-      policyQualifiedVersion: ACTIVE_POLICY_QUALIFIED_VERSION,
+      policyQualifiedVersion: LEGACY_POLICY_QUALIFIED_VERSION,
       questionManifestId: 'QM-TOURIST-1',
       documentManifestId: 'DM-TOURIST-1',
       purposeFamily: 'SYNTHETIC_TOURIST_PURPOSE',

@@ -4,6 +4,7 @@ export {
   P0_STORAGE_KEY,
   P0_STORAGE_SCHEMA_VERSION,
   PERSISTED_SCENARIO_IDS,
+  LEGACY_PERSISTED_SCENARIO_IDS,
 } from './keys'
 export { createLocalStoragePersistence } from './local-storage'
 export { createCanonicalPersistenceEnvelope } from './reset'

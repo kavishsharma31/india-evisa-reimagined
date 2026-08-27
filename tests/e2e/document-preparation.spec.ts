@@ -137,7 +137,7 @@ test('Medical A04 prepares all policy-required bundled files and hands off to Re
   await expect(page.getByRole('heading', { name: /Review your application/i })).toHaveCount(0)
   const evidence = await loadDocumentEvidence(page)
   expect(evidence.documents).toHaveLength(3)
-  expect(evidence.policyQualifiedVersion).toBe('SYN-EVISA-POLICY@1.0.0')
+  expect(evidence.policyQualifiedVersion).toBe('SYN-EVISA-POLICY@2.0.0')
   expect(browserErrors).toEqual([])
   expect(
     requestUrls.every((url) => {

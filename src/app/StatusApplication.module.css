@@ -107,7 +107,7 @@
   width: 130%;
   margin: 0;
   transform: translate(-50%, -50%) rotate(-12deg);
-  color: rgb(139 75 39 / 9%);
+  color: #8b4b27;
   font-size: clamp(2.2rem, 8vw, 5.4rem);
   font-weight: 900;
   letter-spacing: 0.08em;

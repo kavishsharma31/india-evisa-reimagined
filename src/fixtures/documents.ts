@@ -86,10 +86,77 @@ export const hospitalLetterV2Fixture = parseDocumentFixture({
   integrityHash: 'sha256:0b662e31f1a9e5112157afea025b132aa2bcc68fa152dd2d6b09bedb7e7ec0ea',
 })
 
+function createExpandedDocumentFixture(input: {
+  fixtureId: string
+  documentType: string
+  requirementId: string
+  fixtureCategory: string
+  label: string
+  integrityHash: string
+}): DocumentFixture {
+  return parseDocumentFixture({
+    ...commonFixtureMetadata,
+    ...input,
+    expectedInspectionScenario: 'DOCUMENT_PASS',
+    expectedInspectionReasonCode: 'MOCK_DOCUMENT_PREFLIGHT_PASSED',
+    fixtureVersion: '1.0.0',
+  })
+}
+
+export const validBusinessCardFixture = createExpandedDocumentFixture({
+  fixtureId: 'SYN-FIXTURE-BUSINESS-CARD-VALID-001', documentType: 'SYNTHETIC_BUSINESS_CARD',
+  requirementId: 'REQ-BUSINESS-CARD-1', fixtureCategory: 'SYNTHETIC_BUSINESS_CARD_FIXTURE',
+  label: 'Synthetic business card — valid demo metadata',
+  integrityHash: 'sha256:1111111111111111111111111111111111111111111111111111111111111111',
+})
+export const validStudentAdmissionLetterFixture = createExpandedDocumentFixture({
+  fixtureId: 'SYN-FIXTURE-STUDENT-ADMISSION-LETTER-VALID-001', documentType: 'SYNTHETIC_ADMISSION_LETTER',
+  requirementId: 'REQ-ADMISSION-LETTER-1', fixtureCategory: 'SYNTHETIC_ADMISSION_LETTER_FIXTURE',
+  label: 'Synthetic admission letter — valid demo metadata',
+  integrityHash: 'sha256:2222222222222222222222222222222222222222222222222222222222222222',
+})
+export const validStudentFinancialSupportFixture = createExpandedDocumentFixture({
+  fixtureId: 'SYN-FIXTURE-STUDENT-FINANCIAL-SUPPORT-VALID-001', documentType: 'SYNTHETIC_FINANCIAL_SUPPORT',
+  requirementId: 'REQ-FINANCIAL-SUPPORT-1', fixtureCategory: 'SYNTHETIC_FINANCIAL_SUPPORT_FIXTURE',
+  label: 'Synthetic financial-support evidence — valid demo metadata',
+  integrityHash: 'sha256:3333333333333333333333333333333333333333333333333333333333333333',
+})
+export const validTransitTicketsFixture = createExpandedDocumentFixture({
+  fixtureId: 'SYN-FIXTURE-TRANSIT-TICKETS-VALID-001', documentType: 'SYNTHETIC_TRANSIT_TICKETS',
+  requirementId: 'REQ-TRANSIT-TICKETS-1', fixtureCategory: 'SYNTHETIC_TRANSIT_TICKETS_FIXTURE',
+  label: 'Synthetic confirmed journey tickets — valid demo metadata',
+  integrityHash: 'sha256:4444444444444444444444444444444444444444444444444444444444444444',
+})
+export const validDestinationEntryFixture = createExpandedDocumentFixture({
+  fixtureId: 'SYN-FIXTURE-DESTINATION-ENTRY-VALID-001', documentType: 'SYNTHETIC_DESTINATION_ENTRY_EVIDENCE',
+  requirementId: 'REQ-DESTINATION-ENTRY-1', fixtureCategory: 'SYNTHETIC_DESTINATION_ENTRY_FIXTURE',
+  label: 'Synthetic destination-entry evidence — valid demo metadata',
+  integrityHash: 'sha256:5555555555555555555555555555555555555555555555555555555555555555',
+})
+export const validMiscRelationProofFixture = createExpandedDocumentFixture({
+  fixtureId: 'SYN-FIXTURE-MISC-RELATION-PROOF-VALID-001', documentType: 'SYNTHETIC_RELATIONSHIP_EVIDENCE',
+  requirementId: 'REQ-RELATIONSHIP-PROOF-1', fixtureCategory: 'SYNTHETIC_RELATIONSHIP_EVIDENCE_FIXTURE',
+  label: 'Synthetic relationship or Indian-status evidence — valid demo metadata',
+  integrityHash: 'sha256:6666666666666666666666666666666666666666666666666666666666666666',
+})
+export const validMiscCivilCertificateFixture = createExpandedDocumentFixture({
+  fixtureId: 'SYN-FIXTURE-MISC-CIVIL-CERTIFICATE-VALID-001', documentType: 'SYNTHETIC_CIVIL_CERTIFICATE',
+  requirementId: 'REQ-CIVIL-CERTIFICATE-1', fixtureCategory: 'SYNTHETIC_CIVIL_CERTIFICATE_FIXTURE',
+  label: 'Synthetic birth or marriage certificate — valid demo metadata',
+  integrityHash: 'sha256:7777777777777777777777777777777777777777777777777777777777777777',
+})
+
 export const canonicalDocumentFixtures = deepFreeze([
   validPortraitFixture,
   validPassportPageFixture,
   unclearPassportPageFixture,
   hospitalLetterV1Fixture,
   hospitalLetterV2Fixture,
+  validBusinessCardFixture,
+  validStudentAdmissionLetterFixture,
+  validStudentFinancialSupportFixture,
+  validTransitTicketsFixture,
+  validDestinationEntryFixture,
+  validMiscRelationProofFixture,
+  validMiscCivilCertificateFixture,
 ])

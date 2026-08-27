@@ -14,7 +14,7 @@ import {
   syntheticIdSchema,
   syntheticTimestampSchema,
 } from '../domain/ids'
-import { activePolicyBundle, ACTIVE_POLICY_QUALIFIED_VERSION } from '../policy'
+import { isSupportedPolicyPin, registeredPolicyBundles } from '../policy'
 import { deepFreeze, type DeepReadonly } from '../policy/schema'
 import {
   P0_FIXTURE_VERSION,
@@ -50,12 +50,19 @@ const documentRequirementIdSchema = z.enum([
   'REQ-PORTRAIT-1',
   'REQ-PASSPORT-PAGE-1',
   'REQ-HOSPITAL-LETTER-1',
+  'REQ-BUSINESS-CARD-1',
+  'REQ-ADMISSION-LETTER-1',
+  'REQ-FINANCIAL-SUPPORT-1',
+  'REQ-TRANSIT-TICKETS-1',
+  'REQ-DESTINATION-ENTRY-1',
+  'REQ-RELATIONSHIP-PROOF-1',
+  'REQ-CIVIL-CERTIFICATE-1',
 ])
 
 const questionAllowedValues = new Map(
-  activePolicyBundle.questionManifests.flatMap((manifest) =>
+  registeredPolicyBundles.flatMap((bundle) => bundle.questionManifests.flatMap((manifest) =>
     manifest.questions.map((question) => [question.id, new Set(question.allowedValues)] as const),
-  ),
+  )),
 )
 
 export const controlledAnswerMapSchema = z
@@ -93,7 +100,7 @@ export const draftSnapshotSchema = z
     sequence: z.number().int().positive(),
     currentStep: z.enum(APPLICATION_STEP_IDS),
     answers: controlledAnswerMapSchema,
-    policyQualifiedVersion: z.literal(ACTIVE_POLICY_QUALIFIED_VERSION),
+    policyQualifiedVersion: policyQualifiedVersionSchema,
     savedAt: syntheticTimestampSchema,
   })
   .strict()
@@ -236,7 +243,7 @@ export const persistedDomainEventSchema = z
     newState: z.string().min(1).optional(),
     actor: z.enum(['APPLICANT', 'SYSTEM', 'REVIEWER', 'PAYMENT_MOCK']),
     syntheticTimestamp: syntheticTimestampSchema,
-    policyQualifiedVersion: z.literal(ACTIVE_POLICY_QUALIFIED_VERSION).optional(),
+    policyQualifiedVersion: policyQualifiedVersionSchema.optional(),
     reasonCode: reasonCodeSchema.optional(),
     idempotencyKey: syntheticIdSchema.optional(),
     payload: privacySafeEventPayloadSchema,
@@ -266,10 +273,13 @@ export const persistedDomainEventSchema = z
 
 const policyPinSchema = z
   .object({
-    qualifiedVersion: z.literal(ACTIVE_POLICY_QUALIFIED_VERSION),
-    digest: z.literal(activePolicyBundle.digest),
+    qualifiedVersion: policyQualifiedVersionSchema,
+    digest: syntheticIdSchema,
   })
   .strict()
+  .refine((pin) => isSupportedPolicyPin(pin.qualifiedVersion, pin.digest), {
+    message: 'Policy pin must identify an exact registered policy bundle.',
+  })
 
 export const persistedCaseSchema = z
   .object({
@@ -280,7 +290,7 @@ export const persistedCaseSchema = z
     updatedAt: syntheticTimestampSchema,
     policyPin: policyPinSchema,
     application: persistedApplicationSchema,
-    documents: z.array(persistedDocumentAggregateSchema).max(3),
+    documents: z.array(persistedDocumentAggregateSchema).max(4),
     payment: persistedPaymentSchema,
     scrutiny: persistedScrutinySchema,
     eta: persistedEtaSchema,
@@ -436,7 +446,7 @@ export const persistenceEnvelopeSchema = z
     fixtureVersion: z.literal(P0_FIXTURE_VERSION),
     activeCaseId: syntheticIdSchema.nullable(),
     lastUpdatedAt: syntheticTimestampSchema,
-    cases: z.array(persistedCaseSchema).max(7),
+    cases: z.array(persistedCaseSchema).max(8),
   })
   .strict()
   .superRefine((envelope, context) => {

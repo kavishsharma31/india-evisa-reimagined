@@ -124,3 +124,43 @@ export function createProvenanceCatalogue(): readonly ProvenanceDefinitionInput[
     },
   ]
 }
+
+const EXPANDED_SCOPES = Object.freeze([
+  ['BUSINESS', 'Business'],
+  ['MEDICAL-ATTENDANT', 'Medical Attendant'],
+  ['STUDENT', 'Student'],
+  ['FAMILY', 'Student Dependent'],
+  ['TRANSIT', 'Transit'],
+  ['MISCELLANEOUS', 'Miscellaneous e-Entry'],
+] as const)
+
+export function createExpandedReasonCatalogue(): readonly ReasonDefinitionInput[] {
+  return [
+    ...createReasonCatalogue(),
+    ...EXPANDED_SCOPES.flatMap(([codePart, label]) => [
+      {
+        code: `R-SYN-${codePart}-INTENT` as const,
+        summary: `Synthetic ${label} purpose selected`,
+        explanation: `The bounded scenario facts select the representative synthetic ${label} purpose family.`,
+        legalAdvice: false as const,
+      },
+      {
+        code: `R-SYN-${codePart}-DOCUMENTS` as const,
+        summary: `Synthetic ${label} evidence set required`,
+        explanation: `The representative ${label} demo manifest requires its policy-defined synthetic evidence categories.`,
+        legalAdvice: false as const,
+      },
+    ]),
+  ]
+}
+
+export function createExpandedProvenanceCatalogue(): readonly ProvenanceDefinitionInput[] {
+  return [
+    ...createProvenanceCatalogue(),
+    ...EXPANDED_SCOPES.map(([codePart, label]) => ({
+      id: `PROV-SYN-P2-${codePart}` as const,
+      sourceLabel: `Approved representative ${label} demo contract`,
+      note: 'Synthetic representative scope only; not a complete statement of official requirements.',
+    })),
+  ]
+}

@@ -33,6 +33,7 @@ import {
   type CaseNavigationProjection,
   type CaseStage,
   type ScenarioId,
+  type Scenario,
 } from './app/navigation'
 import type { SyntheticId } from './domain'
 import { getSeed, type RecoverySeed, type RecoverySeedId } from './fixtures'
@@ -45,9 +46,7 @@ const PROTOTYPE_NOTICE =
 type AppProps = Readonly<{ services?: AppRuntimeServices }>
 
 function createCaseIdempotencyKey(scenarioId: ScenarioId): SyntheticId {
-  return scenarioId === 'SYN-MEDICAL-001'
-    ? 'SYN-IDEMPOTENCY-UI-CREATE-MEDICAL-001'
-    : 'SYN-IDEMPOTENCY-UI-CREATE-TOURIST-001'
+  return `SYN-IDEMPOTENCY-UI-CREATE-${scenarioId.slice('SYN-'.length)}-001`
 }
 
 function beginDraftIdempotencyKey(caseId: SyntheticId): SyntheticId {
@@ -78,17 +77,17 @@ function ScenarioSelection({ services }: { services: AppRuntimeServices }) {
     <section className={styles.entryLayout} aria-labelledby="scenario-heading">
       <div className={styles.entryIntroduction}>
         <p className={styles.eyebrow}>Purpose guidance</p>
-        <h2 id="scenario-heading" tabIndex={-1}>What are you travelling to India for?</h2>
+        <h2 id="scenario-heading" tabIndex={-1}>Why are you travelling to India?</h2>
         <p className={styles.lead}>
-          Choose a controlled synthetic scenario. We’ll use its versioned demo policy to explain what comes next.
+          Choose the purpose that best matches your trip.
         </p>
       </div>
 
       <fieldset className={styles.scenarioFieldset}>
         <legend className={styles.visuallyHidden}>Choose one synthetic travel purpose</legend>
-        {SCENARIOS.map((scenario, index) => (
+        {SCENARIOS.map((scenario) => (
           <label
-            className={`${styles.scenarioCard} ${index === 0 ? styles.primaryScenario : ''}`}
+            className={styles.scenarioCard}
             key={scenario.id}
           >
             <input
@@ -109,9 +108,8 @@ function ScenarioSelection({ services }: { services: AppRuntimeServices }) {
             <span className={styles.scenarioCopy}>
               <span className={styles.scenarioTopline}>
                 <strong>{scenario.name}</strong>
-                <span className={styles.scenarioBadge}>{scenario.badge}</span>
               </span>
-              <span>{scenario.description}</span>
+              <span>{scenario.officialCategory}</span>
             </span>
             <span className={styles.radioIndicator} aria-hidden="true" />
           </label>
@@ -136,6 +134,7 @@ function ScenarioSelection({ services }: { services: AppRuntimeServices }) {
 }
 
 function PurposeGuidance(props: {
+  scenario: Scenario
   evaluation: PolicyEvaluationResult
   backPath: string
   error: string | null
@@ -156,6 +155,9 @@ function PurposeGuidance(props: {
       <div className={styles.guidanceHeader}>
         <p className={styles.eyebrow}>Purpose guidance · Step 1 of 6</p>
         <h2 id="guidance-heading" tabIndex={-1}>{purposeName}</h2>
+        <p><strong>{props.scenario.officialCategory}</strong></p>
+        <p>{props.scenario.description}</p>
+        <p className={styles.demoDisclaimer}>{props.scenario.scopeNote}</p>
         <p className={styles.demoDisclaimer}>
           This purpose is supported by the selected demo scenario. It is not a legal eligibility decision.
         </p>
@@ -335,7 +337,7 @@ function PurposeRoute(props: { services: AppRuntimeServices }) {
     setError('The synthetic case could not be created safely. Your saved demo data was not changed.')
   }
 
-  return <PurposeGuidance evaluation={evaluated.evaluation} backPath={withPreservedDemo('/', location.search)} error={error} onContinue={createCase} />
+  return <PurposeGuidance scenario={scenario} evaluation={evaluated.evaluation} backPath={withPreservedDemo('/', location.search)} error={error} onContinue={createCase} />
 }
 
 function LandingRoute(props: { services: AppRuntimeServices; onReset(): void }) {

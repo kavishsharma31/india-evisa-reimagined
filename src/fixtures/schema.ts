@@ -18,13 +18,13 @@ import {
   syntheticTimestampSchema,
 } from '../domain/ids'
 import type { DocumentInspectionScenario } from '../mocks'
-import { ACTIVE_POLICY_QUALIFIED_VERSION, activePolicyBundle } from '../policy'
+import { LEGACY_POLICY_QUALIFIED_VERSION, legacyPolicyBundle } from '../policy'
 import { deepFreeze, type DeepReadonly } from '../policy/schema'
 import {
   APPLICATION_STEP_IDS,
   P0_FIXTURE_VERSION,
   P0_STORAGE_SCHEMA_VERSION,
-  PERSISTED_SCENARIO_IDS,
+  LEGACY_PERSISTED_SCENARIO_IDS,
   persistenceEnvelopeSchema,
 } from '../persistence'
 
@@ -48,6 +48,13 @@ export const DOCUMENT_FIXTURE_IDS = Object.freeze([
   'SYN-FIXTURE-PASSPORT-UNCLEAR-001',
   'SYN-FIXTURE-HOSPITAL-LETTER-V1-001',
   'SYN-FIXTURE-HOSPITAL-LETTER-V2-001',
+  'SYN-FIXTURE-BUSINESS-CARD-VALID-001',
+  'SYN-FIXTURE-STUDENT-ADMISSION-LETTER-VALID-001',
+  'SYN-FIXTURE-STUDENT-FINANCIAL-SUPPORT-VALID-001',
+  'SYN-FIXTURE-TRANSIT-TICKETS-VALID-001',
+  'SYN-FIXTURE-DESTINATION-ENTRY-VALID-001',
+  'SYN-FIXTURE-MISC-RELATION-PROOF-VALID-001',
+  'SYN-FIXTURE-MISC-CIVIL-CERTIFICATE-VALID-001',
 ] as const)
 
 export const RECOVERY_SEED_IDS = Object.freeze([
@@ -69,12 +76,26 @@ const documentRequirementIdSchema = z.enum([
   'REQ-PORTRAIT-1',
   'REQ-PASSPORT-PAGE-1',
   'REQ-HOSPITAL-LETTER-1',
+  'REQ-BUSINESS-CARD-1',
+  'REQ-ADMISSION-LETTER-1',
+  'REQ-FINANCIAL-SUPPORT-1',
+  'REQ-TRANSIT-TICKETS-1',
+  'REQ-DESTINATION-ENTRY-1',
+  'REQ-RELATIONSHIP-PROOF-1',
+  'REQ-CIVIL-CERTIFICATE-1',
 ])
 
 const fixtureCategorySchema = z.enum([
   'SYNTHETIC_PORTRAIT_FIXTURE',
   'SYNTHETIC_PASSPORT_PAGE_FIXTURE',
   'SYNTHETIC_HOSPITAL_LETTER_FIXTURE',
+  'SYNTHETIC_BUSINESS_CARD_FIXTURE',
+  'SYNTHETIC_ADMISSION_LETTER_FIXTURE',
+  'SYNTHETIC_FINANCIAL_SUPPORT_FIXTURE',
+  'SYNTHETIC_TRANSIT_TICKETS_FIXTURE',
+  'SYNTHETIC_DESTINATION_ENTRY_FIXTURE',
+  'SYNTHETIC_RELATIONSHIP_EVIDENCE_FIXTURE',
+  'SYNTHETIC_CIVIL_CERTIFICATE_FIXTURE',
 ])
 
 const fixtureTimestampSchema = syntheticTimestampSchema.refine(
@@ -106,6 +127,13 @@ export const documentFixtureSchema = z
       'SYNTHETIC_PORTRAIT',
       'SYNTHETIC_PASSPORT_PAGE',
       'SYNTHETIC_HOSPITAL_LETTER',
+      'SYNTHETIC_BUSINESS_CARD',
+      'SYNTHETIC_ADMISSION_LETTER',
+      'SYNTHETIC_FINANCIAL_SUPPORT',
+      'SYNTHETIC_TRANSIT_TICKETS',
+      'SYNTHETIC_DESTINATION_ENTRY_EVIDENCE',
+      'SYNTHETIC_RELATIONSHIP_EVIDENCE',
+      'SYNTHETIC_CIVIL_CERTIFICATE',
     ]),
     requirementId: documentRequirementIdSchema,
     fixtureCategory: fixtureCategorySchema,
@@ -135,11 +163,11 @@ export const documentFixtureSchema = z
 
 export const scenarioRootSchema = z
   .object({
-    scenarioId: z.enum(PERSISTED_SCENARIO_IDS),
+    scenarioId: z.enum(LEGACY_PERSISTED_SCENARIO_IDS),
     caseId: z.enum(CANONICAL_CASE_IDS),
     applicantId: z.enum(CANONICAL_APPLICANT_IDS),
     orientation: z.enum(['PRIMARY', 'SHARED_CONTRACT_VALIDATION']),
-    policyQualifiedVersion: z.literal(ACTIVE_POLICY_QUALIFIED_VERSION),
+    policyQualifiedVersion: z.literal(LEGACY_POLICY_QUALIFIED_VERSION),
     questionManifestId: z.enum(['QM-MEDICAL-1', 'QM-TOURIST-1']),
     documentManifestId: z.enum(['DM-MEDICAL-1', 'DM-TOURIST-1']),
     purposeFamily: z.enum([
@@ -167,7 +195,7 @@ export const recoverySeedSchema = z
     seedId: z.enum(RECOVERY_SEED_IDS),
     label: z.string().min(1).max(100),
     seedKind: z.enum(['SCENARIO_ROOT', 'RECOVERY']),
-    scenarioId: z.enum(PERSISTED_SCENARIO_IDS),
+    scenarioId: z.enum(LEGACY_PERSISTED_SCENARIO_IDS),
     caseId: z.enum(CANONICAL_CASE_IDS),
     recoveryOracle: z.enum([
       'BEGIN_FRESH_CASE',
@@ -263,7 +291,7 @@ function validateSeedConsistency(
   if (activeCase.scenarioId !== seed.scenarioId) {
     addIssue(context, seedPath, 'Seed scenario must match its persisted case.')
   }
-  if (activeCase.policyPin.qualifiedVersion !== ACTIVE_POLICY_QUALIFIED_VERSION) {
+  if (activeCase.policyPin.qualifiedVersion !== LEGACY_POLICY_QUALIFIED_VERSION) {
     addIssue(context, seedPath, 'Seed case must retain the active P0 policy pin.')
   }
   if (
@@ -346,8 +374,8 @@ export const fixtureManifestSchema = z
     persistenceFixtureVersion: z.literal(P0_FIXTURE_VERSION),
     activePolicy: z
       .object({
-        qualifiedVersion: z.literal(ACTIVE_POLICY_QUALIFIED_VERSION),
-        digest: z.literal(activePolicyBundle.digest),
+        qualifiedVersion: z.literal(LEGACY_POLICY_QUALIFIED_VERSION),
+        digest: z.literal(legacyPolicyBundle.digest),
       })
       .strict(),
     provenance: z
@@ -383,7 +411,7 @@ export const fixtureManifestSchema = z
       }
     }
 
-    if (!sameMembers(scenarioIds, PERSISTED_SCENARIO_IDS)) {
+    if (!sameMembers(scenarioIds, LEGACY_PERSISTED_SCENARIO_IDS)) {
       addIssue(context, ['scenarioRoots'], 'Manifest must contain exactly Medical and Tourist.')
     }
     if (!sameMembers(caseIds, CANONICAL_CASE_IDS)) {

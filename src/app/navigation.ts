@@ -4,20 +4,48 @@ import type { AppRuntimeServices } from './create-app-runtime'
 
 export const SCENARIOS = [
   {
-    id: 'SYN-MEDICAL-001',
-    slug: 'medical',
-    name: 'Medical treatment',
-    pageTitle: 'Medical e-Visa',
-    description: 'For a synthetic traveller visiting India for medical treatment.',
-    badge: 'Recommended demo',
-  },
-  {
     id: 'SYN-TOURIST-001',
     slug: 'tourist',
     name: 'Tourism',
     pageTitle: 'Tourist e-Visa',
-    description: 'For a synthetic traveller visiting India for tourism.',
-    badge: 'Shared journey check',
+    officialCategory: 'e-Tourist Visa',
+    description: 'Representative ordinary-tourism demo path.',
+    scopeNote: 'Short courses, short voluntary work and mountaineering can involve additional official requirements.',
+  },
+  {
+    id: 'SYN-BUSINESS-001', slug: 'business', name: 'Business', pageTitle: 'Business e-Visa',
+    officialCategory: 'e-Business Visa', description: 'Representative ordinary business-visit demo path.',
+    scopeNote: 'Specialised sports, GIAN, conference and film-related purposes can require additional evidence or clearances.',
+  },
+  {
+    id: 'SYN-MEDICAL-001', slug: 'medical', name: 'Medical treatment', pageTitle: 'Medical e-Visa',
+    officialCategory: 'e-Medical Visa', description: 'Representative medical-treatment demo path.',
+    scopeNote: 'Medical remains the deep synthetic payment and hospital-letter recovery demonstration.',
+  },
+  {
+    id: 'SYN-MEDICAL-ATTENDANT-001', slug: 'medical-attendant', name: 'Accompanying a medical patient', pageTitle: 'Medical Attendant e-Visa',
+    officialCategory: 'e-Medical Attendant Visa', description: 'Representative attendant path using a synthetic patient reference; no linked Medical case is required.',
+    scopeNote: 'This demo does not model legal entitlement or linked-case eligibility.',
+  },
+  {
+    id: 'SYN-STUDENT-001', slug: 'student', name: 'Study', pageTitle: 'Student e-Visa',
+    officialCategory: 'e-Student Visa', description: 'Representative general non-medical academic-study demo path.',
+    scopeNote: 'Medical or paramedical study can have additional official requirements; this representative demo does not model that subtype.',
+  },
+  {
+    id: 'SYN-FAMILY-001', slug: 'family', name: 'Joining a student family member', pageTitle: 'Family e-Visa',
+    officialCategory: 'e-Family Visa', description: 'Representative Student Dependent demo path—not a generic family-visiting category.',
+    scopeNote: 'This path uses a synthetic student reference and does not determine dependent entitlement.',
+  },
+  {
+    id: 'SYN-TRANSIT-001', slug: 'transit', name: 'Transit through India', pageTitle: 'Transit e-Visa',
+    officialCategory: 'e-Transit Visa', description: 'Representative transit demo path with onward-journey evidence.',
+    scopeNote: 'This prototype does not determine destination admission or legal transit eligibility.',
+  },
+  {
+    id: 'SYN-MISCELLANEOUS-001', slug: 'miscellaneous', name: 'Entry / another eligible purpose', pageTitle: 'Miscellaneous e-Visa',
+    officialCategory: 'e-Miscellaneous Visa', description: 'Representative relationship-based e-Entry demo path—not a generic legal catch-all.',
+    scopeNote: 'This prototype does not determine relationship-based legal eligibility.',
   },
 ] as const
 

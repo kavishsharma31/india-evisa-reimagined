@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 
 import type { SyntheticId } from '../domain'
-import { PURPOSE_NAMES } from './applicant-labels'
+import { OFFICIAL_CATEGORY_NAMES, PURPOSE_NAMES } from './applicant-labels'
 import type { AppRuntimeServices } from './create-app-runtime'
 import styles from './StatusApplication.module.css'
 
@@ -57,6 +57,10 @@ export function SyntheticEta(props: {
             <div>
               <dt>Purpose</dt>
               <dd>{PURPOSE_NAMES[status.purposeFamily]}</dd>
+            </div>
+            <div>
+              <dt>e-Visa category</dt>
+              <dd>{OFFICIAL_CATEGORY_NAMES[status.purposeFamily]}</dd>
             </div>
             <div>
               <dt>Synthetic ETA reference</dt>

@@ -66,17 +66,18 @@ async function openMedicalGuidance(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe('applicant slice A00 and A01', () => {
-  it('presents the persistent notice and exactly two accessible scenario choices', () => {
+  it('presents the persistent notice and exactly eight accessible scenario choices', () => {
     const { services } = createTestServices()
     render(<App services={services} />)
 
     expect(screen.getByRole('heading', { level: 1, name: 'India e-Visa Reimagined' })).toBeInTheDocument()
     expect(screen.getByText(PROTOTYPE_NOTICE, { exact: true })).toBeInTheDocument()
-    expect(screen.getAllByRole('radio')).toHaveLength(2)
+    expect(screen.getAllByRole('radio')).toHaveLength(8)
+    expect(screen.getAllByRole('radio').every((radio) => !radio.hasAttribute('checked'))).toBe(true)
     expect(screen.getByRole('radio', { name: /Medical treatment/i })).toBeInTheDocument()
     expect(screen.getByRole('radio', { name: /Tourism/i })).toBeInTheDocument()
-    expect(screen.getByText('Recommended demo', { exact: true })).toBeInTheDocument()
-    expect(screen.getByText('Shared journey check', { exact: true })).toBeInTheDocument()
+    expect(screen.queryByText('Recommended demo', { exact: true })).not.toBeInTheDocument()
+    expect(screen.queryByText('Shared journey check', { exact: true })).not.toBeInTheDocument()
   })
 
   it('renders Medical guidance from the actual policy evaluation result', async () => {
@@ -242,7 +243,7 @@ describe('applicant slice A02 and resume', () => {
     await user.click(screen.getByRole('button', { name: 'Reset demo data' }))
 
     expect(resetCalls).toBe(1)
-    expect(screen.getByRole('heading', { name: 'What are you travelling to India for?' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Why are you travelling to India?' })).toBeInTheDocument()
     expect(requireValidState(store).cases).toEqual([])
   })
 
@@ -308,13 +309,13 @@ describe('D01 deterministic demo controls', () => {
 
     await user.selectOptions(seedSelect, 'SEED-MEDICAL-REUPLOAD-REQUESTED')
 
-    expect(screen.getByRole('heading', { name: 'Action required' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Action required' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Replace hospital letter' })).toBeInTheDocument()
     expect(requireValidState(store)).toEqual(getSeed('SEED-MEDICAL-REUPLOAD-REQUESTED').envelope)
     const canonicalReuploadBytes = storage.getItem(P0_STORAGE_KEY)
 
     await user.selectOptions(seedSelect, 'SEED-MEDICAL-AMBIGUOUS-PAYMENT')
-    expect(screen.getByRole('heading', { name: 'Complete the demo payment' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Complete the demo payment' })).toBeInTheDocument()
     expect(requireValidState(store).cases).toHaveLength(1)
     await user.selectOptions(seedSelect, 'SEED-MEDICAL-REUPLOAD-REQUESTED')
     expect(storage.getItem(P0_STORAGE_KEY)).toBe(canonicalReuploadBytes)
@@ -323,7 +324,7 @@ describe('D01 deterministic demo controls', () => {
     firstView.unmount()
     render(<App services={createAppRuntime({ store: createPersistenceStore(storage) })} />)
 
-    expect(screen.getByRole('heading', { name: 'Action required' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Action required' })).toBeInTheDocument()
     expect(storage.getItem(P0_STORAGE_KEY)).toBe(canonicalReuploadBytes)
   })
 
@@ -342,7 +343,7 @@ describe('D01 deterministic demo controls', () => {
     await user.click(screen.getByRole('button', { name: 'Reset demo' }))
 
     expect(
-      screen.getByRole('heading', { name: 'What are you travelling to India for?' }),
+      screen.getByRole('heading', { name: 'Why are you travelling to India?' }),
     ).toBeInTheDocument()
     expect(requireValidState(store)).toEqual(createCanonicalPersistenceEnvelope())
     expect(storage.getItem('unrelated:preference')).toBe('keep-me')

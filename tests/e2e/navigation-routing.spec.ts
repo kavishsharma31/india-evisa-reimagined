@@ -38,7 +38,7 @@ async function completeMedicalApplication(page: Page) {
 test('purpose routes are deep-linkable and A00/A01 use native browser history', async ({ page }) => {
   await openFresh(page)
   await expect(page).toHaveURL('/')
-  await expect(page.getByRole('heading', { name: 'What are you travelling to India for?' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Why are you travelling to India?' })).toBeVisible()
 
   await page.getByText('Medical treatment', { exact: true }).click()
   await page.getByRole('link', { name: 'Continue' }).click()
@@ -54,7 +54,7 @@ test('purpose routes are deep-linkable and A00/A01 use native browser history', 
   await expect(page.getByRole('heading', { name: 'Tourism' })).toBeVisible()
   await page.goto('/apply/not-a-scenario')
   await expect(page).toHaveURL('/')
-  await expect(page.getByRole('heading', { name: 'What are you travelling to India for?' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Why are you travelling to India?' })).toBeVisible()
 })
 
 test('application, documents, and review routes preserve bytes across reload and browser history', async ({ page }) => {

@@ -5,13 +5,12 @@ import { policyQualifiedVersionSchema, syntheticIdSchema } from '../domain/ids'
 import {
   canonicalScenarios,
   createPolicyEvaluationRequest,
-  getSeed,
   hospitalLetterV2Fixture,
 } from '../fixtures'
 import {
   ACTIVE_POLICY_QUALIFIED_VERSION,
-  activePolicyBundle,
   evaluatePolicy,
+  resolvePolicyBundle,
   type PolicyEvaluationResult,
 } from '../policy'
 import { deepFreeze } from '../policy/schema'
@@ -20,6 +19,7 @@ import {
   controlledAnswerMapSchema,
   createCanonicalPersistenceEnvelope,
   persistenceEnvelopeSchema,
+  persistedCaseSchema,
   type PersistedCase,
   type PersistenceEnvelope,
 } from '../persistence'
@@ -119,6 +119,13 @@ const prepareDocumentInputSchema = z
       'REQ-PORTRAIT-1',
       'REQ-PASSPORT-PAGE-1',
       'REQ-HOSPITAL-LETTER-1',
+      'REQ-BUSINESS-CARD-1',
+      'REQ-ADMISSION-LETTER-1',
+      'REQ-FINANCIAL-SUPPORT-1',
+      'REQ-TRANSIT-TICKETS-1',
+      'REQ-DESTINATION-ENTRY-1',
+      'REQ-RELATIONSHIP-PROOF-1',
+      'REQ-CIVIL-CERTIFICATE-1',
     ]),
     fixtureId: syntheticIdSchema,
     idempotencyKey: syntheticIdSchema,
@@ -139,9 +146,15 @@ const prepareCorrectionInputSchema = z
 
 type CanonicalScenarioId = PersistedCase['scenarioId']
 
-const START_SEED_BY_SCENARIO = Object.freeze({
-  'SYN-MEDICAL-001': 'SEED-MEDICAL-START',
-  'SYN-TOURIST-001': 'SEED-TOURIST-START',
+const CASE_TAG_BY_SCENARIO = Object.freeze({
+  'SYN-TOURIST-001': 'TOURIST',
+  'SYN-BUSINESS-001': 'BUSINESS',
+  'SYN-MEDICAL-001': 'MED',
+  'SYN-MEDICAL-ATTENDANT-001': 'MEDICAL-ATTENDANT',
+  'SYN-STUDENT-001': 'STUDENT',
+  'SYN-FAMILY-001': 'FAMILY',
+  'SYN-TRANSIT-001': 'TRANSIT',
+  'SYN-MISCELLANEOUS-001': 'MISCELLANEOUS',
 } as const)
 
 function invalidCommand(
@@ -160,7 +173,7 @@ function invalidCommand(
 }
 
 function isCanonicalScenarioId(scenarioId: SyntheticId): scenarioId is CanonicalScenarioId {
-  return scenarioId === 'SYN-MEDICAL-001' || scenarioId === 'SYN-TOURIST-001'
+  return canonicalScenarios.some((scenario) => scenario.scenarioId === scenarioId)
 }
 
 function scenarioFacts(scenarioId: CanonicalScenarioId) {
@@ -174,11 +187,45 @@ function scenarioFacts(scenarioId: CanonicalScenarioId) {
 function evaluateCanonicalScenario(
   scenarioId: CanonicalScenarioId,
   mode: 'NEW_CASE' | 'RESUME' = 'NEW_CASE',
+  policyQualifiedVersion: string = ACTIVE_POLICY_QUALIFIED_VERSION,
 ): PolicyEvaluationResult {
+  const bundle = resolvePolicyBundle(policyQualifiedVersion)
+  if (bundle === null) {
+    throw new Error(`Registered policy bundle is missing for ${policyQualifiedVersion}.`)
+  }
   return evaluatePolicy(
     createPolicyEvaluationRequest(scenarioFacts(scenarioId), mode),
-    activePolicyBundle,
+    bundle,
   )
+}
+
+function createCanonicalStartCase(
+  scenarioId: CanonicalScenarioId,
+  evaluation: PolicyEvaluationResult,
+): PersistedCase {
+  const tag = CASE_TAG_BY_SCENARIO[scenarioId]
+  const caseId = `SYN-CASE-${tag}-001` as SyntheticId
+  const applicationDraftId = `SYN-APPLICATION-DRAFT-${tag}-001` as SyntheticId
+  const createdAt = '2099-03-01T09:01:00Z'
+  return deepFreeze(persistedCaseSchema.parse({
+    caseId,
+    scenarioId,
+    revision: 1,
+    createdAt,
+    updatedAt: createdAt,
+    policyPin: { qualifiedVersion: evaluation.policy.qualifiedVersion, digest: evaluation.policy.digest },
+    application: { applicationDraftId, state: 'DRAFT_CREATED', revision: 1, latestDraftSnapshotId: null, draftSnapshots: [] },
+    documents: [],
+    payment: { state: 'NOT_STARTED', mockPaymentAttemptId: null, syntheticReference: null },
+    scrutiny: { scrutinyRecordId: `SYN-SCRUTINY-${tag}-001`, state: 'NOT_STARTED', submittedDocumentVersionIds: [] },
+    eta: { syntheticEtaId: `SYN-ETA-${tag}-001`, state: 'NOT_READY' },
+    auditEvents: [{
+      eventId: `SYN-EVENT-${tag}-START-01`, caseId, eventType: 'DraftCreated', domain: 'APPLICATION',
+      aggregateId: applicationDraftId, newState: 'DRAFT_CREATED', actor: 'APPLICANT', syntheticTimestamp: createdAt,
+      policyQualifiedVersion: evaluation.policy.qualifiedVersion,
+      payload: { scenarioId, policyEvaluationId: evaluation.evaluationId },
+    }],
+  }))
 }
 
 function unknownScenarioPolicyRejection(scenarioId: SyntheticId): RuntimePolicyRejected {
@@ -444,10 +491,11 @@ function eventRevision(persistedCase: PersistedCase, eventId: SyntheticId): numb
 function evaluatePinnedDocumentPolicy(
   persistedCase: PersistedCase,
 ): PolicyEvaluationResult | RuntimePolicyRejected {
-  const evaluation = evaluateCanonicalScenario(persistedCase.scenarioId, 'RESUME')
+  const evaluation = evaluateCanonicalScenario(persistedCase.scenarioId, 'RESUME', persistedCase.policyPin.qualifiedVersion)
   if (
     evaluation.scenarioSupport !== 'SUPPORTED_BY_DEMO' ||
     evaluation.policy.qualifiedVersion !== persistedCase.policyPin.qualifiedVersion ||
+    evaluation.policy.digest !== persistedCase.policyPin.digest ||
     evaluation.documentManifest === undefined
   ) {
     return evaluationPolicyRejection(evaluation)
@@ -458,10 +506,11 @@ function evaluatePinnedDocumentPolicy(
 function evaluatePinnedPaymentPolicy(
   persistedCase: PersistedCase,
 ): PolicyEvaluationResult | RuntimePolicyRejected {
-  const evaluation = evaluateCanonicalScenario(persistedCase.scenarioId, 'RESUME')
+  const evaluation = evaluateCanonicalScenario(persistedCase.scenarioId, 'RESUME', persistedCase.policyPin.qualifiedVersion)
   if (
     evaluation.scenarioSupport !== 'SUPPORTED_BY_DEMO' ||
     evaluation.policy.qualifiedVersion !== persistedCase.policyPin.qualifiedVersion ||
+    evaluation.policy.digest !== persistedCase.policyPin.digest ||
     evaluation.syntheticFee === undefined
   ) {
     return evaluationPolicyRejection(evaluation)
@@ -499,13 +548,13 @@ function paymentEvidenceMatches(input: {
   metadata: Readonly<{
     caseId: SyntheticId
     applicationId: SyntheticId
-    amount: 41 | 73
+    amount: number
     unit: 'SYNTHETIC_DEMO_CREDITS'
     idempotencyKey: SyntheticId
     syntheticPaymentReference: SyntheticId
   }>
   persistedCase: PersistedCase
-  amount: 41 | 73
+  amount: number
   idempotencyKey: SyntheticId
   syntheticReference: SyntheticId
 }): boolean {
@@ -612,11 +661,7 @@ export function createDemoRuntime(dependencies: DemoRuntimeDependencies): DemoRu
     }
 
     const envelope = loaded.state ?? createCanonicalPersistenceEnvelope()
-    const canonicalSeed = getSeed(START_SEED_BY_SCENARIO[input.scenarioId])
-    const canonicalCase = canonicalSeed.envelope.cases[0]
-    if (canonicalCase === undefined) {
-      throw new Error('Canonical start seed did not contain its case.')
-    }
+    const canonicalCase = createCanonicalStartCase(input.scenarioId, evaluation)
     const expectedCaseId = canonicalCase.caseId
     const scenarioCase = envelope.cases.find(
       (persistedCase) => persistedCase.scenarioId === input.scenarioId,
@@ -811,7 +856,11 @@ export function createDemoRuntime(dependencies: DemoRuntimeDependencies): DemoRu
       return Object.freeze({ status: 'CASE_NOT_FOUND', caseId: input.caseId })
     }
 
-    const evaluation = evaluateCanonicalScenario(persistedCase.scenarioId, 'RESUME')
+    const evaluation = evaluateCanonicalScenario(
+      persistedCase.scenarioId,
+      'RESUME',
+      persistedCase.policyPin.qualifiedVersion,
+    )
     if (
       evaluation.scenarioSupport !== 'SUPPORTED_BY_DEMO' ||
       evaluation.policy.qualifiedVersion !== persistedCase.policyPin.qualifiedVersion ||
@@ -1490,7 +1539,7 @@ export function createDemoRuntime(dependencies: DemoRuntimeDependencies): DemoRu
     }
 
     const amount = evaluation.syntheticFee?.amount
-    if (amount !== 41 && amount !== 73) {
+    if (amount === undefined) {
       return invalidCommand(
         'StartMockPayment',
         1,
@@ -1627,7 +1676,7 @@ export function createDemoRuntime(dependencies: DemoRuntimeDependencies): DemoRu
     if (
       attemptId === null ||
       syntheticReference === null ||
-      (amount !== 41 && amount !== 73)
+      amount === undefined
     ) {
       return invalidCommand(
         'CheckMockPaymentStatus',

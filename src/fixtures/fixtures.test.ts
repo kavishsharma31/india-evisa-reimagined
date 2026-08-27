@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { evaluatePolicy, activePolicyBundle, ACTIVE_POLICY_QUALIFIED_VERSION } from '../policy'
+import { evaluatePolicy, legacyPolicyBundle, LEGACY_POLICY_QUALIFIED_VERSION } from '../policy'
 import {
   createPersistenceStore,
   parsePersistenceEnvelope,
@@ -58,8 +58,8 @@ describe('canonical P0 fixture manifest', () => {
 
     expect(validation.status).toBe('VALID')
     expect(manifest.version).toBe(P0_FIXTURE_MANIFEST_VERSION)
-    expect(manifest.activePolicy.qualifiedVersion).toBe(ACTIVE_POLICY_QUALIFIED_VERSION)
-    expect(manifest.activePolicy.digest).toBe(activePolicyBundle.digest)
+    expect(manifest.activePolicy.qualifiedVersion).toBe(LEGACY_POLICY_QUALIFIED_VERSION)
+    expect(manifest.activePolicy.digest).toBe(legacyPolicyBundle.digest)
     expect(Object.isFrozen(manifest)).toBe(true)
     expect(Object.isFrozen(manifest.seeds)).toBe(true)
     expect(Reflect.set(manifest, 'version', 'SYN-P0-FIXTURES@999.0.0')).toBe(false)
@@ -98,11 +98,11 @@ describe('canonical P0 fixture manifest', () => {
   it('retains policy compatibility through the same evaluator', () => {
     const medical = evaluatePolicy(
       createPolicyEvaluationRequest(medicalScenario),
-      activePolicyBundle,
+      legacyPolicyBundle,
     )
     const tourist = evaluatePolicy(
       createPolicyEvaluationRequest(touristScenario),
-      activePolicyBundle,
+      legacyPolicyBundle,
     )
 
     expect(medical).toMatchObject({
@@ -187,8 +187,8 @@ describe('canonical scenario roots', () => {
     expect(persistenceEnvelopeSchema.safeParse(tourist.seed.envelope).success).toBe(true)
     expect(Object.keys(medical.seed.envelope)).toEqual(Object.keys(tourist.seed.envelope))
     expect(Object.keys(medical.persistedCase)).toEqual(Object.keys(tourist.persistedCase))
-    expect(medical.persistedCase.policyPin.qualifiedVersion).toBe(ACTIVE_POLICY_QUALIFIED_VERSION)
-    expect(tourist.persistedCase.policyPin.qualifiedVersion).toBe(ACTIVE_POLICY_QUALIFIED_VERSION)
+    expect(medical.persistedCase.policyPin.qualifiedVersion).toBe(LEGACY_POLICY_QUALIFIED_VERSION)
+    expect(tourist.persistedCase.policyPin.qualifiedVersion).toBe(LEGACY_POLICY_QUALIFIED_VERSION)
     expect(medical.persistedCase.application.state).toBe('DRAFT_CREATED')
     expect(tourist.persistedCase.application.state).toBe('DRAFT_CREATED')
   })
@@ -206,7 +206,7 @@ describe('mandatory recovery seeds', () => {
     expect(snapshots.map(({ sequence }) => sequence)).toEqual([1, 2])
     expect(latest).toMatchObject({
       currentStep: 'DOCUMENTS',
-      policyQualifiedVersion: ACTIVE_POLICY_QUALIFIED_VERSION,
+      policyQualifiedVersion: LEGACY_POLICY_QUALIFIED_VERSION,
     })
     expect(latest?.answers).toMatchObject({
       'Q-MEDICAL-TREATMENT-INTENT': 'SYNTHETIC_MEDICAL_TREATMENT',

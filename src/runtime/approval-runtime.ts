@@ -6,7 +6,7 @@ import {
   type SyntheticId,
 } from '../domain'
 import { syntheticIdSchema } from '../domain/ids'
-import { ACTIVE_POLICY_QUALIFIED_VERSION } from '../policy'
+import { isSupportedPolicyPin } from '../policy'
 import { deepFreeze } from '../policy/schema'
 import {
   persistedCaseSchema,
@@ -87,7 +87,10 @@ function requiredCurrentVersions(
 }
 
 function hasActivePolicyPin(persistedCase: PersistedCase): boolean {
-  return persistedCase.policyPin.qualifiedVersion === ACTIVE_POLICY_QUALIFIED_VERSION
+  return isSupportedPolicyPin(
+    persistedCase.policyPin.qualifiedVersion,
+    persistedCase.policyPin.digest,
+  )
 }
 
 function applyDocumentAcceptance(input: {

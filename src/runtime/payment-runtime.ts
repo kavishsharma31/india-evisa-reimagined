@@ -159,7 +159,7 @@ function applyPaymentTransition(input: {
 
 export function applyAmbiguousPaymentStart(input: {
   persistedCase: PersistedCase
-  amount: 41 | 73
+  amount: number
   attemptId: SyntheticId
   syntheticReference: SyntheticId
   idempotencyKey: SyntheticId

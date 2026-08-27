@@ -27,7 +27,7 @@ const paymentRequestSchema = z
     correlationId: syntheticIdSchema,
     caseId: syntheticIdSchema,
     applicationId: syntheticIdSchema,
-    amount: z.union([z.literal(41), z.literal(73)]),
+    amount: z.number().int().positive(),
     unit: z.literal('SYNTHETIC_DEMO_CREDITS'),
     idempotencyKey: syntheticIdSchema,
     scenario: z.enum(PAYMENT_SCENARIO_NAMES),
@@ -40,7 +40,7 @@ type PaymentOutcome =
 type PaymentEvidence = Readonly<{
   caseId: SyntheticId
   applicationId: SyntheticId
-  amount: 41 | 73
+  amount: number
   unit: 'SYNTHETIC_DEMO_CREDITS'
   idempotencyKey: SyntheticId
   syntheticPaymentReference: SyntheticId

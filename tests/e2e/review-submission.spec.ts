@@ -153,7 +153,7 @@ test('Medical A05 reviews authoritative details and reaches one locked simulated
 
   const evidence = await loadCaseEvidence(page)
   expect(evidence.applicationState).toBe('LOCKED')
-  expect(evidence.policyQualifiedVersion).toBe('SYN-EVISA-POLICY@1.0.0')
+  expect(evidence.policyQualifiedVersion).toBe('SYN-EVISA-POLICY@2.0.0')
   expect(evidence.documents.map(({ state }) => state)).toEqual([
     'SUBMITTED',
     'SUBMITTED',

@@ -91,7 +91,7 @@ test('D01 controls are absent from the normal applicant URL', async ({ page }) =
   await page.evaluate((storageKey) => localStorage.removeItem(storageKey), P0_STORAGE_KEY)
   await page.reload()
 
-  await expect(page.getByRole('heading', { name: 'What are you travelling to India for?' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Why are you travelling to India?' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Demo controls' })).toHaveCount(0)
   await expect(page.getByText('Demo-only controls', { exact: true })).toHaveCount(0)
 })
@@ -155,7 +155,7 @@ test('D01 loads all seven canonical seeds, switches byte-stably, reloads, and re
   expect(await page.evaluate((key) => localStorage.getItem(key), UNRELATED_STORAGE_KEY)).toBe('keep-me')
 
   await page.getByRole('button', { name: 'Reset demo' }).click()
-  await expect(page.getByRole('heading', { name: 'What are you travelling to India for?' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Why are you travelling to India?' })).toBeVisible()
   await expect(
     page.getByRole('region', { name: 'Demo controls' }).getByRole('status'),
   ).toContainText('Reset to the canonical clean demo state.')

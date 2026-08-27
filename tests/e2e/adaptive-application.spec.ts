@@ -53,7 +53,7 @@ async function openFreshApp(page: Page) {
   await page.goto('/')
   await page.evaluate((storageKey) => localStorage.removeItem(storageKey), P0_STORAGE_KEY)
   await page.reload()
-  await expect(page.getByRole('heading', { name: 'What are you travelling to India for?' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Why are you travelling to India?' })).toBeVisible()
 }
 
 async function startApplication(page: Page, scenario: 'Medical treatment' | 'Tourism') {
@@ -170,7 +170,7 @@ test('Medical A03 autosaves controlled answers and ends at the Documents handoff
     caseCount: 1,
     caseId: 'SYN-CASE-MED-001',
     scenarioId: 'SYN-MEDICAL-001',
-    policyQualifiedVersion: 'SYN-EVISA-POLICY@1.0.0',
+    policyQualifiedVersion: 'SYN-EVISA-POLICY@2.0.0',
     revision: 9,
     applicationState: 'IN_PROGRESS',
   })
@@ -226,7 +226,7 @@ test('Tourist adapts through the same A03 renderer and completes without Medical
 
   const evidence = await loadApplicationEvidence(page)
   expect(evidence.scenarioId).toBe('SYN-TOURIST-001')
-  expect(evidence.policyQualifiedVersion).toBe('SYN-EVISA-POLICY@1.0.0')
+  expect(evidence.policyQualifiedVersion).toBe('SYN-EVISA-POLICY@2.0.0')
   expect(evidence.snapshots.at(-1)?.answers).not.toHaveProperty('Q-MEDICAL-ADMISSION-DATE')
 })
 

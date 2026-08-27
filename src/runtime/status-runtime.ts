@@ -181,7 +181,7 @@ export function buildStatusSummary(
     persistedCase.scrutiny.state === 'IN_REVIEW' &&
     persistedCase.eta.state === 'NOT_READY' &&
     documentsUnderReview &&
-    (persistedCase.scenarioId === 'SYN-TOURIST-001' ||
+    (persistedCase.scenarioId !== 'SYN-MEDICAL-001' ||
       documentFixtureForVersionId(hospitalVersion?.documentVersionId ?? 'SYN-MISSING')
         ?.fixtureId === 'SYN-FIXTURE-HOSPITAL-LETTER-V2-001')
   return deepFreeze({

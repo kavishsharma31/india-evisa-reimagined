@@ -26,7 +26,46 @@ export const touristScenario = parseScenarioFacts({
   plannedExitDate: '2099-05-17',
 })
 
-export const canonicalScenarios = deepFreeze([medicalScenario, touristScenario])
+export const businessScenario = parseScenarioFacts({
+  scenarioId: 'SYN-BUSINESS-001', scenarioIntent: 'SYNTHETIC_ORDINARY_BUSINESS_VISIT',
+  syntheticPolicyCohort: 'SYN-POLICY-COHORT-A', syntheticPassportClass: 'SYNTHETIC_STANDARD_PASSPORT',
+  plannedArrivalDate: '2099-05-10', plannedExitDate: '2099-05-17',
+})
+
+export const medicalAttendantScenario = parseScenarioFacts({
+  scenarioId: 'SYN-MEDICAL-ATTENDANT-001', scenarioIntent: 'SYNTHETIC_MEDICAL_ATTENDANT',
+  syntheticPolicyCohort: 'SYN-POLICY-COHORT-A', syntheticPassportClass: 'SYNTHETIC_STANDARD_PASSPORT',
+  plannedArrivalDate: '2099-04-14',
+})
+
+export const studentScenario = parseScenarioFacts({
+  scenarioId: 'SYN-STUDENT-001', scenarioIntent: 'SYNTHETIC_GENERAL_ACADEMIC_STUDY',
+  syntheticPolicyCohort: 'SYN-POLICY-COHORT-A', syntheticPassportClass: 'SYNTHETIC_STANDARD_PASSPORT',
+  plannedArrivalDate: '2099-05-10',
+})
+
+export const familyScenario = parseScenarioFacts({
+  scenarioId: 'SYN-FAMILY-001', scenarioIntent: 'SYNTHETIC_STUDENT_DEPENDENT',
+  syntheticPolicyCohort: 'SYN-POLICY-COHORT-A', syntheticPassportClass: 'SYNTHETIC_STANDARD_PASSPORT',
+  plannedArrivalDate: '2099-05-10', plannedExitDate: '2099-05-17',
+})
+
+export const transitScenario = parseScenarioFacts({
+  scenarioId: 'SYN-TRANSIT-001', scenarioIntent: 'SYNTHETIC_TRANSIT',
+  syntheticPolicyCohort: 'SYN-POLICY-COHORT-A', syntheticPassportClass: 'SYNTHETIC_STANDARD_PASSPORT',
+  plannedArrivalDate: '2099-05-10', plannedExitDate: '2099-05-11',
+})
+
+export const miscellaneousScenario = parseScenarioFacts({
+  scenarioId: 'SYN-MISCELLANEOUS-001', scenarioIntent: 'SYNTHETIC_RELATIONSHIP_BASED_ENTRY',
+  syntheticPolicyCohort: 'SYN-POLICY-COHORT-A', syntheticPassportClass: 'SYNTHETIC_STANDARD_PASSPORT',
+  plannedArrivalDate: '2099-05-10', plannedExitDate: '2099-05-17',
+})
+
+export const canonicalScenarios = deepFreeze([
+  touristScenario, businessScenario, medicalScenario, medicalAttendantScenario,
+  studentScenario, familyScenario, transitScenario, miscellaneousScenario,
+])
 
 export function createPolicyEvaluationRequest(
   facts: PolicyFacts,
