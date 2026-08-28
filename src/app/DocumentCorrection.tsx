@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import type { SyntheticId } from '../domain'
+import { formatFileSize, inspectLocalDocumentFile, localFileRequirement } from '../documents'
 import type { RuntimeCorrectionSummary } from '../runtime'
 import { applicantReference } from './applicant-labels'
 import type { AppRuntimeServices } from './create-app-runtime'
@@ -10,6 +11,7 @@ import styles from './DocumentCorrection.module.css'
 type DocumentCorrectionProps = Readonly<{
   services: AppRuntimeServices
   caseId: SyntheticId
+  demoEnabled: boolean
   statusPath: string
   onCorrectionSubmitted(): void
   onRecoveryRequired(status: 'STORAGE_REQUIRES_RESET' | 'STORAGE_UNAVAILABLE'): void
@@ -28,6 +30,8 @@ export function DocumentCorrection(props: DocumentCorrectionProps) {
   })
   const [message, setMessage] = useState<string | null>(null)
   const [working, setWorking] = useState(false)
+  const [fileSummary, setFileSummary] = useState<Readonly<{ name: string; sizeBytes: number }> | null>(null)
+  const [fileErrors, setFileErrors] = useState<readonly string[]>([])
 
   function refreshCorrection(): boolean {
     const inspected = props.services.runtime.inspectCorrection({ caseId: props.caseId })
@@ -65,6 +69,37 @@ export function DocumentCorrection(props: DocumentCorrectionProps) {
       result.status === 'CORRECTION_REPLACEMENT_READY' ||
       result.status === 'CORRECTION_EXISTING'
     ) {
+      refreshCorrection()
+      setMessage('The corrected letter is ready.')
+      return
+    }
+    setMessage('The corrected letter could not be checked safely. The current document was not changed.')
+  }
+
+  async function prepareLocalReplacement(file: File) {
+    setWorking(true)
+    setMessage(null)
+    setFileErrors([])
+    setFileSummary({ name: file.name, sizeBytes: file.size })
+    const validation = await inspectLocalDocumentFile('SYNTHETIC_HOSPITAL_LETTER', file)
+    if (!validation.valid) {
+      setFileErrors(validation.errors)
+      setWorking(false)
+      return
+    }
+    const result = props.services.runtime.prepareLocalCorrection({
+      caseId: props.caseId,
+      fileName: file.name,
+      mimeType: validation.metadata.mimeType,
+      sizeBytes: validation.metadata.sizeBytes,
+      idempotencyKey: `SYN-IDEMPOTENCY-CORRECTION-${props.caseId.slice('SYN-'.length)}-LOCAL-V2`,
+    })
+    setWorking(false)
+    if (result.status === 'STORAGE_REQUIRES_RESET' || result.status === 'STORAGE_UNAVAILABLE') {
+      props.onRecoveryRequired(result.status)
+      return
+    }
+    if (result.status === 'CORRECTION_REPLACEMENT_READY' || result.status === 'CORRECTION_EXISTING') {
       refreshCorrection()
       setMessage('The corrected letter is ready.')
       return
@@ -118,7 +153,9 @@ export function DocumentCorrection(props: DocumentCorrectionProps) {
         <p>
           Check the corrected document, then submit it for review.
         </p>
-        <p>For this prototype, a sample corrected document is provided.</p>
+        <p>{props.demoEnabled
+          ? 'For this prototype, a sample corrected document is provided.'
+          : 'Files are checked in your browser for this prototype and are not uploaded.'}</p>
         <p className={styles.caseReference}>Application reference {applicantReference(correction.caseId)}</p>
       </header>
 
@@ -144,15 +181,44 @@ export function DocumentCorrection(props: DocumentCorrectionProps) {
         {!replacementReady ? (
           <div className={styles.replacementChoice}>
             <p className={styles.sectionLabel}>Corrected replacement</p>
-            <strong>{versionLabel(correction.replacementOption.fixtureId)}</strong>
-            <button
+            <strong>Corrected hospital letter</strong>
+            {props.demoEnabled ? <button
               className={styles.primaryButton}
               type="button"
               disabled={working}
               onClick={prepareReplacement}
             >
               {working ? 'Checking document…' : 'Use corrected letter'}
-            </button>
+            </button> : <>
+              <label className={styles.fileLabel} htmlFor="corrected-hospital-letter">
+                Choose corrected hospital letter
+              </label>
+              <input
+                className={styles.fileInput}
+                id="corrected-hospital-letter"
+                type="file"
+                accept={localFileRequirement('SYNTHETIC_HOSPITAL_LETTER').accept}
+                aria-describedby={`corrected-hospital-status${fileErrors.length > 0 ? ' corrected-hospital-errors' : ''}`}
+                onChange={(event) => {
+                  const file = event.currentTarget.files?.[0]
+                  if (file !== undefined) void prepareLocalReplacement(file)
+                }}
+              />
+              {fileSummary === null ? <p id="corrected-hospital-status">Not uploaded</p> : (
+                <div className={styles.fileSummary} id="corrected-hospital-status">
+                  <strong>Selected file</strong>
+                  <span>{fileSummary.name}</span>
+                  <span>PDF · {formatFileSize(fileSummary.sizeBytes)}</span>
+                </div>
+              )}
+              {fileErrors.length > 0 ? (
+                <div className={styles.inlineError} id="corrected-hospital-errors" role="alert">
+                  <ul>
+                    {fileErrors.map((error) => <li key={error}>{error}</li>)}
+                  </ul>
+                </div>
+              ) : null}
+            </>}
           </div>
         ) : (
           <div className={styles.readyPanel} role="status">

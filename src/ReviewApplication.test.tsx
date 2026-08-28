@@ -17,7 +17,7 @@ afterEach(() => {
 })
 
 beforeEach(() => {
-  window.history.replaceState(null, '', '/')
+  window.history.replaceState(null, '', '/?demo=1')
 })
 
 class MemoryStorage implements StoragePort {
@@ -48,7 +48,7 @@ async function reachA05(
   user: ReturnType<typeof userEvent.setup>,
   scenario: 'Medical treatment' | 'Tourism' = 'Medical treatment',
 ) {
-  window.history.replaceState(null, '', '/')
+  window.history.replaceState(null, '', '/?demo=1')
   window.dispatchEvent(new PopStateEvent('popstate'))
   await waitFor(() => expect(screen.getByRole('heading', { name: 'Why are you travelling to India?' })).toBeInTheDocument())
   await user.click(screen.getByRole('radio', { name: new RegExp(scenario, 'i') }))
@@ -181,7 +181,7 @@ describe('A05 review and simulated submission', () => {
     const user = userEvent.setup()
     const storage = new MemoryStorage()
     const store = createPersistenceStore(storage)
-    window.history.replaceState(null, '', '/')
+    window.history.replaceState(null, '', '/?demo=1')
     const firstRender = render(<App services={createAppRuntime({ store })} />)
     await reachA05(user)
     await user.click(screen.getByRole('checkbox'))

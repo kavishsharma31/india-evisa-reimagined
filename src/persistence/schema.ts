@@ -17,6 +17,7 @@ import {
 import { isSupportedPolicyPin, registeredPolicyBundles, resolvePolicyBundle } from '../policy'
 import { deepFreeze, type DeepReadonly } from '../policy/schema'
 import { validateQuestionAnswerShape } from '../policy/question-validation'
+import { localDocumentMetadataSchema } from '../documents'
 import {
   P0_FIXTURE_VERSION,
   P0_STORAGE_SCHEMA_VERSION,
@@ -115,6 +116,7 @@ const persistedDocumentVersionSchema = z
     sequence: z.number().int().positive(),
     state: z.enum(DOCUMENT_VERSION_STATES),
     predecessorVersionId: syntheticIdSchema.optional(),
+    localFileMetadata: localDocumentMetadataSchema.optional(),
   })
   .strict()
 

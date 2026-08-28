@@ -17,9 +17,9 @@ function requiredArray(record: Readonly<Record<string, unknown>>, key: string): 
 }
 
 async function openFreshApp(page: Page) {
-  await page.goto('/')
+  await page.goto('/?demo=1')
   await page.evaluate((storageKey) => localStorage.removeItem(storageKey), P0_STORAGE_KEY)
-  await page.goto('/')
+  await page.goto('/?demo=1')
 }
 
 async function reachStatus(

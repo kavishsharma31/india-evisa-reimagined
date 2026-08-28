@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { fillMedicalApplication } from './application-inputs.js'
+import { selectAllVisibleDocuments } from './test-files.js'
 
 const STORAGE_KEY = 'india-evisa-reimagined:p0'
 const MEDICAL_CASE = 'SYN-CASE-MED-001'
@@ -72,12 +73,7 @@ test('application, documents, and review routes preserve bytes across reload and
   await page.goForward()
   await expect(page).toHaveURL(`/application/${MEDICAL_CASE}/documents`)
 
-  for (const name of ['Recent photograph', 'Passport bio page', 'Hospital letter']) {
-    const card = page.locator('article').filter({
-      has: page.getByRole('heading', { level: 3, name }),
-    })
-    await card.getByRole('button', { name: 'Check document' }).click()
-  }
+  await selectAllVisibleDocuments(page)
   await page.getByRole('link', { name: 'Review application' }).click()
   await expect(page).toHaveURL(`/application/${MEDICAL_CASE}/review`)
   await page.goBack()

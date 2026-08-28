@@ -401,6 +401,7 @@ function DocumentsRoute(props: SharedRouteProps) {
         caseId={projection.caseId}
         purposeName={projection.scenario.name}
         editMode={Boolean((location.state as { editDocuments?: boolean } | null)?.editDocuments)}
+        demoEnabled={new URLSearchParams(location.search).get('demo') === '1'}
         applicationPath={withPreservedDemo(applicationPath(projection.caseId), location.search)}
         reviewPath={withPreservedDemo(applicationPath(projection.caseId, 'review'), location.search)}
         onPrepareReview={() => {
@@ -487,6 +488,7 @@ function CorrectionRoute(props: SharedRouteProps) {
         return <DocumentCorrection
           services={props.services}
           caseId={projection.caseId}
+          demoEnabled={new URLSearchParams(location.search).get('demo') === '1'}
           statusPath={statusPath}
           onCorrectionSubmitted={() => { props.onStateChanged(); navigate(statusPath) }}
           onRecoveryRequired={props.onStateChanged}

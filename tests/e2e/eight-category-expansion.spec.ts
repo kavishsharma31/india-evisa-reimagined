@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { fillGenericApplication } from './application-inputs.js'
+import { selectValidDocument } from './test-files.js'
 
 const STORAGE_KEY = 'india-evisa-reimagined:p0'
 
@@ -59,7 +60,7 @@ for (const scenario of NEW_SCENARIOS) {
         has: page.getByRole('heading', { level: 3, name: documentName }),
       })
       await expect(card).toHaveCount(1)
-      await card.getByRole('button', { name: 'Check document' }).click()
+      await selectValidDocument(page, documentName)
     }
     await page.getByRole('link', { name: 'Review application' }).click()
     await page.getByRole('checkbox', {

@@ -1,7 +1,15 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
+import { AxeBuilder } from '@axe-core/playwright'
 import { fillMedicalApplication } from './application-inputs.js'
+import { selectAllVisibleDocuments, validPdf } from './test-files.js'
 
 const P0_STORAGE_KEY = 'india-evisa-reimagined:p0'
+const VISUAL_QA_DIRECTORY = process.env.STAGE2_VISUAL_QA_DIR
+
+async function captureVisualQa(page: Page, fileName: string): Promise<void> {
+  if (VISUAL_QA_DIRECTORY === undefined) return
+  await page.screenshot({ path: `${VISUAL_QA_DIRECTORY}/${fileName}`, fullPage: false })
+}
 
 test('Medical completes the full applicant A00 through A09 journey without seed bypasses', async ({ page }) => {
   await page.goto('/')
@@ -23,16 +31,9 @@ test('Medical completes the full applicant A00 through A09 journey without seed 
   await page.getByRole('link', { name: 'Prepare documents' }).click()
   await expect(page).toHaveURL('/application/SYN-CASE-MED-001/documents')
 
-  for (const documentName of [
-    'Recent photograph',
-    'Passport bio page',
-    'Hospital letter',
-  ]) {
-    const card = page.locator('article').filter({
-      has: page.getByRole('heading', { level: 3, name: documentName }),
-    })
-    await card.getByRole('button', { name: 'Check document' }).click()
-  }
+  await expect(page.locator('input[type="file"]')).toHaveCount(3)
+  await expect(page.getByRole('combobox', { name: 'Sample document' })).toHaveCount(0)
+  await selectAllVisibleDocuments(page)
   await page.getByRole('link', { name: 'Review application' }).click()
   await expect(page).toHaveURL('/application/SYN-CASE-MED-001/review')
   await page.getByRole('checkbox', {
@@ -55,7 +56,29 @@ test('Medical completes the full applicant A00 through A09 journey without seed 
   await expect(page.getByRole('heading', { name: 'Action required' })).toBeVisible()
   await page.getByRole('link', { name: 'Replace hospital letter' }).click()
   await expect(page).toHaveURL('/application/SYN-CASE-MED-001/correction')
-  await page.getByRole('button', { name: 'Use corrected letter' }).click()
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.getByLabel('Choose corrected hospital letter').scrollIntoViewIfNeeded()
+  await captureVisualQa(page, 'correction-file-selector.png')
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
+  await page.getByLabel('Choose corrected hospital letter').setInputFiles(
+    validPdf('synthetic-corrected-hospital-letter.pdf'),
+  )
+  await expect(page.getByText('Correction ready')).toBeVisible()
+  await page.getByText('Correction ready').scrollIntoViewIfNeeded()
+  await captureVisualQa(page, 'corrected-document-ready.png')
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
+  const correctionEvidence = await page.evaluate((storageKey) => {
+    const envelope = JSON.parse(localStorage.getItem(storageKey) ?? '{}') as {
+      cases?: Array<{ documents?: Array<{ requirementId?: string; versions?: Array<{ state?: string; localFileMetadata?: { source?: string } }> }> }>
+    }
+    return envelope.cases?.[0]?.documents?.find(
+      ({ requirementId }) => requirementId === 'REQ-HOSPITAL-LETTER-1',
+    )?.versions
+  }, P0_STORAGE_KEY)
+  expect(correctionEvidence).toEqual([
+    expect.objectContaining({ state: 'SUPERSEDED', localFileMetadata: expect.objectContaining({ source: 'LOCAL_FILE' }) }),
+    expect.objectContaining({ state: 'PREFLIGHT_PASSED', localFileMetadata: expect.objectContaining({ source: 'LOCAL_FILE' }) }),
+  ])
   await page.getByRole('button', { name: 'Submit correction' }).click()
   await expect(page).toHaveURL('/application/SYN-CASE-MED-001/status')
 

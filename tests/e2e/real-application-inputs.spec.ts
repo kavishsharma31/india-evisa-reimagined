@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { fillMedicalApplication, futureDate } from './application-inputs.js'
+import { selectAllVisibleDocuments } from './test-files.js'
 
 const STORAGE_KEY = 'india-evisa-reimagined:p0'
 
@@ -109,12 +110,7 @@ test('Medical Review presents applicant labels and readable persisted values', a
   await fillMedicalApplication(page)
   await page.getByRole('button', { name: 'Continue to documents' }).click()
   await page.getByRole('link', { name: 'Prepare documents' }).click()
-  for (const documentName of ['Recent photograph', 'Passport bio page', 'Hospital letter']) {
-    const card = page.locator('article').filter({
-      has: page.getByRole('heading', { level: 3, name: documentName }),
-    })
-    await card.getByRole('button', { name: 'Check document' }).click()
-  }
+  await selectAllVisibleDocuments(page)
   await page.getByRole('link', { name: 'Review application' }).click()
 
   const answers = page.getByRole('region', { name: 'Your answers' })

@@ -48,6 +48,7 @@ function renderCorrection() {
       <DocumentCorrection
         services={services}
         caseId="SYN-CASE-MED-001"
+        demoEnabled
         statusPath="/status"
         onCorrectionSubmitted={onCorrectionSubmitted}
         onRecoveryRequired={() => undefined}

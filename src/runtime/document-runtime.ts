@@ -10,6 +10,7 @@ import {
   type DocumentFixture,
 } from '../fixtures'
 import type { PolicyEvaluationResult } from '../policy'
+import type { LocalDocumentMetadata } from '../documents'
 import { deepFreeze } from '../policy/schema'
 import {
   persistedCaseSchema,
@@ -121,6 +122,10 @@ function versionView(
     documentVersionId: version.documentVersionId,
     sequence: version.sequence,
     fixtureId: fixture.fixtureId,
+    source: version.localFileMetadata === undefined ? 'BUNDLED_FIXTURE' : 'LOCAL_FILE',
+    ...(version.localFileMetadata === undefined
+      ? {}
+      : { localFileMetadata: version.localFileMetadata }),
     state: version.state,
     inspectionReasonCode: inspectionReasonCode(persistedCase, version.documentVersionId),
   })
@@ -215,6 +220,7 @@ export function applyDocumentPreparation(input: {
   outcome: InspectionOutcome
   idempotencyKey: SyntheticId
   metadata: RuntimeMetadataSource
+  localFileMetadata?: LocalDocumentMetadata
 }): DocumentMutation | DocumentMutationRejection {
   const existingAggregate = input.persistedCase.documents.find(
     ({ requirementId }) => requirementId === input.fixture.requirementId,
@@ -356,6 +362,9 @@ export function applyDocumentPreparation(input: {
     documentVersionId,
     sequence,
     state: preflightTransition.nextState,
+    ...(input.localFileMetadata === undefined
+      ? {}
+      : { localFileMetadata: input.localFileMetadata }),
     ...(existingActiveVersion === undefined
       ? {}
       : { predecessorVersionId: existingActiveVersion.documentVersionId }),

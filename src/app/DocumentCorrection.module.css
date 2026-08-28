@@ -141,6 +141,50 @@
   line-height: 1.5;
 }
 
+.fileLabel {
+  display: block;
+  margin-top: 1rem;
+  color: var(--ink-strong);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.fileInput {
+  width: 100%;
+  min-width: 0;
+  min-height: 3rem;
+  margin-top: 0.4rem;
+  padding: 0.55rem;
+  box-sizing: border-box;
+  border: 1px solid var(--border-strong);
+  border-radius: 0.45rem;
+  background: var(--surface-raised);
+  color: var(--ink-strong);
+  font: inherit;
+}
+
+.fileInput::file-selector-button {
+  min-height: 2.25rem;
+  margin-right: 0.75rem;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid var(--accent-strong);
+  border-radius: 0.35rem;
+  background: var(--surface-raised);
+  color: var(--accent-strong);
+  font: inherit;
+  font-weight: 700;
+}
+
+.fileSummary {
+  min-width: 0;
+  margin-top: 0.7rem;
+  display: grid;
+  gap: 0.2rem;
+  color: var(--ink-muted);
+  font-size: 0.84rem;
+  overflow-wrap: anywhere;
+}
+
 .primaryButton,
 .secondaryButton {
   min-height: 3rem;
@@ -182,6 +226,11 @@
   outline-offset: 3px;
 }
 
+.fileInput:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
 .historyNote,
 .successMessage,
 .inlineError {
@@ -200,6 +249,11 @@
 .inlineError {
   border-left-color: var(--error-strong);
   color: var(--error-strong);
+}
+
+.inlineError ul {
+  margin: 0;
+  padding-left: 1.1rem;
 }
 
 .prototypeContext {

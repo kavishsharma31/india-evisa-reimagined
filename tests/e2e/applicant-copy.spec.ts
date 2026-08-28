@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { fillGenericApplication, fillMedicalApplication } from './application-inputs.js'
+import { selectAllVisibleDocuments, validPdf } from './test-files.js'
 
 const STORAGE_KEY = 'india-evisa-reimagined:p0'
 const PROTOTYPE_NOTICE =
@@ -121,7 +122,8 @@ test('all eight A03 and A04 routes translate prompts and document names at the U
     for (const documentName of purpose.documents) {
       await expect(page.getByRole('heading', { level: 3, name: documentName })).toHaveCount(1)
     }
-    await expect(page.getByText('For this prototype, sample documents are provided instead of real uploads.')).toBeVisible()
+    await expect(page.getByText('Files are checked in your browser for this prototype and are not uploaded.')).toBeVisible()
+    await expect(page.locator('input[type="file"]')).toHaveCount(purpose.documents.length)
     await expectNoImplementationLanguage(page)
   }
 })
@@ -130,12 +132,7 @@ test('normal Medical A05 to A09 keeps citizen copy and only the required safety 
   await startMedical(page)
   await page.getByRole('button', { name: 'Continue to documents' }).click()
   await page.getByRole('link', { name: 'Prepare documents' }).click()
-  for (const name of ['Recent photograph', 'Passport bio page', 'Hospital letter']) {
-    const card = page.locator('article').filter({
-      has: page.getByRole('heading', { level: 3, name }),
-    })
-    await card.getByRole('button', { name: 'Check document' }).click()
-  }
+  await selectAllVisibleDocuments(page)
   await page.getByRole('link', { name: 'Review application' }).click()
   await expect(page.getByRole('heading', { name: 'Review your application' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Not calculated in this prototype' })).toBeVisible()
@@ -165,9 +162,9 @@ test('normal Medical A05 to A09 keeps citizen copy and only the required safety 
 
   await page.getByRole('link', { name: 'Replace hospital letter' }).click()
   await expect(page.getByRole('heading', { name: 'Replace your hospital letter' })).toBeVisible()
-  await expect(page.getByText('For this prototype, a sample corrected document is provided.')).toBeVisible()
+  await expect(page.getByText('Files are checked in your browser for this prototype and are not uploaded.')).toBeVisible()
   await expectNoImplementationLanguage(page)
-  await page.getByRole('button', { name: 'Use corrected letter' }).click()
+  await page.getByLabel('Choose corrected hospital letter').setInputFiles(validPdf('synthetic-corrected.pdf'))
   await page.getByRole('button', { name: 'Submit correction' }).click()
   await page.getByText('Review update').click()
   await page.getByRole('button', { name: 'Check application status' }).click()

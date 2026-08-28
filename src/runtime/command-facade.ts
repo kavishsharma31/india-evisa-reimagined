@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 import type { DomainCommand, ReasonCode, SyntheticId } from '../domain'
+import { validateLocalDocumentMetadata } from '../documents'
 import { policyQualifiedVersionSchema, syntheticIdSchema } from '../domain/ids'
 import {
   canonicalScenarios,
@@ -132,6 +133,18 @@ const prepareDocumentInputSchema = z
     idempotencyKey: syntheticIdSchema,
   })
   .strict()
+const localDocumentInputSchema = z
+  .object({
+    caseId: syntheticIdSchema,
+    requirementId: prepareDocumentInputSchema.shape.requirementId,
+    fileName: z.string().min(1).max(255),
+    mimeType: z.string().min(1).max(100),
+    sizeBytes: z.number().int().positive(),
+    width: z.number().int().positive().optional(),
+    height: z.number().int().positive().optional(),
+    idempotencyKey: syntheticIdSchema,
+  })
+  .strict()
 const reviewInputSchema = z.object({ caseId: syntheticIdSchema }).strict()
 const reviewMutationInputSchema = z
   .object({ caseId: syntheticIdSchema, idempotencyKey: syntheticIdSchema })
@@ -144,6 +157,7 @@ const prepareCorrectionInputSchema = z
     fixtureId: z.literal(HOSPITAL_V2_FIXTURE_ID),
   })
   .strict()
+const prepareLocalCorrectionInputSchema = localDocumentInputSchema.omit({ requirementId: true }).strict()
 
 type CanonicalScenarioId = PersistedCase['scenarioId']
 
@@ -1143,6 +1157,7 @@ export function createDemoRuntime(dependencies: DemoRuntimeDependencies): DemoRu
         caseId: persistedCase.caseId,
         requirementId: input.requirementId,
         fixtureId: fixture.fixtureId,
+        source: 'BUNDLED_FIXTURE',
         documentVersionId: latestVersion.documentVersionId,
         documentState: latestVersion.state,
         revision: persistedCase.revision,
@@ -1229,12 +1244,103 @@ export function createDemoRuntime(dependencies: DemoRuntimeDependencies): DemoRu
       caseId: persistedCase.caseId,
       requirementId: input.requirementId,
       fixtureId: fixture.fixtureId,
+      source: 'BUNDLED_FIXTURE',
       documentVersionId: mutation.documentVersionId,
       documentState: inspection.outcome,
       revision: mutation.persistedCase.revision,
       emittedEventTypes: mutation.events.map(({ eventType }) => eventType),
       emittedEventIds: mutation.events.map(({ eventId }) => eventId),
       inspectionReasonCode: inspection.reasonCode,
+    })
+  }
+
+  function prepareLocalDocument(candidate: unknown): RuntimeDocumentMutationResult {
+    const parsed = localDocumentInputSchema.safeParse(candidate)
+    if (!parsed.success) return invalidCommand('PrepareDocument', parsed.error.issues.length)
+    const loaded = loadForMutation(dependencies)
+    if (loaded.status !== 'READY') return loaded
+    const input = parsed.data
+    const persistedCase = loaded.state?.cases.find(({ caseId }) => caseId === input.caseId)
+    if (persistedCase === undefined) {
+      return Object.freeze({ status: 'CASE_NOT_FOUND', caseId: input.caseId })
+    }
+    const latestSnapshot = persistedCase.application.draftSnapshots.at(-1)
+    if (
+      persistedCase.application.state !== 'IN_PROGRESS' ||
+      (latestSnapshot?.currentStep !== 'DOCUMENTS' && latestSnapshot?.currentStep !== 'REVIEW')
+    ) {
+      return invalidCommand('PrepareDocument', 1, 'GUARD_FAILED', persistedCase.caseId)
+    }
+    const evaluation = evaluatePinnedDocumentPolicy(persistedCase)
+    if ('status' in evaluation) return evaluation
+    const requirement = evaluation.documentManifest?.requirements.find(
+      ({ id }) => id === input.requirementId,
+    )
+    if (requirement === undefined) {
+      return invalidCommand('PrepareDocument', 1, 'INVALID_COMMAND', persistedCase.caseId)
+    }
+    const validation = validateLocalDocumentMetadata({
+      documentType: requirement.documentType,
+      name: input.fileName,
+      mimeType: input.mimeType,
+      sizeBytes: input.sizeBytes,
+      ...(input.width === undefined ? {} : { width: input.width }),
+      ...(input.height === undefined ? {} : { height: input.height }),
+    })
+    if (!validation.valid) {
+      return invalidCommand('PrepareDocument', validation.errors.length, 'INVALID_COMMAND', persistedCase.caseId)
+    }
+    const fixture = a04DocumentFixtures.find(
+      (candidateFixture) =>
+        candidateFixture.requirementId === requirement.id &&
+        candidateFixture.documentType === requirement.documentType &&
+        candidateFixture.expectedInspectionScenario === 'DOCUMENT_PASS',
+    )
+    if (fixture === undefined) {
+      return invalidCommand('PrepareDocument', 1, 'FIXTURE_NOT_COMPATIBLE', persistedCase.caseId)
+    }
+    const preparation = buildDocumentPreparationView(persistedCase, evaluation)
+    const latestVersion = preparation.requirements
+      .find(({ requirementId }) => requirementId === input.requirementId)
+      ?.versionHistory.at(-1)
+    if (
+      latestVersion?.source === 'LOCAL_FILE' &&
+      latestVersion.state !== 'CREATED' &&
+      JSON.stringify(latestVersion.localFileMetadata) === JSON.stringify(validation.metadata)
+    ) {
+      return deepFreeze({
+        status: 'DOCUMENT_EXISTING', operation: 'PrepareDocument', caseId: persistedCase.caseId,
+        requirementId: input.requirementId, fixtureId: fixture.fixtureId, source: 'LOCAL_FILE',
+        documentVersionId: latestVersion.documentVersionId, documentState: latestVersion.state,
+        revision: persistedCase.revision, idempotentReplay: true,
+      })
+    }
+    if (existingIdempotentEvent(persistedCase, input.idempotencyKey) !== undefined) {
+      return invalidCommand('PrepareDocument', 1, 'IDEMPOTENCY_CONFLICT', persistedCase.caseId)
+    }
+    const mutation = applyDocumentPreparation({
+      persistedCase,
+      fixture,
+      outcome: { state: 'PREFLIGHT_PASSED', reasonCode: 'DOC_PREFLIGHT_PASSED_SYNTHETIC' },
+      idempotencyKey: input.idempotencyKey,
+      metadata: dependencies.metadata,
+      localFileMetadata: validation.metadata,
+    })
+    if (!mutation.accepted) {
+      return invalidCommand('PrepareDocument', 1, mutation.reasonCode, persistedCase.caseId)
+    }
+    const envelope = loaded.state
+    if (envelope === null) throw new Error('A located Case must belong to a loaded persistence envelope.')
+    const saved = saveEnvelope(dependencies, replaceCase(envelope, mutation.persistedCase), 'PrepareDocument', persistedCase.caseId)
+    if ('status' in saved) return saved
+    return deepFreeze({
+      status: 'DOCUMENT_PREPARED', operation: 'PrepareDocument', caseId: persistedCase.caseId,
+      requirementId: input.requirementId, fixtureId: fixture.fixtureId, source: 'LOCAL_FILE',
+      documentVersionId: mutation.documentVersionId, documentState: 'PREFLIGHT_PASSED',
+      revision: mutation.persistedCase.revision,
+      emittedEventTypes: mutation.events.map(({ eventType }) => eventType),
+      emittedEventIds: mutation.events.map(({ eventId }) => eventId),
+      inspectionReasonCode: 'DOC_PREFLIGHT_PASSED_SYNTHETIC',
     })
   }
 
@@ -2130,6 +2236,68 @@ export function createDemoRuntime(dependencies: DemoRuntimeDependencies): DemoRu
     })
   }
 
+  function prepareLocalCorrection(candidate: unknown): RuntimeCorrectionMutationResult {
+    const parsed = prepareLocalCorrectionInputSchema.safeParse(candidate)
+    if (!parsed.success) return invalidCommand('PrepareCorrection', parsed.error.issues.length)
+    const loaded = loadForMutation(dependencies)
+    if (loaded.status !== 'READY') return loaded
+    const persistedCase = loaded.state?.cases.find(({ caseId }) => caseId === parsed.data.caseId)
+    if (persistedCase === undefined) {
+      return Object.freeze({ status: 'CASE_NOT_FOUND', caseId: parsed.data.caseId })
+    }
+    const evaluation = evaluatePinnedDocumentPolicy(persistedCase)
+    if ('status' in evaluation) return evaluation
+    const correction = buildCorrectionSummary(persistedCase, evaluation)
+    if (!correction.accepted) {
+      return invalidCommand('PrepareCorrection', 1, 'CORRECTION_PREREQUISITES_NOT_MET', persistedCase.caseId)
+    }
+    if (correction.summary.stage === 'REPLACEMENT_READY') {
+      return deepFreeze({
+        status: 'CORRECTION_EXISTING', operation: 'PrepareCorrection', caseId: persistedCase.caseId,
+        revision: persistedCase.revision, scrutinyState: persistedCase.scrutiny.state,
+        idempotentReplay: true,
+      })
+    }
+    const validation = validateLocalDocumentMetadata({
+      documentType: 'SYNTHETIC_HOSPITAL_LETTER',
+      name: parsed.data.fileName,
+      mimeType: parsed.data.mimeType,
+      sizeBytes: parsed.data.sizeBytes,
+    })
+    if (!validation.valid) {
+      return invalidCommand('PrepareCorrection', validation.errors.length, 'INVALID_COMMAND', persistedCase.caseId)
+    }
+    const mutation = applyDocumentPreparation({
+      persistedCase,
+      fixture: hospitalLetterV2Fixture,
+      outcome: { state: 'PREFLIGHT_PASSED', reasonCode: 'DOC_PREFLIGHT_PASSED_SYNTHETIC' },
+      idempotencyKey: correctionPreparationIdempotencyKey(persistedCase.caseId),
+      metadata: dependencies.metadata,
+      localFileMetadata: validation.metadata,
+    })
+    if (!mutation.accepted) {
+      return invalidCommand('PrepareCorrection', 1, mutation.reasonCode, persistedCase.caseId)
+    }
+    const envelope = loaded.state
+    if (envelope === null) throw new Error('A located Case must belong to a loaded persistence envelope.')
+    const saved = saveEnvelope(
+      dependencies,
+      replaceCase(envelope, mutation.persistedCase),
+      'PrepareCorrection',
+      persistedCase.caseId,
+    )
+    if ('status' in saved) return saved
+    return deepFreeze({
+      status: 'CORRECTION_REPLACEMENT_READY', operation: 'PrepareCorrection',
+      caseId: persistedCase.caseId, revision: mutation.persistedCase.revision,
+      scrutinyState: 'ACTION_REQUIRED', documentVersionId: mutation.documentVersionId,
+      documentState: 'PREFLIGHT_PASSED',
+      supersededVersionId: correction.summary.currentVersion.documentVersionId,
+      emittedEventTypes: mutation.events.map(({ eventType }) => eventType),
+      emittedEventIds: mutation.events.map(({ eventId }) => eventId),
+    })
+  }
+
   function submitCorrection(candidate: unknown): RuntimeCorrectionMutationResult {
     const parsed = statusInputSchema.safeParse(candidate)
     if (!parsed.success) {
@@ -2324,6 +2492,7 @@ export function createDemoRuntime(dependencies: DemoRuntimeDependencies): DemoRu
     resumeCase,
     inspectDocuments,
     prepareDocumentFixture,
+    prepareLocalDocument,
     inspectReview,
     prepareReview,
     submitApplication,
@@ -2335,6 +2504,7 @@ export function createDemoRuntime(dependencies: DemoRuntimeDependencies): DemoRu
     requestMedicalCorrection,
     inspectCorrection,
     prepareCorrection,
+    prepareLocalCorrection,
     submitCorrection,
     completeSyntheticReview,
   })

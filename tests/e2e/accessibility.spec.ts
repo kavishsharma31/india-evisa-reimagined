@@ -5,7 +5,7 @@ import { fillMedicalApplication } from './application-inputs.js'
 const P0_STORAGE_KEY = 'india-evisa-reimagined:p0'
 
 async function openFreshApp(page: Page) {
-  await page.goto('/')
+  await page.goto('/?demo=1')
   await page.evaluate((storageKey) => localStorage.removeItem(storageKey), P0_STORAGE_KEY)
   await page.reload()
 }

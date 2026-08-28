@@ -1,7 +1,13 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import type { SyntheticId } from '../domain'
+import {
+  formatFileSize,
+  inspectLocalDocumentFile,
+  localFileRequirement,
+  type LocalDocumentMetadata,
+} from '../documents'
 import type {
   RuntimeDocumentRequirementView,
   RuntimeDocumentsInspected,
@@ -19,6 +25,7 @@ type DocumentPreparationProps = Readonly<{
   caseId: SyntheticId
   purposeName: string
   editMode?: boolean
+  demoEnabled: boolean
   applicationPath: string
   reviewPath: string
   onPrepareReview(): boolean
@@ -27,6 +34,14 @@ type DocumentPreparationProps = Readonly<{
 
 type RequirementMessages = Readonly<Record<string, string>>
 type FixtureSelections = Readonly<Record<string, SyntheticId>>
+type LocalSelection = Readonly<{
+  fileName: string
+  mimeType: string
+  sizeBytes: number
+  width?: number
+  height?: number
+  previewUrl?: string
+}>
 
 function documentName(requirement: RuntimeDocumentRequirementView): string {
   return DOCUMENT_NAMES[requirement.documentType] ?? 'Document'
@@ -62,6 +77,14 @@ function statusLabel(status: RuntimeDocumentRequirementView['status']): string {
   return 'Not checked'
 }
 
+function localIdempotencyKey(caseId: SyntheticId, requirementId: string, revision: number): SyntheticId {
+  return `SYN-IDEMPOTENCY-A04-LOCAL-${caseId.slice('SYN-'.length)}-${requirementId}-${String(revision).padStart(3, '0')}`
+}
+
+function fileTypeLabel(mimeType: string): string {
+  return mimeType === 'image/jpeg' ? 'JPEG' : mimeType === 'application/pdf' ? 'PDF' : 'File'
+}
+
 function inspectionMessage(requirement: RuntimeDocumentRequirementView): string | null {
   if (
     requirement.currentVersion?.inspectionReasonCode ===
@@ -84,11 +107,17 @@ export function DocumentPreparation(props: DocumentPreparationProps) {
     documents === null ? Object.freeze({}) : initialSelections(documents),
   )
   const [messages, setMessages] = useState<RequirementMessages>({})
+  const [validationErrors, setValidationErrors] = useState<Readonly<Record<string, readonly string[]>>>({})
+  const [localSelections, setLocalSelections] = useState<Readonly<Record<string, LocalSelection>>>({})
   const [activeRequirementId, setActiveRequirementId] = useState<string | null>(null)
   const [reviewPrepared, setReviewPrepared] = useState(() => {
     const resumed = props.services.runtime.resumeCase({ caseId: props.caseId })
     return resumed.status === 'CASE_RESUMED' && resumed.currentStep === 'REVIEW'
   })
+  const previewUrls = useRef(new Set<string>())
+  useEffect(() => () => {
+    for (const previewUrl of previewUrls.current) URL.revokeObjectURL(previewUrl)
+  }, [])
 
   function refreshDocuments() {
     const inspected = props.services.runtime.inspectDocuments({ caseId: props.caseId })
@@ -182,6 +211,82 @@ export function DocumentPreparation(props: DocumentPreparationProps) {
     setActiveRequirementId(null)
   }
 
+  async function chooseLocalFile(requirement: RuntimeDocumentRequirementView, file: File) {
+    const previousPreview = localSelections[requirement.requirementId]?.previewUrl
+    if (previousPreview !== undefined) {
+      URL.revokeObjectURL(previousPreview)
+      previewUrls.current.delete(previousPreview)
+    }
+    const previewUrl =
+      requirement.documentType === 'SYNTHETIC_PORTRAIT' &&
+      file.type === 'image/jpeg' &&
+      typeof URL.createObjectURL === 'function'
+        ? URL.createObjectURL(file)
+        : undefined
+    if (previewUrl !== undefined) previewUrls.current.add(previewUrl)
+    setLocalSelections((current) => ({
+      ...current,
+      [requirement.requirementId]: {
+        fileName: file.name,
+        mimeType: file.type,
+        sizeBytes: file.size,
+        ...(previewUrl === undefined ? {} : { previewUrl }),
+      },
+    }))
+    setValidationErrors((current) => {
+      const { [requirement.requirementId]: _removed, ...remaining } = current
+      return remaining
+    })
+    setActiveRequirementId(requirement.requirementId)
+    const validation = await inspectLocalDocumentFile(requirement.documentType, file)
+    if (!validation.valid) {
+      setValidationErrors((current) => ({ ...current, [requirement.requirementId]: validation.errors }))
+      setActiveRequirementId(null)
+      return
+    }
+    setLocalSelections((current) => ({
+      ...current,
+      [requirement.requirementId]: {
+        ...current[requirement.requirementId],
+        fileName: file.name,
+        mimeType: validation.metadata.mimeType,
+        sizeBytes: validation.metadata.sizeBytes,
+        ...(validation.metadata.width === undefined ? {} : { width: validation.metadata.width }),
+        ...(validation.metadata.height === undefined ? {} : { height: validation.metadata.height }),
+      },
+    }))
+    const result = props.services.runtime.prepareLocalDocument({
+      caseId: props.caseId,
+      requirementId: requirement.requirementId,
+      fileName: file.name,
+      mimeType: validation.metadata.mimeType,
+      sizeBytes: validation.metadata.sizeBytes,
+      ...(validation.metadata.width === undefined ? {} : { width: validation.metadata.width }),
+      ...(validation.metadata.height === undefined ? {} : { height: validation.metadata.height }),
+      idempotencyKey: localIdempotencyKey(
+        props.caseId,
+        requirement.requirementId,
+        (documents?.revision ?? 0) + 1,
+      ),
+    })
+    if (result.status === 'STORAGE_REQUIRES_RESET' || result.status === 'STORAGE_UNAVAILABLE') {
+      setActiveRequirementId(null)
+      props.onRecoveryRequired(result.status)
+      return
+    }
+    if (result.status === 'DOCUMENT_PREPARED' || result.status === 'DOCUMENT_EXISTING') {
+      const refreshed = refreshDocuments()
+      if (refreshed?.allReady) prepareReview()
+      setActiveRequirementId(null)
+      return
+    }
+    setMessages((current) => ({
+      ...current,
+      [requirement.requirementId]: 'This document could not be checked safely. Its status was not changed.',
+    }))
+    setActiveRequirementId(null)
+  }
+
   if (documents === null) {
     return (
       <section className={styles.documentsPanel} aria-labelledby="documents-heading">
@@ -195,7 +300,7 @@ export function DocumentPreparation(props: DocumentPreparationProps) {
     )
   }
 
-  if (documents.allReady && !props.editMode) {
+  if (documents.allReady && !props.editMode && props.demoEnabled) {
     return (
       <section className={styles.completionPanel} aria-labelledby="documents-heading" aria-live="polite">
         <div className={styles.completionMarker} aria-hidden="true">✓</div>
@@ -235,7 +340,9 @@ export function DocumentPreparation(props: DocumentPreparationProps) {
         <p className={styles.eyebrow}>Documents · Step 3 of 6</p>
         <h2 id="documents-heading" tabIndex={-1}>Prepare your documents</h2>
         <p>Check each required document before continuing.</p>
-        <p>For this prototype, sample documents are provided instead of real uploads.</p>
+        <p>{props.demoEnabled
+          ? 'For this prototype, sample documents are provided instead of real uploads.'
+          : 'Files are checked in your browser for this prototype and are not uploaded.'}</p>
         <div className={styles.purposeContext}>
           <span>Selected purpose</span>
           <strong>{props.purposeName}</strong>
@@ -252,8 +359,12 @@ export function DocumentPreparation(props: DocumentPreparationProps) {
           const selectedFixtureId = selections[requirement.requirementId] ?? ''
           const currentMessage = inspectionMessage(requirement)
           const errorMessage = messages[requirement.requirementId]
+          const localErrors = validationErrors[requirement.requirementId] ?? []
+          const localSelection = localSelections[requirement.requirementId]
+          const localMetadata: LocalDocumentMetadata | undefined = requirement.currentVersion?.localFileMetadata
           const statusId = `document-status-${index + 1}`
           const errorId = `document-error-${index + 1}`
+          const displayedStatus = localErrors.length > 0 ? 'NEEDS_ATTENTION' : requirement.status
           const selectedAlreadyChecked =
             requirement.currentVersion?.fixtureId === selectedFixtureId &&
             (requirement.status === 'READY' || requirement.status === 'NEEDS_ATTENTION')
@@ -264,15 +375,14 @@ export function DocumentPreparation(props: DocumentPreparationProps) {
                   <span className={styles.documentNumber}>{String(index + 1).padStart(2, '0')}</span>
                   <h3>{documentName(requirement)}</h3>
                 </div>
-                <span className={styles.status} data-status={requirement.status} id={statusId}>
-                  {statusLabel(requirement.status)}
+                <span className={styles.status} data-status={displayedStatus} id={statusId} aria-live="polite">
+                  {activeRequirementId === requirement.requirementId ? 'Checking…' : statusLabel(displayedStatus)}
                 </span>
               </div>
               <p className={styles.guidance}>{DOCUMENT_GUIDANCE[requirement.documentType] ?? 'Provide a clear copy of this document.'}</p>
 
-              <label className={styles.fixtureLabel} htmlFor={`document-fixture-${index + 1}`}>
-                Sample document
-              </label>
+              {props.demoEnabled ? <>
+              <label className={styles.fixtureLabel} htmlFor={`document-fixture-${index + 1}`}>Sample document</label>
               <select
                 id={`document-fixture-${index + 1}`}
                 value={selectedFixtureId}
@@ -317,15 +427,62 @@ export function DocumentPreparation(props: DocumentPreparationProps) {
                       ? 'Check document'
                       : 'Check replacement'}
               </button>
+              </> : <>
+                <label className={styles.fixtureLabel} htmlFor={`document-file-${index + 1}`}>
+                  {requirement.currentVersion?.source === 'LOCAL_FILE' ? 'Replace file' : 'Choose file'}
+                </label>
+                <input
+                  className={styles.fileInput}
+                  id={`document-file-${index + 1}`}
+                  type="file"
+                  accept={localFileRequirement(requirement.documentType).accept}
+                  aria-describedby={`${statusId}${localErrors.length > 0 || errorMessage ? ` ${errorId}` : ''}`}
+                  onChange={(event) => {
+                    const file = event.currentTarget.files?.[0]
+                    if (file !== undefined) void chooseLocalFile(requirement, file)
+                  }}
+                />
+                {localSelection !== undefined ? (
+                  <div className={styles.fileSummary}>
+                    <strong>Selected file</strong>
+                    <span className={styles.fileName}>{localSelection.fileName}</span>
+                    <span>{fileTypeLabel(localSelection.mimeType)} · {formatFileSize(localSelection.sizeBytes)}
+                      {localSelection.width !== undefined && localSelection.height !== undefined
+                        ? ` · ${localSelection.width} × ${localSelection.height} px`
+                        : ''}</span>
+                  </div>
+                ) : requirement.currentVersion?.source === 'LOCAL_FILE' && localMetadata !== undefined ? (
+                  <div className={styles.fileSummary}>
+                    <strong>Document checked</strong>
+                    <span>{fileTypeLabel(localMetadata.mimeType)} · {formatFileSize(localMetadata.sizeBytes)}
+                      {localMetadata.width !== undefined && localMetadata.height !== undefined
+                        ? ` · ${localMetadata.width} × ${localMetadata.height} px`
+                        : ''}</span>
+                    <span>The original file is not retained after refresh.</span>
+                  </div>
+                ) : <p className={styles.notUploaded}>Not uploaded</p>}
+                {localSelection?.previewUrl !== undefined ? (
+                  <img className={styles.photoPreview} src={localSelection.previewUrl} alt="Selected photograph preview" />
+                ) : null}
+                {localErrors.length > 0 ? (
+                  <div className={styles.inlineError} id={errorId} role="alert">
+                    <ul>
+                      {localErrors.map((error) => <li key={error}>{error}</li>)}
+                    </ul>
+                  </div>
+                ) : requirement.status === 'READY' ? (
+                  <p className={styles.readyMessage} role="status">Technical checks passed.</p>
+                ) : null}
+              </>}
             </article>
           )
         })}
       </div>
       {documents.allReady ? (
         <div className={styles.returnToReview}>
-          <p>All required documents remain ready.</p>
+          <p>All required documents are ready.</p>
           <Link className={styles.checkButton} to={props.reviewPath}>
-            Return to review <span aria-hidden="true">→</span>
+            {props.editMode ? 'Return to review' : 'Review application'} <span aria-hidden="true">→</span>
           </Link>
         </div>
       ) : null}

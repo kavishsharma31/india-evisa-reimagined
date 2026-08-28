@@ -312,4 +312,57 @@ describe('runtime A04 document preparation', () => {
       reasonCode: 'GUARD_FAILED',
     })
   })
+
+  it('rejects invalid local metadata without creating a document version', () => {
+    const storage = new MemoryStorage()
+    const runtime = createRuntime(storage)
+    const caseId = prepareCaseAtDocuments(runtime, 'SYN-MEDICAL-001')
+    const before = storage.rawProjectState()
+    expect(runtime.prepareLocalDocument({
+      caseId,
+      requirementId: 'REQ-PASSPORT-PAGE-1',
+      fileName: 'passport.png',
+      mimeType: 'image/png',
+      sizeBytes: 12_000,
+      idempotencyKey: 'SYN-IDEMPOTENCY-A04-LOCAL-INVALID',
+    })).toMatchObject({ status: 'COMMAND_REJECTED', reasonCode: 'INVALID_COMMAND' })
+    expect(storage.rawProjectState()).toBe(before)
+    expect(runtime.inspectDocuments({ caseId })).toMatchObject({ readyCount: 0 })
+  })
+
+  it('persists only safe local-file metadata and reloads without duplicate events', () => {
+    const storage = new MemoryStorage()
+    const runtime = createRuntime(storage)
+    const caseId = prepareCaseAtDocuments(runtime, 'SYN-MEDICAL-001')
+    const input = {
+      caseId,
+      requirementId: 'REQ-PORTRAIT-1',
+      fileName: 'very-private-applicant-name.jpg',
+      mimeType: 'image/jpeg',
+      sizeBytes: 12_000,
+      width: 350,
+      height: 350,
+      idempotencyKey: 'SYN-IDEMPOTENCY-A04-LOCAL-VALID',
+    }
+    expect(runtime.prepareLocalDocument(input)).toMatchObject({
+      status: 'DOCUMENT_PREPARED', source: 'LOCAL_FILE', documentState: 'PREFLIGHT_PASSED',
+    })
+    const before = storage.rawProjectState()
+    expect(before).not.toContain(input.fileName)
+    expect(before).not.toContain('base64')
+    expect(before).not.toContain('blob:')
+    expect(runtime.prepareLocalDocument(input)).toMatchObject({
+      status: 'DOCUMENT_EXISTING', source: 'LOCAL_FILE', idempotentReplay: true,
+    })
+    expect(storage.rawProjectState()).toBe(before)
+    const view = createRuntime(storage).inspectDocuments({ caseId })
+    expect(view).toMatchObject({ status: 'DOCUMENTS_INSPECTED', readyCount: 1 })
+    if (view.status === 'DOCUMENTS_INSPECTED') {
+      expect(view.requirements[0]?.currentVersion).toMatchObject({
+        source: 'LOCAL_FILE',
+        localFileMetadata: { mimeType: 'image/jpeg', sizeBytes: 12_000, width: 350, height: 350 },
+      })
+    }
+    expect(storage.rawProjectState()).toBe(before)
+  })
 })

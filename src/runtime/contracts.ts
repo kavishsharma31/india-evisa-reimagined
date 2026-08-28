@@ -12,6 +12,7 @@ import type {
 } from '../domain'
 import type { LocalMockAdapters } from '../mocks'
 import type { PolicyEvaluationResult, ScenarioSupport } from '../policy'
+import type { LocalDocumentMetadata } from '../documents'
 import type {
   PersistenceDiagnostic,
   PersistenceEnvelope,
@@ -178,6 +179,8 @@ export type RuntimeDocumentVersionView = Readonly<{
   documentVersionId: SyntheticId
   sequence: number
   fixtureId: SyntheticId
+  source: 'BUNDLED_FIXTURE' | 'LOCAL_FILE'
+  localFileMetadata?: LocalDocumentMetadata
   state: DocumentVersionState
   inspectionReasonCode: string | null
 }>
@@ -217,6 +220,7 @@ export type RuntimeDocumentPrepared = Readonly<{
   caseId: SyntheticId
   requirementId: string
   fixtureId: SyntheticId
+  source: 'BUNDLED_FIXTURE' | 'LOCAL_FILE'
   documentVersionId: SyntheticId
   documentState: 'PREFLIGHT_PASSED' | 'PREFLIGHT_FAILED'
   revision: number
@@ -231,6 +235,7 @@ export type RuntimeDocumentExisting = Readonly<{
   caseId: SyntheticId
   requirementId: string
   fixtureId: SyntheticId
+  source: 'BUNDLED_FIXTURE' | 'LOCAL_FILE'
   documentVersionId: SyntheticId
   documentState: DocumentVersionState
   revision: number
@@ -621,6 +626,7 @@ export type DemoRuntime = Readonly<{
   resumeCase(candidate?: unknown): RuntimeResumeResult
   inspectDocuments(candidate: unknown): RuntimeDocumentInspectResult
   prepareDocumentFixture(candidate: unknown): RuntimeDocumentMutationResult
+  prepareLocalDocument(candidate: unknown): RuntimeDocumentMutationResult
   inspectReview(candidate: unknown): RuntimeReviewInspectResult
   prepareReview(candidate: unknown): RuntimeReviewMutationResult
   submitApplication(candidate: unknown): RuntimeReviewMutationResult
@@ -632,6 +638,7 @@ export type DemoRuntime = Readonly<{
   requestMedicalCorrection(candidate: unknown): RuntimeCorrectionMutationResult
   inspectCorrection(candidate: unknown): RuntimeCorrectionInspectResult
   prepareCorrection(candidate: unknown): RuntimeCorrectionMutationResult
+  prepareLocalCorrection(candidate: unknown): RuntimeCorrectionMutationResult
   submitCorrection(candidate: unknown): RuntimeCorrectionMutationResult
   completeSyntheticReview(candidate: unknown): RuntimeSyntheticReviewMutationResult
 }>

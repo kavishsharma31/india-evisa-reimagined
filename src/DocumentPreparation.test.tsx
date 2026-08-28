@@ -1,6 +1,6 @@
 import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import App from './App'
 import { createAppRuntime, type AppRuntimeServices } from './app/create-app-runtime'
@@ -11,7 +11,14 @@ import {
   type StoragePort,
 } from './persistence'
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  window.history.replaceState(null, '', '/')
+})
+
+beforeEach(() => {
+  window.history.replaceState(null, '', '/?demo=1')
+})
 
 class MemoryStorage implements StoragePort {
   readonly #values = new Map<string, string>()
