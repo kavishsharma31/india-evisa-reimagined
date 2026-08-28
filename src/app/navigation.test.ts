@@ -4,9 +4,11 @@ import { createPersistenceStore, type StoragePort } from '../persistence'
 import { getSeed } from '../fixtures'
 import { createAppRuntime } from './create-app-runtime'
 import {
+  SCENARIOS,
   applicationPath,
   guardedDestination,
   projectCaseNavigation,
+  projectScenarioNavigation,
   scenarioFromSlug,
   withPreservedDemo,
 } from './navigation'
@@ -57,6 +59,31 @@ describe('route guard and navigation projection', () => {
       status: 'CASE_NOT_FOUND',
     })
     expect(JSON.stringify(store.load())).toBe(before)
+  })
+
+  it('finds every category through the shared scenario slot without mutating persistence', () => {
+    const storage = new MemoryStorage()
+    const store = createPersistenceStore(storage)
+    const services = createAppRuntime({ store })
+    for (const scenario of SCENARIOS) {
+      expect(services.runtime.createCase({
+        scenarioId: scenario.id,
+        idempotencyKey: `SYN-IDEMPOTENCY-NAVIGATION-${scenario.id}`,
+      }).status).toBe('COMMAND_ACCEPTED')
+    }
+    const beforeProjection = JSON.stringify(store.load())
+
+    for (const scenario of SCENARIOS) {
+      const projection = projectScenarioNavigation(services, scenario.id)
+      expect(projection.status).toBe('READY')
+      if (projection.status !== 'READY') continue
+      expect(projection.scenario.id).toBe(scenario.id)
+      expect(projection.resumedCase.policyQualifiedVersion).toBe(
+        'SYN-EVISA-POLICY@2.1.0',
+      )
+      expect(projection.furthestPath).toBe(applicationPath(projection.caseId))
+    }
+    expect(JSON.stringify(store.load())).toBe(beforeProjection)
   })
 
   it('exposes only payment for the ambiguous-payment recovery point', () => {

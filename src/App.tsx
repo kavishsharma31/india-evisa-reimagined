@@ -28,6 +28,7 @@ import {
   applicationPath,
   guardedDestination,
   projectCaseNavigation,
+  projectScenarioNavigation,
   scenarioFromSlug,
   withPreservedDemo,
   type CaseNavigationProjection,
@@ -42,6 +43,19 @@ import styles from './App.module.css'
 
 const PROTOTYPE_NOTICE =
   'UNOFFICIAL HACKATHON PROTOTYPE — NO REAL APPLICATIONS OR PAYMENTS'
+
+const DRAFT_PAGE_COPY = Object.freeze({
+  created: Object.freeze({
+    heading: 'Your application has been created',
+    action: 'Start application',
+    helper: 'Start providing your application details. Nothing will be submitted until you review and submit your application.',
+  }),
+  existing: Object.freeze({
+    heading: 'Continue your application',
+    action: 'Continue application',
+    helper: 'Continue where you left off. Nothing will be submitted until you review and submit your application.',
+  }),
+})
 
 type AppProps = Readonly<{ services?: AppRuntimeServices }>
 
@@ -132,6 +146,7 @@ function PurposeGuidance(props: {
   scenario: Scenario
   evaluation: PolicyEvaluationResult
   backPath: string
+  continueLabel: 'Continue application' | 'Resume application' | 'View application' | 'View application status'
   error: string | null
   onContinue(): void
 }) {
@@ -183,9 +198,8 @@ function PurposeGuidance(props: {
           <section className={styles.feePanel} aria-labelledby="fee-heading">
             <div>
               <p className={styles.feeLabel} id="fee-heading">Visa fee</p>
-              <p className={styles.feeAmount}>Varies by nationality and category</p>
+              <p className={styles.feeAmount}>Varies by nationality and visa category</p>
             </div>
-            <strong>Visa fees vary by nationality and visa category.</strong>
           </section>
         ) : null}
       </div>
@@ -204,7 +218,7 @@ function PurposeGuidance(props: {
       {props.error ? <p className={styles.inlineError} role="alert">{props.error}</p> : null}
       <div className={styles.actions}>
         <button className={styles.primaryButton} type="button" onClick={props.onContinue}>
-          Continue application <span aria-hidden="true">→</span>
+          {props.continueLabel} <span aria-hidden="true">→</span>
         </button>
         <Link className={styles.secondaryButton} to={props.backPath}>Choose a different purpose</Link>
       </div>
@@ -220,11 +234,12 @@ function CaseStart(props: {
 }) {
   const location = useLocation()
   const demoEnabled = new URLSearchParams(location.search).get('demo') === '1'
+  const copy = props.created ? DRAFT_PAGE_COPY.created : DRAFT_PAGE_COPY.existing
   return (
     <section className={props.created ? styles.outcomePanel : styles.resumePanel} aria-labelledby="case-created-heading">
       {props.created ? <div className={styles.outcomeMarker} aria-hidden="true">✓</div> : null}
       <p className={styles.eyebrow}>Application · Step 2 of 6</p>
-      <h2 id="case-created-heading" tabIndex={-1}>{props.created ? 'Your application has been created' : 'Continue your application'}</h2>
+      <h2 id="case-created-heading" tabIndex={-1}>{copy.heading}</h2>
       <p>Your {props.projection.scenario.name.toLowerCase()} application is saved in this browser.</p>
       <dl className={styles.caseFacts}>
         <div><dt>Purpose</dt><dd>{props.projection.scenario.name}</dd></div>
@@ -232,8 +247,8 @@ function CaseStart(props: {
         {demoEnabled ? <div><dt>Policy version</dt><dd>{props.projection.resumedCase.policyQualifiedVersion}</dd></div> : null}
       </dl>
       {props.error ? <p className={styles.inlineError} role="alert">{props.error}</p> : null}
-      <button className={styles.primaryButton} type="button" onClick={props.onStart}>Start application <span aria-hidden="true">→</span></button>
-      <p className={styles.actionNote}>This starts the saved draft. It does not submit anything.</p>
+      <button className={styles.primaryButton} type="button" onClick={props.onStart}>{copy.action} <span aria-hidden="true">→</span></button>
+      <p className={styles.actionNote}>{copy.helper}</p>
     </section>
   )
 }
@@ -327,19 +342,38 @@ function PurposeRoute(props: { services: AppRuntimeServices }) {
   if (scenario === null) return <Navigate to={withPreservedDemo('/', location.search)} replace />
   const evaluated = props.services.runtime.evaluateScenario({ scenarioId: scenario.id })
   if (evaluated.status !== 'POLICY_EVALUATED') return <Navigate to={withPreservedDemo('/', location.search)} replace />
+  const existingNavigation = projectScenarioNavigation(props.services, scenario.id)
+  const continueLabel = existingNavigation.status !== 'READY'
+    ? 'Continue application'
+    : existingNavigation.resumedCase.applicationState !== 'LOCKED'
+      ? 'Resume application'
+      : existingNavigation.furthestPath.endsWith('/status')
+        ? 'View application status'
+        : 'View application'
 
   function createCase() {
     if (scenario === null) return
     setError(null)
+    if (existingNavigation.status === 'READY') {
+      navigate(withPreservedDemo(existingNavigation.furthestPath, location.search))
+      return
+    }
     const result = props.services.runtime.createCase({ scenarioId: scenario.id, idempotencyKey: createCaseIdempotencyKey(scenario.id) })
-    if (result.status === 'COMMAND_ACCEPTED' || result.status === 'EXISTING_CASE') {
+    if (result.status === 'COMMAND_ACCEPTED') {
       navigate(withPreservedDemo(applicationPath(result.caseId), location.search), { state: { created: result.status === 'COMMAND_ACCEPTED' } })
       return
+    }
+    if (result.status === 'EXISTING_CASE') {
+      const projected = projectCaseNavigation(props.services, result.caseId)
+      if (projected.status === 'READY') {
+        navigate(withPreservedDemo(projected.furthestPath, location.search))
+        return
+      }
     }
     setError('The application could not be created safely. Your saved data was not changed.')
   }
 
-  return <PurposeGuidance scenario={scenario} evaluation={evaluated.evaluation} backPath={withPreservedDemo('/', location.search)} error={error} onContinue={createCase} />
+  return <PurposeGuidance scenario={scenario} evaluation={evaluated.evaluation} backPath={withPreservedDemo('/', location.search)} continueLabel={continueLabel} error={error} onContinue={createCase} />
 }
 
 function LandingRoute(props: { services: AppRuntimeServices; onReset(): void }) {

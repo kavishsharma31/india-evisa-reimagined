@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { canonicalScenarios, canonicalDocumentFixtures, listSeeds, createPolicyEvaluationRequest } from '../fixtures'
+import { canonicalScenarios, canonicalDocumentFixtures, getSeed, listSeeds, createPolicyEvaluationRequest } from '../fixtures'
 import { P0_STORAGE_KEY, createPersistenceStore, type StoragePort } from '../persistence'
 import { createLocalMockAdapters } from '../mocks'
 import { createDemoRuntime, createDeterministicRuntimeMetadata } from '../runtime'
@@ -104,6 +104,30 @@ describe('eight-category active policy catalog', () => {
     expect(storage.getItem(P0_STORAGE_KEY)).toBe(beforeResume)
   })
 
+  it('recognizes a persisted 1.0.0 Medical case as the existing application slot under active 2.1.0', () => {
+    const storage = new MemoryStorage()
+    storage.setItem(
+      P0_STORAGE_KEY,
+      JSON.stringify(getSeed('SEED-MEDICAL-START').envelope),
+    )
+    const beforeLookup = storage.getItem(P0_STORAGE_KEY)
+    const runtime = createDemoRuntime({
+      store: createPersistenceStore(storage),
+      adapters: createLocalMockAdapters(),
+      metadata: createDeterministicRuntimeMetadata(),
+    })
+
+    expect(runtime.createCase({
+      scenarioId: 'SYN-MEDICAL-001',
+      idempotencyKey: 'SYN-IDEMPOTENCY-LEGACY-EXISTING-001',
+    })).toMatchObject({
+      status: 'EXISTING_CASE',
+      caseId: 'SYN-CASE-MED-001',
+      scenarioId: 'SYN-MEDICAL-001',
+    })
+    expect(storage.getItem(P0_STORAGE_KEY)).toBe(beforeLookup)
+  })
+
   it('creates and resumes a frozen 2.0.0 case without migrating its policy pin', () => {
     const storage = new MemoryStorage()
     const runtime = createDemoRuntime({
@@ -132,6 +156,16 @@ describe('eight-category active policy catalog', () => {
       policyQualifiedVersion: EXPANDED_POLICY_QUALIFIED_VERSION,
     })
     expect(storage.getItem(P0_STORAGE_KEY)).toBe(beforeResume)
+
+    expect(runtime.createCase({
+      scenarioId: 'SYN-MEDICAL-001',
+      idempotencyKey: 'SYN-IDEMPOTENCY-FROZEN-2-0-EXISTING',
+    })).toMatchObject({
+      status: 'EXISTING_CASE',
+      caseId: 'SYN-CASE-MED-001',
+      scenarioId: 'SYN-MEDICAL-001',
+    })
+    expect(storage.getItem(P0_STORAGE_KEY)).toBe(beforeResume)
   })
 
   it('creates and resumes one stable active-policy case for every category', () => {
@@ -148,5 +182,31 @@ describe('eight-category active policy catalog', () => {
     const raw = storage.getItem(P0_STORAGE_KEY)
     expect(raw).not.toBeNull()
     expect(JSON.parse(raw!).cases).toHaveLength(8)
+
+    const envelope = JSON.parse(raw!) as {
+      cases: Array<{
+        scenarioId: string
+        policyPin: { qualifiedVersion: string; digest: string }
+      }>
+    }
+    const businessCase = envelope.cases.find(
+      ({ scenarioId }) => scenarioId === 'SYN-BUSINESS-001',
+    )
+    expect(businessCase).toBeDefined()
+    businessCase!.policyPin = {
+      qualifiedVersion: EXPANDED_POLICY_QUALIFIED_VERSION,
+      digest: expandedPolicyBundle.digest,
+    }
+    storage.setItem(P0_STORAGE_KEY, JSON.stringify(envelope))
+    const beforeBusinessResume = storage.getItem(P0_STORAGE_KEY)
+    expect(runtime.createCase({
+      scenarioId: 'SYN-BUSINESS-001',
+      idempotencyKey: 'SYN-IDEMPOTENCY-BUSINESS-2-0-EXISTING',
+    }).status).toBe('EXISTING_CASE')
+    expect(runtime.resumeCase({ caseId: 'SYN-CASE-BUSINESS-001' })).toMatchObject({
+      status: 'CASE_RESUMED',
+      policyQualifiedVersion: EXPANDED_POLICY_QUALIFIED_VERSION,
+    })
+    expect(storage.getItem(P0_STORAGE_KEY)).toBe(beforeBusinessResume)
   })
 })

@@ -196,6 +196,25 @@ export function projectCaseNavigation(
   })
 }
 
+export function projectScenarioNavigation(
+  services: AppRuntimeServices,
+  scenarioId: ScenarioId,
+): CaseNavigationResult {
+  const inspected = services.runtime.inspectState()
+  const inspectionFailure = storageFailure(inspected.status)
+  if (inspectionFailure !== null) {
+    return inspectionFailure
+  }
+  if (inspected.status !== 'VALID_STATE') {
+    return { status: 'CASE_NOT_FOUND' }
+  }
+
+  const persistedCase = inspected.state.cases.find(
+    (candidate) => candidate.scenarioId === scenarioId,
+  )
+  return projectCaseNavigation(services, persistedCase?.caseId)
+}
+
 export function guardedDestination(
   projection: CaseNavigationProjection,
   requestedStage: CaseStage,

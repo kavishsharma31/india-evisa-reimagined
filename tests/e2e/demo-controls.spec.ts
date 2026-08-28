@@ -114,7 +114,7 @@ test('D01 loads all seven canonical seeds, switches byte-stably, reloads, and re
 
   expect((await chooseSeed(page, 'SEED-MEDICAL-START')).scenarioId).toBe('SYN-MEDICAL-001')
   await expect(page.getByRole('heading', { name: 'Continue your application' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Start application' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Continue application' })).toBeVisible()
 
   expect((await chooseSeed(page, 'SEED-TOURIST-START')).scenarioId).toBe('SYN-TOURIST-001')
   await expect(page.getByRole('heading', { name: 'Continue your application' })).toBeVisible()

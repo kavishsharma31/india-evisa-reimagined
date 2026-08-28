@@ -48,7 +48,7 @@ test('completes A00 to A02 at 360x800 without console errors or horizontal overf
 
   await page.getByText('Medical treatment', { exact: true }).click()
   await page.getByRole('link', { name: 'Continue' }).click()
-  await expect(page.getByText('Varies by nationality and category', { exact: true })).toBeVisible()
+  await expect(page.getByText('Varies by nationality and visa category', { exact: true })).toBeVisible()
   await expect(page.getByText('Hospital letter')).toBeVisible()
   await expectNoHorizontalOverflow()
 

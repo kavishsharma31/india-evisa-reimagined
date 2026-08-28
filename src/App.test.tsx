@@ -15,6 +15,10 @@ import {
   type PersistenceService,
   type StoragePort,
 } from './persistence'
+import {
+  EXPANDED_POLICY_QUALIFIED_VERSION,
+  expandedPolicyBundle,
+} from './policy'
 
 const PROTOTYPE_NOTICE =
   'UNOFFICIAL HACKATHON PROTOTYPE — NO REAL APPLICATIONS OR PAYMENTS'
@@ -93,7 +97,8 @@ describe('applicant slice A00 and A01', () => {
     expect(screen.getByText('Recent photograph', { exact: true })).toBeInTheDocument()
     expect(screen.getByText('Passport bio page', { exact: true })).toBeInTheDocument()
     expect(screen.getByText('Hospital letter', { exact: true })).toBeInTheDocument()
-    expect(screen.getByText('Varies by nationality and category', { exact: true })).toBeInTheDocument()
+    expect(screen.getByText('Varies by nationality and visa category', { exact: true })).toBeInTheDocument()
+    expect(screen.queryByText('Visa fees vary by nationality and visa category.', { exact: true })).not.toBeInTheDocument()
     expect(screen.queryByText(/SYNTHETIC_DEMO_CREDITS/)).not.toBeInTheDocument()
     expect(screen.getByText(PROTOTYPE_NOTICE, { exact: true })).toBeInTheDocument()
   })
@@ -110,7 +115,7 @@ describe('applicant slice A00 and A01', () => {
     expect(screen.getByText('Recent photograph', { exact: true })).toBeInTheDocument()
     expect(screen.getByText('Passport bio page', { exact: true })).toBeInTheDocument()
     expect(screen.queryByText('Hospital letter', { exact: true })).not.toBeInTheDocument()
-    expect(screen.getByText('Varies by nationality and category', { exact: true })).toBeInTheDocument()
+    expect(screen.getByText('Varies by nationality and visa category', { exact: true })).toBeInTheDocument()
   })
 
   it('does not offer continuation when policy evaluation rejects the selection', async () => {
@@ -142,6 +147,113 @@ describe('applicant slice A00 and A01', () => {
 })
 
 describe('applicant slice A02 and resume', () => {
+  it('resumes a persisted 1.0.0 Medical case from A01 without changing its bytes', async () => {
+    const user = userEvent.setup()
+    const storage = new MemoryStorage()
+    storage.setItem(
+      P0_STORAGE_KEY,
+      JSON.stringify(getSeed('SEED-MEDICAL-START').envelope),
+    )
+    const beforeResume = storage.getItem(P0_STORAGE_KEY)
+    window.history.replaceState(null, '', '/apply/medical')
+
+    render(
+      <App
+        services={createAppRuntime({
+          store: createPersistenceStore(storage),
+        })}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Resume application' }))
+
+    expect(
+      screen.getByRole('heading', { name: 'Continue your application' }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Continue application' })).toBeInTheDocument()
+    expect(screen.getByText(
+      'Continue where you left off. Nothing will be submitted until you review and submit your application.',
+      { exact: true },
+    )).toBeInTheDocument()
+    expect(storage.getItem(P0_STORAGE_KEY)).toBe(beforeResume)
+  })
+
+  it('resumes a persisted 2.0.0 Medical case from A01 without upgrading its policy pin', async () => {
+    const user = userEvent.setup()
+    const { services, storage } = createTestServices()
+    expect(services.runtime.createCase({
+      scenarioId: 'SYN-MEDICAL-001',
+      idempotencyKey: 'SYN-IDEMPOTENCY-COMPONENT-2-0-001',
+    }).status).toBe('COMMAND_ACCEPTED')
+    const envelope = JSON.parse(storage.getItem(P0_STORAGE_KEY)!) as {
+      cases: Array<{ policyPin: { qualifiedVersion: string; digest: string } }>
+    }
+    envelope.cases[0]!.policyPin = {
+      qualifiedVersion: EXPANDED_POLICY_QUALIFIED_VERSION,
+      digest: expandedPolicyBundle.digest,
+    }
+    storage.setItem(P0_STORAGE_KEY, JSON.stringify(envelope))
+    const beforeResume = storage.getItem(P0_STORAGE_KEY)
+    window.history.replaceState(null, '', '/apply/medical')
+
+    render(<App services={services} />)
+    await user.click(screen.getByRole('button', { name: 'Resume application' }))
+
+    expect(
+      screen.getByRole('heading', { name: 'Continue your application' }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Continue application' })).toBeInTheDocument()
+    expect(storage.getItem(P0_STORAGE_KEY)).toBe(beforeResume)
+    expect(requireValidState(createPersistenceStore(storage)).cases[0]?.policyPin)
+      .toEqual(envelope.cases[0]!.policyPin)
+  })
+
+  it('views a submitted Medical case at its projected payment destination without mutation', async () => {
+    const user = userEvent.setup()
+    const storage = new MemoryStorage()
+    storage.setItem(
+      P0_STORAGE_KEY,
+      JSON.stringify(getSeed('SEED-MEDICAL-AMBIGUOUS-PAYMENT').envelope),
+    )
+    const beforeView = storage.getItem(P0_STORAGE_KEY)
+    window.history.replaceState(null, '', '/apply/medical')
+
+    render(
+      <App
+        services={createAppRuntime({
+          store: createPersistenceStore(storage),
+        })}
+      />,
+    )
+    await user.click(screen.getByRole('button', { name: 'View application' }))
+
+    expect(screen.getByRole('heading', { name: 'Pay visa fee' })).toBeInTheDocument()
+    expect(storage.getItem(P0_STORAGE_KEY)).toBe(beforeView)
+  })
+
+  it('views a scrutiny-active Medical case at authoritative status without mutation', async () => {
+    const user = userEvent.setup()
+    const storage = new MemoryStorage()
+    storage.setItem(
+      P0_STORAGE_KEY,
+      JSON.stringify(getSeed('SEED-MEDICAL-STATUS-RECOVERY').envelope),
+    )
+    const beforeView = storage.getItem(P0_STORAGE_KEY)
+    window.history.replaceState(null, '', '/apply/medical')
+
+    render(
+      <App
+        services={createAppRuntime({
+          store: createPersistenceStore(storage),
+        })}
+      />,
+    )
+    await user.click(screen.getByRole('button', { name: 'View application status' }))
+
+    expect(screen.getByRole('heading', { name: 'Track your application' })).toBeInTheDocument()
+    expect(storage.getItem(P0_STORAGE_KEY)).toBe(beforeView)
+  })
+
   it('creates and legally starts one new Medical case through explicit actions', async () => {
     const user = userEvent.setup()
     const { services, store } = createTestServices()
@@ -153,6 +265,11 @@ describe('applicant slice A02 and resume', () => {
     expect(
       screen.getByRole('heading', { name: 'Your application has been created' }),
     ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Start application' })).toBeInTheDocument()
+    expect(screen.getByText(
+      'Start providing your application details. Nothing will be submitted until you review and submit your application.',
+      { exact: true },
+    )).toBeInTheDocument()
     expect(requireValidState(store).cases).toHaveLength(1)
     expect(requireValidState(store).cases[0]?.application.state).toBe('DRAFT_CREATED')
 
@@ -205,8 +322,8 @@ describe('applicant slice A02 and resume', () => {
     render(<App services={services} />)
 
     expect(screen.getByRole('heading', { name: 'Continue your application' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Start application' })).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Start application' }))
+    expect(screen.getByRole('button', { name: 'Continue application' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Continue application' }))
 
     const state = requireValidState(store)
     expect(state.cases).toHaveLength(1)

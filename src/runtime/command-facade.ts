@@ -688,9 +688,7 @@ export function createDemoRuntime(dependencies: DemoRuntimeDependencies): DemoRu
       const compatible =
         scenarioCase.caseId === canonicalCase.caseId &&
         scenarioCase.application.applicationDraftId ===
-          canonicalCase.application.applicationDraftId &&
-        scenarioCase.policyPin.qualifiedVersion === evaluation.policy.qualifiedVersion &&
-        scenarioCase.policyPin.digest === evaluation.policy.digest
+          canonicalCase.application.applicationDraftId
       if (!compatible) {
         return caseConflict('CreateDraft', expectedCaseId)
       }
