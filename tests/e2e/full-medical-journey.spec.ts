@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { fillMedicalApplication } from './application-inputs.js'
 
 const P0_STORAGE_KEY = 'india-evisa-reimagined:p0'
 
@@ -17,12 +18,7 @@ test('Medical completes the full applicant A00 through A09 journey without seed 
   await expect(page.getByRole('heading', { name: 'Your application has been created' })).toBeVisible()
   await page.getByRole('button', { name: 'Start application' }).click()
 
-  await page.getByLabel('Country of nationality').selectOption('SYN-POLICY-COHORT-A')
-  await page.getByLabel('Passport type').selectOption('SYNTHETIC_STANDARD_PASSPORT')
-  await page.getByLabel('Expected date of arrival').selectOption('2099-04-14')
-  await page.getByLabel('Purpose of medical visit').selectOption('SYNTHETIC_MEDICAL_TREATMENT')
-  await page.getByLabel('Proposed hospital admission date').selectOption('2099-04-18')
-  await page.getByRole('radio', { name: 'Yes' }).check()
+  await fillMedicalApplication(page)
   await page.getByRole('button', { name: 'Continue to documents' }).click()
   await page.getByRole('link', { name: 'Prepare documents' }).click()
   await expect(page).toHaveURL('/application/SYN-CASE-MED-001/documents')

@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import App from './App'
 import { createAppRuntime, type AppRuntimeServices } from './app/create-app-runtime'
+import { addLocalDays, isoDateFromLocalDate } from './policy/question-validation'
 import {
   createPersistenceStore,
   type PersistenceService,
@@ -61,22 +62,24 @@ async function startApplication(
 }
 
 async function answerMedicalForm(user: ReturnType<typeof userEvent.setup>) {
-  const selects = screen.getAllByRole('combobox')
-  await user.selectOptions(requiredItem(selects, 0), 'SYN-POLICY-COHORT-A')
-  await user.selectOptions(requiredItem(selects, 1), 'SYNTHETIC_STANDARD_PASSPORT')
-  await user.selectOptions(requiredItem(selects, 2), '2099-04-14')
-  await user.selectOptions(requiredItem(selects, 3), 'SYNTHETIC_MEDICAL_TREATMENT')
-  await user.selectOptions(requiredItem(selects, 4), '2099-04-18')
+  await user.selectOptions(screen.getByLabelText(/Country of nationality/), 'NAT-UNITED-KINGDOM')
+  await user.selectOptions(screen.getByLabelText(/Passport type/), 'PASSPORT-ORDINARY')
+  await user.type(screen.getByLabelText(/Expected date of arrival/), futureDate(10))
+  await user.type(screen.getByLabelText(/Type of medical treatment required/), 'Cardiac consultation')
+  await user.type(screen.getByLabelText(/Proposed hospital admission date/), futureDate(12))
   await user.click(screen.getByRole('radio', { name: 'Yes' }))
 }
 
 async function answerTouristForm(user: ReturnType<typeof userEvent.setup>) {
-  const selects = screen.getAllByRole('combobox')
-  await user.selectOptions(requiredItem(selects, 0), 'SYN-POLICY-COHORT-A')
-  await user.selectOptions(requiredItem(selects, 1), 'SYNTHETIC_STANDARD_PASSPORT')
-  await user.selectOptions(requiredItem(selects, 2), '2099-05-10')
-  await user.selectOptions(requiredItem(selects, 3), 'SYNTHETIC_TOURISM')
-  await user.selectOptions(requiredItem(selects, 4), '2099-05-17')
+  await user.selectOptions(screen.getByLabelText(/Country of nationality/), 'NAT-UNITED-KINGDOM')
+  await user.selectOptions(screen.getByLabelText(/Passport type/), 'PASSPORT-ORDINARY')
+  await user.type(screen.getByLabelText(/Expected date of arrival/), futureDate(10))
+  await user.selectOptions(screen.getByLabelText(/Purpose of visit/), 'TOURIST-LEISURE')
+  await user.type(screen.getByLabelText(/Expected date of departure/), futureDate(17))
+}
+
+function futureDate(days: number): string {
+  return isoDateFromLocalDate(addLocalDays(new Date(), days))
 }
 
 describe('A03 adaptive application', () => {
@@ -114,16 +117,16 @@ describe('A03 adaptive application', () => {
     await startApplication(user)
 
     const firstQuestion = requiredItem(screen.getAllByRole('combobox'), 0)
-    await user.selectOptions(firstQuestion, 'SYN-POLICY-COHORT-A')
+    await user.selectOptions(firstQuestion, 'NAT-UNITED-KINGDOM')
 
     expect(screen.getByText('Saved in this browser', { exact: true })).toBeInTheDocument()
     const afterFirstSave = requireCase(store)
     expect(afterFirstSave.application.draftSnapshots).toHaveLength(1)
     expect(afterFirstSave.application.draftSnapshots[0]?.answers).toEqual({
-      'Q-SHARED-POLICY-COHORT': 'SYN-POLICY-COHORT-A',
+      'Q-SHARED-POLICY-COHORT': 'NAT-UNITED-KINGDOM',
     })
 
-    await user.selectOptions(firstQuestion, 'SYN-POLICY-COHORT-A')
+    await user.selectOptions(firstQuestion, 'NAT-UNITED-KINGDOM')
     expect(requireCase(store).application.draftSnapshots).toHaveLength(1)
   })
 
@@ -149,8 +152,8 @@ describe('A03 adaptive application', () => {
     const firstView = render(<App services={createAppRuntime({ store: firstStore })} />)
     await startApplication(firstUser)
     const firstTwoQuestions = screen.getAllByRole('combobox').slice(0, 2)
-    await firstUser.selectOptions(requiredItem(firstTwoQuestions, 0), 'SYN-POLICY-COHORT-A')
-    await firstUser.selectOptions(requiredItem(firstTwoQuestions, 1), 'SYNTHETIC_STANDARD_PASSPORT')
+    await firstUser.selectOptions(requiredItem(firstTwoQuestions, 0), 'NAT-UNITED-KINGDOM')
+    await firstUser.selectOptions(requiredItem(firstTwoQuestions, 1), 'PASSPORT-ORDINARY')
     const beforeReload = requireCase(firstStore)
     firstView.unmount()
 
@@ -164,9 +167,8 @@ describe('A03 adaptive application', () => {
     render(<App services={services} />)
 
     const resumedQuestions = screen.getAllByRole('combobox')
-    expect(resumedQuestions[0]).toHaveValue('SYN-POLICY-COHORT-A')
-    expect(resumedQuestions[1]).toHaveValue('SYNTHETIC_STANDARD_PASSPORT')
-    expect(resumedQuestions[2]).toHaveValue('')
+    expect(resumedQuestions[0]).toHaveValue('NAT-UNITED-KINGDOM')
+    expect(resumedQuestions[1]).toHaveValue('PASSPORT-ORDINARY')
     expect(beginDraft).not.toHaveBeenCalled()
     const afterReload = requireCase(reloadedStore)
     expect(afterReload.revision).toBe(beforeReload.revision)
@@ -181,7 +183,7 @@ describe('A03 adaptive application', () => {
     await startApplication(user)
     await user.selectOptions(
       requiredItem(screen.getAllByRole('combobox'), 0),
-      'SYN-POLICY-COHORT-A',
+      'NAT-UNITED-KINGDOM',
     )
     const beforeBack = requireCase(store)
 
@@ -190,7 +192,7 @@ describe('A03 adaptive application', () => {
     window.history.back()
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Tell us about this trip' })).toBeInTheDocument())
 
-    expect(requiredItem(screen.getAllByRole('combobox'), 0)).toHaveValue('SYN-POLICY-COHORT-A')
+    expect(requiredItem(screen.getAllByRole('combobox'), 0)).toHaveValue('NAT-UNITED-KINGDOM')
     const afterReturn = requireCase(store)
     expect(afterReturn.revision).toBe(beforeBack.revision)
     expect(afterReturn.application.draftSnapshots).toHaveLength(1)
@@ -213,7 +215,7 @@ describe('A03 adaptive application', () => {
     expect(completedCase.application.draftSnapshots.at(-1)?.currentStep).toBe('DOCUMENTS')
     expect(completedCase.application.draftSnapshots.at(-1)?.answers).toHaveProperty(
       'Q-MEDICAL-ATTENDANT-GUIDANCE',
-      'YES_SYNTHETIC',
+      'YES',
     )
     firstView.unmount()
 
@@ -261,9 +263,9 @@ describe('A03 adaptive application', () => {
     await startApplication(user)
 
     const firstQuestion = requiredItem(screen.getAllByRole('combobox'), 0)
-    await user.selectOptions(firstQuestion, 'SYN-POLICY-COHORT-A')
+    await user.selectOptions(firstQuestion, 'NAT-UNITED-KINGDOM')
 
-    expect(firstQuestion).toHaveValue('SYN-POLICY-COHORT-A')
+    expect(firstQuestion).toHaveValue('NAT-UNITED-KINGDOM')
     expect(screen.getByText(/Could not save changes/)).toBeInTheDocument()
     expect(screen.queryByText('Saved in this browser', { exact: true })).not.toBeInTheDocument()
     expect(requireCase(store).application.draftSnapshots).toHaveLength(0)

@@ -88,13 +88,67 @@ export const questionDefinitionSchema = z
       'MISCELLANEOUS',
     ]),
     prompt: z.string().min(1),
-    control: z.enum(['SINGLE_SELECT', 'SYNTHETIC_DATE', 'BOOLEAN_CHOICE']),
-    allowedValues: z.array(z.string().min(1)).min(1),
+    control: z.enum([
+      'SINGLE_SELECT',
+      'SYNTHETIC_DATE',
+      'BOOLEAN_CHOICE',
+      'SELECT',
+      'DATE',
+      'TEXT',
+      'YES_NO',
+    ]),
+    allowedValues: z.array(z.string().min(1)).max(250),
+    legacyAllowedValues: z.array(z.string().min(1)).max(20).optional(),
     required: z.boolean(),
+    helperText: z.string().min(1).max(300).optional(),
+    placeholder: z.string().min(1).max(160).optional(),
+    maxLength: z.number().int().positive().max(500).optional(),
+    searchable: z.boolean().optional(),
+    guidanceByValue: z.record(z.string().min(1), z.string().min(1).max(400)).optional(),
+    dateConstraints: z
+      .object({
+        minOffsetDays: z.number().int().min(0).max(3650).optional(),
+        maxOffsetDays: z.number().int().min(0).max(3650).optional(),
+        notBeforeQuestionId: z.string().regex(/^Q-[A-Z0-9-]+$/).optional(),
+      })
+      .strict()
+      .optional(),
     reasonCode: reasonCodeSchema,
     policySourceId: provenanceIdSchema,
   })
   .strict()
+  .superRefine((question, context) => {
+    if (
+      ['SINGLE_SELECT', 'SYNTHETIC_DATE', 'BOOLEAN_CHOICE', 'SELECT', 'YES_NO'].includes(
+        question.control,
+      ) &&
+      question.allowedValues.length === 0
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['allowedValues'],
+        message: 'Choice controls require at least one allowed value.',
+      })
+    }
+    if (question.control === 'YES_NO' && question.allowedValues.length !== 2) {
+      context.addIssue({
+        code: 'custom',
+        path: ['allowedValues'],
+        message: 'YES_NO controls require exactly two allowed values.',
+      })
+    }
+    if (
+      question.dateConstraints?.minOffsetDays !== undefined &&
+      question.dateConstraints.maxOffsetDays !== undefined &&
+      question.dateConstraints.minOffsetDays > question.dateConstraints.maxOffsetDays
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['dateConstraints'],
+        message: 'Date minimum offset cannot exceed its maximum offset.',
+      })
+    }
+  })
 
 export const questionManifestSchema = z
   .object({

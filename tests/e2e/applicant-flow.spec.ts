@@ -106,7 +106,7 @@ test('Medical fresh-start reaches A03 without external requests or console error
   await expect(page.getByText(PROTOTYPE_NOTICE, { exact: true })).toBeVisible()
   await chooseMedical(page)
   await expect(page.getByText('Hospital letter')).toBeVisible()
-  await expect(page.getByText('Calculated before payment', { exact: true })).toBeVisible()
+  await expect(page.getByText('Varies by nationality and category', { exact: true })).toBeVisible()
   await expect(page.getByText(/SYNTHETIC_DEMO_CREDITS/)).toHaveCount(0)
 
   await page.getByRole('button', { name: 'Continue application' }).click()
@@ -163,7 +163,7 @@ test('Tourist reuses the applicant path with Tourist policy guidance', async ({ 
   await page.getByRole('link', { name: 'Continue' }).click()
 
   await expect(page.getByRole('heading', { level: 2, name: 'Tourism' })).toBeVisible()
-  await expect(page.getByText('Calculated before payment', { exact: true })).toBeVisible()
+  await expect(page.getByText('Varies by nationality and category', { exact: true })).toBeVisible()
   await expect(page.getByText('Recent photograph')).toBeVisible()
   await expect(page.getByText('Passport bio page')).toBeVisible()
   await expect(page.getByText('Hospital letter')).toHaveCount(0)

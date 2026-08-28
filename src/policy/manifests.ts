@@ -2,6 +2,11 @@ import type { ProvenanceId } from '../domain/ids'
 import type { z } from 'zod'
 
 import type { documentManifestSchema, questionManifestSchema } from './schema'
+import {
+  EVISA_ELIGIBLE_NATIONALITY_VALUES,
+  NATIONALITY_NOT_LISTED,
+  PASSPORT_TYPE_VALUES,
+} from './catalogues/applicant-options'
 
 type QuestionManifestInput = z.input<typeof questionManifestSchema>
 type DocumentManifestInput = z.input<typeof documentManifestSchema>
@@ -170,6 +175,491 @@ export function createExpandedQuestionManifests(): readonly QuestionManifestInpu
         policySourceId: `PROV-SYN-P2-${scope.replace('_', '-')}` as const,
       })),
     })),
+  ]
+}
+
+const PASSPORT_INELIGIBILITY_GUIDANCE =
+  'This passport type is not eligible for the e-Visa service under current published guidance. You may need to use the regular visa service.'
+
+function createRealSharedQuestions(
+  dateWindow: 'MEDICAL' | 'STANDARD',
+): QuestionManifestInput['questions'] {
+  return [
+    {
+      id: 'Q-SHARED-POLICY-COHORT',
+      scope: 'SHARED',
+      prompt: 'Country of nationality',
+      control: 'SELECT',
+      allowedValues: [...EVISA_ELIGIBLE_NATIONALITY_VALUES, NATIONALITY_NOT_LISTED.value],
+      legacyAllowedValues: ['SYN-POLICY-COHORT-A'],
+      required: true,
+      searchable: true,
+      helperText: 'Search the current e-Visa eligible nationality and region catalogue.',
+      guidanceByValue: {
+        [NATIONALITY_NOT_LISTED.value]:
+          'This nationality or region may not currently be eligible for e-Visa. Check the regular visa service for available options.',
+      },
+      reasonCode: 'R-SYN-SCENARIO-SUPPORTED',
+      policySourceId: 'PROV-SYN-FROZEN-P0',
+    },
+    {
+      id: 'Q-SHARED-PASSPORT-CLASS',
+      scope: 'SHARED',
+      prompt: 'Passport type',
+      control: 'SELECT',
+      allowedValues: [...PASSPORT_TYPE_VALUES],
+      legacyAllowedValues: ['SYNTHETIC_STANDARD_PASSPORT'],
+      required: true,
+      guidanceByValue: {
+        'PASSPORT-OFFICIAL': PASSPORT_INELIGIBILITY_GUIDANCE,
+        'PASSPORT-DIPLOMATIC': PASSPORT_INELIGIBILITY_GUIDANCE,
+      },
+      reasonCode: 'R-SYN-SCENARIO-SUPPORTED',
+      policySourceId: 'PROV-SYN-FROZEN-P0',
+    },
+    {
+      id: 'Q-SHARED-ARRIVAL-DATE',
+      scope: 'SHARED',
+      prompt: 'Expected date of arrival',
+      control: 'DATE',
+      allowedValues: [],
+      legacyAllowedValues: ['2099-04-14', '2099-05-10'],
+      required: true,
+      helperText:
+        dateWindow === 'MEDICAL'
+          ? 'Choose a date from 4 to 120 days from today, in line with current e-Medical guidance.'
+          : 'Choose today or a future date.',
+      dateConstraints:
+        dateWindow === 'MEDICAL'
+          ? { minOffsetDays: 4, maxOffsetDays: 120 }
+          : { minOffsetDays: 0 },
+      reasonCode: 'R-SYN-SCENARIO-SUPPORTED',
+      policySourceId: 'PROV-SYN-FROZEN-P0',
+    },
+  ]
+}
+
+function textQuestion(input: Readonly<{
+  id: string
+  scope: Exclude<QuestionManifestInput['questions'][number]['scope'], 'SHARED'>
+  prompt: string
+  helperText?: string
+  placeholder?: string
+  maxLength?: number
+  reasonCode: QuestionManifestInput['questions'][number]['reasonCode']
+  policySourceId: QuestionManifestInput['questions'][number]['policySourceId']
+}>): QuestionManifestInput['questions'][number] {
+  return {
+    ...input,
+    control: 'TEXT',
+    allowedValues: [],
+    required: true,
+    maxLength: input.maxLength ?? 160,
+  }
+}
+
+function dateQuestion(input: Readonly<{
+  id: string
+  scope: Exclude<QuestionManifestInput['questions'][number]['scope'], 'SHARED'>
+  prompt: string
+  notBeforeQuestionId?: string
+  reasonCode: QuestionManifestInput['questions'][number]['reasonCode']
+  policySourceId: QuestionManifestInput['questions'][number]['policySourceId']
+}>): QuestionManifestInput['questions'][number] {
+  return {
+    id: input.id,
+    scope: input.scope,
+    prompt: input.prompt,
+    control: 'DATE',
+    allowedValues: [],
+    required: true,
+    helperText:
+      input.notBeforeQuestionId === undefined
+        ? 'Choose today or a future date.'
+        : 'This date cannot be before your expected arrival in India.',
+    dateConstraints: {
+      minOffsetDays: 0,
+      ...(input.notBeforeQuestionId === undefined
+        ? {}
+        : { notBeforeQuestionId: input.notBeforeQuestionId }),
+    },
+    reasonCode: input.reasonCode,
+    policySourceId: input.policySourceId,
+  }
+}
+
+export function createRealInputQuestionManifests(): readonly QuestionManifestInput[] {
+  return [
+    {
+      id: 'QM-TOURIST-1',
+      questions: [
+        ...createRealSharedQuestions('STANDARD'),
+        {
+          id: 'Q-TOURIST-LEISURE-INTENT',
+          scope: 'TOURIST',
+          prompt: 'Purpose of visit',
+          control: 'SELECT',
+          allowedValues: [
+            'TOURIST-LEISURE',
+            'TOURIST-FRIENDS-RELATIVES',
+            'TOURIST-SHORT-YOGA',
+            'TOURIST-SHORT-COURSE',
+            'TOURIST-SHORT-VOLUNTEERING',
+          ],
+          legacyAllowedValues: ['SYNTHETIC_TOURISM'],
+          required: true,
+          reasonCode: 'R-SYN-TOURIST-INTENT',
+          policySourceId: 'PROV-SYN-P1-TOURIST',
+        },
+        dateQuestion({
+          id: 'Q-TOURIST-EXIT-DATE',
+          scope: 'TOURIST',
+          prompt: 'Expected date of departure',
+          notBeforeQuestionId: 'Q-SHARED-ARRIVAL-DATE',
+          reasonCode: 'R-SYN-TOURIST-INTENT',
+          policySourceId: 'PROV-SYN-P1-TOURIST',
+        }),
+      ],
+    },
+    {
+      id: 'QM-BUSINESS-1',
+      questions: [
+        ...createRealSharedQuestions('STANDARD'),
+        {
+          id: 'Q-BUSINESS-ACTIVITY',
+          scope: 'BUSINESS',
+          prompt: 'Business purpose or activity',
+          control: 'SELECT',
+          allowedValues: [
+            'BUSINESS-MEETINGS',
+            'BUSINESS-TRADE-FAIR',
+            'BUSINESS-EXPERT-SPECIALIST',
+            'BUSINESS-RECRUITMENT',
+            'BUSINESS-VENTURE-SETUP',
+          ],
+          required: true,
+          reasonCode: 'R-SYN-BUSINESS-INTENT',
+          policySourceId: 'PROV-SYN-P2-BUSINESS',
+        },
+        textQuestion({
+          id: 'Q-BUSINESS-INDIAN-ORGANISATION',
+          scope: 'BUSINESS',
+          prompt: 'Indian organisation or company',
+          placeholder: 'Organisation name',
+          maxLength: 160,
+          reasonCode: 'R-SYN-BUSINESS-INTENT',
+          policySourceId: 'PROV-SYN-P2-BUSINESS',
+        }),
+        textQuestion({
+          id: 'Q-BUSINESS-ORGANISATION-CITY',
+          scope: 'BUSINESS',
+          prompt: 'Organisation city',
+          placeholder: 'City in India',
+          maxLength: 80,
+          reasonCode: 'R-SYN-BUSINESS-INTENT',
+          policySourceId: 'PROV-SYN-P2-BUSINESS',
+        }),
+        dateQuestion({
+          id: 'Q-BUSINESS-DEPARTURE-DATE',
+          scope: 'BUSINESS',
+          prompt: 'Expected date of departure',
+          notBeforeQuestionId: 'Q-SHARED-ARRIVAL-DATE',
+          reasonCode: 'R-SYN-BUSINESS-INTENT',
+          policySourceId: 'PROV-SYN-P2-BUSINESS',
+        }),
+      ],
+    },
+    {
+      id: 'QM-MEDICAL-1',
+      questions: [
+        ...createRealSharedQuestions('MEDICAL'),
+        textQuestion({
+          id: 'Q-MEDICAL-TREATMENT-INTENT',
+          scope: 'MEDICAL',
+          prompt: 'Type of medical treatment required',
+          helperText:
+            'Briefly describe the treatment or procedure you plan to receive in India.',
+          placeholder: 'Cardiac consultation, surgery, oncology treatment, etc.',
+          maxLength: 240,
+          reasonCode: 'R-SYN-MEDICAL-INTENT',
+          policySourceId: 'PROV-SYN-P1-MEDICAL',
+        }),
+        dateQuestion({
+          id: 'Q-MEDICAL-ADMISSION-DATE',
+          scope: 'MEDICAL',
+          prompt: 'Proposed hospital admission date',
+          notBeforeQuestionId: 'Q-SHARED-ARRIVAL-DATE',
+          reasonCode: 'R-SYN-MEDICAL-INTENT',
+          policySourceId: 'PROV-SYN-P1-MEDICAL',
+        }),
+        {
+          id: 'Q-MEDICAL-ATTENDANT-GUIDANCE',
+          scope: 'MEDICAL',
+          prompt: 'Will a medical attendant travel with you?',
+          control: 'YES_NO',
+          allowedValues: ['YES', 'NO'],
+          legacyAllowedValues: ['YES_SYNTHETIC', 'NO_SYNTHETIC'],
+          required: true,
+          reasonCode: 'R-SYN-ATTENDANT-ONLY',
+          policySourceId: 'PROV-SYN-P1-MEDICAL',
+        },
+      ],
+    },
+    {
+      id: 'QM-MEDICAL-ATTENDANT-1',
+      questions: [
+        ...createRealSharedQuestions('MEDICAL'),
+        textQuestion({
+          id: 'Q-MEDICAL-ATTENDANT-PATIENT-REFERENCE',
+          scope: 'MEDICAL_ATTENDANT',
+          prompt: 'Patient application reference',
+          placeholder: 'Enter the patient’s application reference',
+          maxLength: 40,
+          reasonCode: 'R-SYN-MEDICAL-ATTENDANT-INTENT',
+          policySourceId: 'PROV-SYN-P2-MEDICAL-ATTENDANT',
+        }),
+        {
+          id: 'Q-MEDICAL-ATTENDANT-RELATIONSHIP',
+          scope: 'MEDICAL_ATTENDANT',
+          prompt: 'Relationship to the patient',
+          control: 'SELECT',
+          allowedValues: [
+            'RELATIONSHIP-SPOUSE',
+            'RELATIONSHIP-PARENT',
+            'RELATIONSHIP-CHILD',
+            'RELATIONSHIP-SIBLING',
+            'RELATIONSHIP-OTHER-CLOSE-RELATIVE',
+          ],
+          required: true,
+          reasonCode: 'R-SYN-MEDICAL-ATTENDANT-INTENT',
+          policySourceId: 'PROV-SYN-P2-MEDICAL-ATTENDANT',
+        },
+        textQuestion({
+          id: 'Q-MEDICAL-ATTENDANT-HOSPITAL',
+          scope: 'MEDICAL_ATTENDANT',
+          prompt: 'Indian hospital',
+          placeholder: 'Hospital name',
+          maxLength: 160,
+          reasonCode: 'R-SYN-MEDICAL-ATTENDANT-INTENT',
+          policySourceId: 'PROV-SYN-P2-MEDICAL-ATTENDANT',
+        }),
+        textQuestion({
+          id: 'Q-MEDICAL-ATTENDANT-HOSPITAL-CITY',
+          scope: 'MEDICAL_ATTENDANT',
+          prompt: 'Hospital city',
+          placeholder: 'City in India',
+          maxLength: 80,
+          reasonCode: 'R-SYN-MEDICAL-ATTENDANT-INTENT',
+          policySourceId: 'PROV-SYN-P2-MEDICAL-ATTENDANT',
+        }),
+      ],
+    },
+    {
+      id: 'QM-STUDENT-1',
+      questions: [
+        ...createRealSharedQuestions('STANDARD'),
+        textQuestion({
+          id: 'Q-STUDENT-INSTITUTION',
+          scope: 'STUDENT',
+          prompt: 'Educational institution',
+          placeholder: 'Institution name',
+          maxLength: 160,
+          reasonCode: 'R-SYN-STUDENT-INTENT',
+          policySourceId: 'PROV-SYN-P2-STUDENT',
+        }),
+        textQuestion({
+          id: 'Q-STUDENT-PROGRAMME',
+          scope: 'STUDENT',
+          prompt: 'Programme or course',
+          placeholder: 'Course or programme name',
+          maxLength: 160,
+          reasonCode: 'R-SYN-STUDENT-INTENT',
+          policySourceId: 'PROV-SYN-P2-STUDENT',
+        }),
+        textQuestion({
+          id: 'Q-STUDENT-COURSE-DURATION',
+          scope: 'STUDENT',
+          prompt: 'Course duration',
+          placeholder: 'For example, 12 months',
+          maxLength: 80,
+          reasonCode: 'R-SYN-STUDENT-INTENT',
+          policySourceId: 'PROV-SYN-P2-STUDENT',
+        }),
+        {
+          id: 'Q-STUDENT-FUNDING-SOURCE',
+          scope: 'STUDENT',
+          prompt: 'Funding source',
+          control: 'SELECT',
+          allowedValues: [
+            'FUNDING-SELF',
+            'FUNDING-FAMILY',
+            'FUNDING-SCHOLARSHIP',
+            'FUNDING-SPONSOR',
+          ],
+          required: true,
+          reasonCode: 'R-SYN-STUDENT-INTENT',
+          policySourceId: 'PROV-SYN-P2-STUDENT',
+        },
+      ],
+    },
+    {
+      id: 'QM-FAMILY-1',
+      questions: [
+        ...createRealSharedQuestions('STANDARD'),
+        textQuestion({
+          id: 'Q-FAMILY-STUDENT-REFERENCE',
+          scope: 'FAMILY',
+          prompt: 'Student application reference',
+          placeholder: 'Enter the student’s application reference',
+          maxLength: 40,
+          reasonCode: 'R-SYN-FAMILY-INTENT',
+          policySourceId: 'PROV-SYN-P2-FAMILY',
+        }),
+        {
+          id: 'Q-FAMILY-RELATIONSHIP',
+          scope: 'FAMILY',
+          prompt: 'Relationship to the student',
+          control: 'SELECT',
+          allowedValues: [
+            'RELATIONSHIP-SPOUSE',
+            'RELATIONSHIP-PARENT',
+            'RELATIONSHIP-CHILD',
+          ],
+          required: true,
+          reasonCode: 'R-SYN-FAMILY-INTENT',
+          policySourceId: 'PROV-SYN-P2-FAMILY',
+        },
+        textQuestion({
+          id: 'Q-FAMILY-INSTITUTION',
+          scope: 'FAMILY',
+          prompt: 'Student’s educational institution',
+          placeholder: 'Institution name',
+          maxLength: 160,
+          reasonCode: 'R-SYN-FAMILY-INTENT',
+          policySourceId: 'PROV-SYN-P2-FAMILY',
+        }),
+        dateQuestion({
+          id: 'Q-FAMILY-DEPARTURE-DATE',
+          scope: 'FAMILY',
+          prompt: 'Expected date of departure',
+          notBeforeQuestionId: 'Q-SHARED-ARRIVAL-DATE',
+          reasonCode: 'R-SYN-FAMILY-INTENT',
+          policySourceId: 'PROV-SYN-P2-FAMILY',
+        }),
+      ],
+    },
+    {
+      id: 'QM-TRANSIT-1',
+      questions: [
+        ...createRealSharedQuestions('STANDARD'),
+        {
+          id: 'Q-TRANSIT-ARRIVAL-PORT',
+          scope: 'TRANSIT',
+          prompt: 'Port of arrival in India',
+          control: 'SELECT',
+          allowedValues: [
+            'PORT-AHMEDABAD-AIRPORT',
+            'PORT-BENGALURU-AIRPORT',
+            'PORT-CHENNAI-AIRPORT',
+            'PORT-COCHIN-AIRPORT',
+            'PORT-DELHI-AIRPORT',
+            'PORT-GOA-DABOLIM-AIRPORT',
+            'PORT-GOA-MOPA-AIRPORT',
+            'PORT-HYDERABAD-AIRPORT',
+            'PORT-KOLKATA-AIRPORT',
+            'PORT-MUMBAI-AIRPORT',
+            'PORT-OTHER-PERMITTED',
+          ],
+          required: true,
+          helperText: 'Choose a listed port or select another permitted e-Visa port.',
+          reasonCode: 'R-SYN-TRANSIT-INTENT',
+          policySourceId: 'PROV-SYN-P2-TRANSIT',
+        },
+        textQuestion({
+          id: 'Q-TRANSIT-ONWARD-COUNTRY',
+          scope: 'TRANSIT',
+          prompt: 'Onward destination country',
+          placeholder: 'Destination country',
+          maxLength: 100,
+          reasonCode: 'R-SYN-TRANSIT-INTENT',
+          policySourceId: 'PROV-SYN-P2-TRANSIT',
+        }),
+        dateQuestion({
+          id: 'Q-TRANSIT-DEPARTURE-DATE',
+          scope: 'TRANSIT',
+          prompt: 'Onward departure date',
+          notBeforeQuestionId: 'Q-SHARED-ARRIVAL-DATE',
+          reasonCode: 'R-SYN-TRANSIT-INTENT',
+          policySourceId: 'PROV-SYN-P2-TRANSIT',
+        }),
+        textQuestion({
+          id: 'Q-TRANSIT-TICKET-REFERENCE',
+          scope: 'TRANSIT',
+          prompt: 'Confirmed ticket reference',
+          placeholder: 'Booking or ticket reference',
+          maxLength: 60,
+          reasonCode: 'R-SYN-TRANSIT-INTENT',
+          policySourceId: 'PROV-SYN-P2-TRANSIT',
+        }),
+        {
+          id: 'Q-TRANSIT-DESTINATION-ENTRY-BASIS',
+          scope: 'TRANSIT',
+          prompt: 'Permission to enter your destination country',
+          control: 'SELECT',
+          allowedValues: [
+            'DESTINATION-VISA',
+            'DESTINATION-VISA-FREE',
+            'DESTINATION-RESIDENCE-PERMIT',
+            'DESTINATION-OTHER-PERMISSION',
+          ],
+          required: true,
+          reasonCode: 'R-SYN-TRANSIT-INTENT',
+          policySourceId: 'PROV-SYN-P2-TRANSIT',
+        },
+      ],
+    },
+    {
+      id: 'QM-MISCELLANEOUS-1',
+      questions: [
+        ...createRealSharedQuestions('STANDARD'),
+        {
+          id: 'Q-MISC-ENTRY-BASIS',
+          scope: 'MISCELLANEOUS',
+          prompt: 'Basis for your e-Entry application',
+          control: 'SELECT',
+          allowedValues: ['ENTRY-RELATIONSHIP', 'ENTRY-INDIAN-OCI-CONNECTION'],
+          required: true,
+          reasonCode: 'R-SYN-MISCELLANEOUS-INTENT',
+          policySourceId: 'PROV-SYN-P2-MISCELLANEOUS',
+        },
+        textQuestion({
+          id: 'Q-MISC-RELATIONSHIP',
+          scope: 'MISCELLANEOUS',
+          prompt: 'Relationship to the relevant person',
+          placeholder: 'Describe the relationship',
+          maxLength: 100,
+          reasonCode: 'R-SYN-MISCELLANEOUS-INTENT',
+          policySourceId: 'PROV-SYN-P2-MISCELLANEOUS',
+        }),
+        textQuestion({
+          id: 'Q-MISC-RELATED-PERSON-BASIS',
+          scope: 'MISCELLANEOUS',
+          prompt: 'Related person or Indian/OCI status basis',
+          placeholder: 'Briefly describe the relevant status basis',
+          maxLength: 180,
+          reasonCode: 'R-SYN-MISCELLANEOUS-INTENT',
+          policySourceId: 'PROV-SYN-P2-MISCELLANEOUS',
+        }),
+        dateQuestion({
+          id: 'Q-MISC-DEPARTURE-DATE',
+          scope: 'MISCELLANEOUS',
+          prompt: 'Expected date of departure',
+          notBeforeQuestionId: 'Q-SHARED-ARRIVAL-DATE',
+          reasonCode: 'R-SYN-MISCELLANEOUS-INTENT',
+          policySourceId: 'PROV-SYN-P2-MISCELLANEOUS',
+        }),
+      ],
+    },
   ]
 }
 

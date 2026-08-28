@@ -126,7 +126,7 @@ describe('runtime A00 to A02 vertical smoke path', () => {
       status: 'POLICY_EVALUATED',
       evaluation: {
         scenarioSupport: 'SUPPORTED_BY_DEMO',
-        policy: { qualifiedVersion: 'SYN-EVISA-POLICY@2.0.0' },
+        policy: { qualifiedVersion: 'SYN-EVISA-POLICY@2.1.0' },
         questionManifest: { id: 'QM-MEDICAL-1' },
         syntheticFee: { amount: 73, unit: 'SYNTHETIC_DEMO_CREDITS' },
       },
@@ -146,7 +146,7 @@ describe('runtime A00 to A02 vertical smoke path', () => {
     expect(afterCreate.envelope.activeCaseId).toBe('SYN-CASE-MED-001')
     expect(afterCreate.envelope.cases).toHaveLength(1)
     expect(afterCreate.persistedCase.policyPin.qualifiedVersion).toBe(
-      'SYN-EVISA-POLICY@2.0.0',
+      'SYN-EVISA-POLICY@2.1.0',
     )
     expect(afterCreate.persistedCase.auditEvents).toHaveLength(1)
     expect(afterCreate.persistedCase.auditEvents[0]?.eventType).toBe('DraftCreated')
@@ -174,7 +174,7 @@ describe('runtime A00 to A02 vertical smoke path', () => {
       activeCaseId: 'SYN-CASE-MED-001',
       caseId: 'SYN-CASE-MED-001',
       scenarioId: 'SYN-MEDICAL-001',
-      policyQualifiedVersion: 'SYN-EVISA-POLICY@2.0.0',
+      policyQualifiedVersion: 'SYN-EVISA-POLICY@2.1.0',
       applicationState: 'IN_PROGRESS',
       currentStep: 'APPLICATION',
       resumable: true,
@@ -217,7 +217,7 @@ describe('runtime A00 to A02 vertical smoke path', () => {
       status: 'POLICY_EVALUATED',
       evaluation: {
         scenarioSupport: 'SUPPORTED_BY_DEMO',
-        policy: { qualifiedVersion: 'SYN-EVISA-POLICY@2.0.0' },
+        policy: { qualifiedVersion: 'SYN-EVISA-POLICY@2.1.0' },
         questionManifest: { id: 'QM-TOURIST-1' },
         syntheticFee: { amount: 41, unit: 'SYNTHETIC_DEMO_CREDITS' },
       },
@@ -570,7 +570,7 @@ describe('runtime fail-closed command behavior', () => {
     expect(
       loadedCase(createPersistenceStore(storage), 'SYN-CASE-MED-001').persistedCase
         .policyPin.qualifiedVersion,
-    ).toBe('SYN-EVISA-POLICY@2.0.0')
+    ).toBe('SYN-EVISA-POLICY@2.1.0')
   })
 })
 

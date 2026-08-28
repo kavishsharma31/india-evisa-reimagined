@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { fillGenericApplication } from './application-inputs.js'
 
 const STORAGE_KEY = 'india-evisa-reimagined:p0'
 
@@ -42,10 +43,7 @@ for (const scenario of NEW_SCENARIOS) {
     await expect(page).toHaveURL(`/application/${scenario.caseId}`)
     await page.getByRole('button', { name: 'Start application' }).click()
 
-    const selects = page.locator('form select')
-    for (let index = 0; index < await selects.count(); index += 1) {
-      await selects.nth(index).selectOption({ index: 1 })
-    }
+    await fillGenericApplication(page)
     await page.getByRole('button', { name: 'Continue to documents' }).click()
     await page.getByRole('link', { name: 'Prepare documents' }).click()
     await expect(page).toHaveURL(`/application/${scenario.caseId}/documents`)

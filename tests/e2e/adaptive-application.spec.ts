@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { fillMedicalApplication, fillTouristApplication, futureDate } from './application-inputs.js'
 
 const P0_STORAGE_KEY = 'india-evisa-reimagined:p0'
 const PROTOTYPE_NOTICE =
@@ -71,23 +72,6 @@ async function expectSharedApplicantShell(page: Page) {
   await expect(page.getByRole('heading', { name: 'India e-Visa Reimagined' })).toBeVisible()
 }
 
-async function answerMedicalApplication(page: Page) {
-  await page.getByLabel('Country of nationality').selectOption('SYN-POLICY-COHORT-A')
-  await page.getByLabel('Passport type').selectOption('SYNTHETIC_STANDARD_PASSPORT')
-  await page.getByLabel('Expected date of arrival').selectOption('2099-04-14')
-  await page.getByLabel('Purpose of medical visit').selectOption('SYNTHETIC_MEDICAL_TREATMENT')
-  await page.getByLabel('Proposed hospital admission date').selectOption('2099-04-18')
-  await page.getByRole('radio', { name: 'Yes' }).check()
-}
-
-async function answerTouristApplication(page: Page) {
-  await page.getByLabel('Country of nationality').selectOption('SYN-POLICY-COHORT-A')
-  await page.getByLabel('Passport type').selectOption('SYNTHETIC_STANDARD_PASSPORT')
-  await page.getByLabel('Expected date of arrival').selectOption('2099-05-10')
-  await page.getByLabel('Purpose of visit').selectOption('SYNTHETIC_TOURISM')
-  await page.getByLabel('Expected date of departure').selectOption('2099-05-17')
-}
-
 async function loadApplicationEvidence(page: Page): Promise<ApplicationEvidence> {
   const raw = await page.evaluate((storageKey) => localStorage.getItem(storageKey), P0_STORAGE_KEY)
   if (raw === null) {
@@ -158,7 +142,7 @@ test('Medical A03 autosaves controlled answers and ends at the Documents handoff
   await expect(page.getByText(PROTOTYPE_NOTICE, { exact: true })).toBeInViewport()
   await expect(page.getByText('Proposed hospital admission date', { exact: true })).toBeVisible()
   await expect(page.getByText('Will a medical attendant travel with you?', { exact: true })).toBeVisible()
-  await answerMedicalApplication(page)
+  await fillMedicalApplication(page)
   await expect(page.getByText('Saved in this browser', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Continue to documents' }).click()
 
@@ -170,13 +154,13 @@ test('Medical A03 autosaves controlled answers and ends at the Documents handoff
     caseCount: 1,
     caseId: 'SYN-CASE-MED-001',
     scenarioId: 'SYN-MEDICAL-001',
-    policyQualifiedVersion: 'SYN-EVISA-POLICY@2.0.0',
-    revision: 9,
+    policyQualifiedVersion: 'SYN-EVISA-POLICY@2.1.0',
+    revision: 8,
     applicationState: 'IN_PROGRESS',
   })
-  expect(evidence.snapshots).toHaveLength(7)
+  expect(evidence.snapshots).toHaveLength(6)
   expect(evidence.snapshots.at(-1)?.currentStep).toBe('DOCUMENTS')
-  expect(evidence.eventTypes.filter((eventType) => eventType === 'DraftSnapshotSaved')).toHaveLength(7)
+  expect(evidence.eventTypes.filter((eventType) => eventType === 'DraftSnapshotSaved')).toHaveLength(6)
   expect(browserErrors).toEqual([])
   expect(
     requestUrls.every((url) => {
@@ -189,8 +173,8 @@ test('Medical A03 autosaves controlled answers and ends at the Documents handoff
 test('Medical partial answers survive reload without duplicate Case or draft evidence', async ({ page }) => {
   await openFreshApp(page)
   await startApplication(page, 'Medical treatment')
-  await page.getByLabel('Country of nationality').selectOption('SYN-POLICY-COHORT-A')
-  await page.getByLabel('Passport type').selectOption('SYNTHETIC_STANDARD_PASSPORT')
+  await page.getByRole('combobox', { name: /Country of nationality/ }).selectOption('NAT-UNITED-KINGDOM')
+  await page.getByLabel('Passport type').selectOption('PASSPORT-ORDINARY')
   const beforeReload = await loadApplicationEvidence(page)
 
   await page.reload()
@@ -198,8 +182,8 @@ test('Medical partial answers survive reload without duplicate Case or draft evi
   expect(afterPageLoad.raw).toBe(beforeReload.raw)
   await expect(page.getByRole('heading', { name: 'Tell us about this trip' })).toBeVisible()
   await expectSharedApplicantShell(page)
-  await expect(page.getByLabel('Country of nationality')).toHaveValue('SYN-POLICY-COHORT-A')
-  await expect(page.getByLabel('Passport type')).toHaveValue('SYNTHETIC_STANDARD_PASSPORT')
+  await expect(page.getByRole('combobox', { name: /Country of nationality/ })).toHaveValue('NAT-UNITED-KINGDOM')
+  await expect(page.getByLabel('Passport type')).toHaveValue('PASSPORT-ORDINARY')
   await expect(page.getByLabel('Expected date of arrival')).toHaveValue('')
 
   const afterResume = await loadApplicationEvidence(page)
@@ -207,7 +191,7 @@ test('Medical partial answers survive reload without duplicate Case or draft evi
   expect(afterResume.caseCount).toBe(1)
   expect(afterResume.snapshots).toHaveLength(2)
   expect(afterResume.eventTypes.filter((eventType) => eventType === 'DraftCreated')).toHaveLength(1)
-  await page.getByLabel('Expected date of arrival').selectOption('2099-04-14')
+  await page.getByLabel('Expected date of arrival').fill(futureDate(10))
   await expect(page.getByText('Saved in this browser', { exact: true })).toBeVisible()
 })
 
@@ -220,13 +204,13 @@ test('Tourist adapts through the same A03 renderer and completes without Medical
   await expect(page.getByText('Expected date of departure', { exact: true })).toBeVisible()
   await expect(page.getByText('Proposed hospital admission date', { exact: true })).toHaveCount(0)
   await expect(page.getByText('Will a medical attendant travel with you?', { exact: true })).toHaveCount(0)
-  await answerTouristApplication(page)
+  await fillTouristApplication(page)
   await page.getByRole('button', { name: 'Continue to documents' }).click()
   await expect(page.getByRole('heading', { name: 'Application details saved' })).toBeVisible()
 
   const evidence = await loadApplicationEvidence(page)
   expect(evidence.scenarioId).toBe('SYN-TOURIST-001')
-  expect(evidence.policyQualifiedVersion).toBe('SYN-EVISA-POLICY@2.0.0')
+  expect(evidence.policyQualifiedVersion).toBe('SYN-EVISA-POLICY@2.1.0')
   expect(evidence.snapshots.at(-1)?.answers).not.toHaveProperty('Q-MEDICAL-ADMISSION-DATE')
 })
 
@@ -238,7 +222,7 @@ test('required-answer validation blocks the Documents snapshot and focuses the f
   await expect(page.getByRole('heading', { name: 'Check your answers' })).toBeVisible()
   await expectSharedApplicantShell(page)
   await expect(page.getByText('6 required answers need attention.', { exact: true })).toBeVisible()
-  await expect(page.getByLabel('Country of nationality')).toBeFocused()
+  await expect(page.getByRole('combobox', { name: /Country of nationality/ })).toBeFocused()
   await expect(page.getByRole('heading', { name: 'Application details saved' })).toHaveCount(0)
   const evidence = await loadApplicationEvidence(page)
   expect(evidence.snapshots).toEqual([])
@@ -249,8 +233,8 @@ test('A03 remains usable without horizontal overflow at 360x800', async ({ page 
   await page.setViewportSize({ width: 360, height: 800 })
   await openFreshApp(page)
   await startApplication(page, 'Medical treatment')
-  await page.getByLabel('Country of nationality').selectOption('SYN-POLICY-COHORT-A')
-  await page.getByLabel('Expected date of arrival').selectOption('2099-04-14')
+  await page.getByRole('combobox', { name: /Country of nationality/ }).selectOption('NAT-UNITED-KINGDOM')
+  await page.getByLabel('Expected date of arrival').fill(futureDate(10))
   await page.getByRole('radio', { name: 'No' }).check()
 
   const layout = await page.evaluate(() => ({

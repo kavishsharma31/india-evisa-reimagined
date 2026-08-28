@@ -14,6 +14,7 @@ import {
   type PolicyEvaluationResult,
 } from '../policy'
 import { deepFreeze } from '../policy/schema'
+import { validateQuestionAnswers } from '../policy/question-validation'
 import {
   APPLICATION_STEP_IDS,
   controlledAnswerMapSchema,
@@ -868,13 +869,21 @@ export function createDemoRuntime(dependencies: DemoRuntimeDependencies): DemoRu
     ) {
       return evaluationPolicyRejection(evaluation)
     }
+    const answerErrors = validateQuestionAnswers(
+      evaluation.questionManifest.questions,
+      answersValidation.data,
+      { requireAll: false },
+    )
     const allowedQuestionIds = new Set(
       evaluation.questionManifest.questions.map(({ id }) => id),
     )
-    if (Object.keys(answersValidation.data).some((questionId) => !allowedQuestionIds.has(questionId))) {
+    const foreignQuestionCount = Object.keys(answersValidation.data).filter(
+      (questionId) => !allowedQuestionIds.has(questionId),
+    ).length
+    if (Object.keys(answerErrors).length > 0 || foreignQuestionCount > 0) {
       return invalidCommand(
         'SaveSnapshot',
-        1,
+        Object.keys(answerErrors).length + foreignQuestionCount,
         'INVALID_DRAFT_ANSWER',
         persistedCase.caseId,
       )

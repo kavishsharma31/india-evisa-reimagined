@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import App from './App'
 import { createAppRuntime } from './app/create-app-runtime'
+import { addLocalDays, isoDateFromLocalDate } from './policy/question-validation'
 import {
   createPersistenceStore,
   type PersistenceService,
@@ -43,14 +44,6 @@ function requireCase(store: PersistenceService) {
   return loaded.state.cases[0]
 }
 
-function requiredItem<Value>(values: readonly Value[], index: number): Value {
-  const value = values[index]
-  if (value === undefined) {
-    throw new Error(`Expected item at index ${index}.`)
-  }
-  return value
-}
-
 async function reachA05(
   user: ReturnType<typeof userEvent.setup>,
   scenario: 'Medical treatment' | 'Tourism' = 'Medical treatment',
@@ -63,23 +56,25 @@ async function reachA05(
   await user.click(screen.getByRole('button', { name: 'Continue application' }))
   await user.click(screen.getByRole('button', { name: 'Start application' }))
 
-  const selects = screen.getAllByRole('combobox')
-  await user.selectOptions(requiredItem(selects, 0), 'SYN-POLICY-COHORT-A')
-  await user.selectOptions(requiredItem(selects, 1), 'SYNTHETIC_STANDARD_PASSPORT')
-  await user.selectOptions(
-    requiredItem(selects, 2),
-    scenario === 'Medical treatment' ? '2099-04-14' : '2099-05-10',
-  )
-  await user.selectOptions(
-    requiredItem(selects, 3),
-    scenario === 'Medical treatment' ? 'SYNTHETIC_MEDICAL_TREATMENT' : 'SYNTHETIC_TOURISM',
-  )
-  await user.selectOptions(
-    requiredItem(selects, 4),
-    scenario === 'Medical treatment' ? '2099-04-18' : '2099-05-17',
+  await user.selectOptions(screen.getByLabelText(/Country of nationality/), 'NAT-UNITED-KINGDOM')
+  await user.selectOptions(screen.getByLabelText(/Passport type/), 'PASSPORT-ORDINARY')
+  await user.type(
+    screen.getByLabelText(/Expected date of arrival/),
+    isoDateFromLocalDate(addLocalDays(new Date(), 10)),
   )
   if (scenario === 'Medical treatment') {
+    await user.type(screen.getByLabelText(/Type of medical treatment required/), 'Cardiac consultation')
+    await user.type(
+      screen.getByLabelText(/Proposed hospital admission date/),
+      isoDateFromLocalDate(addLocalDays(new Date(), 12)),
+    )
     await user.click(screen.getByRole('radio', { name: 'Yes' }))
+  } else {
+    await user.selectOptions(screen.getByLabelText(/Purpose of visit/), 'TOURIST-LEISURE')
+    await user.type(
+      screen.getByLabelText(/Expected date of departure/),
+      isoDateFromLocalDate(addLocalDays(new Date(), 17)),
+    )
   }
   await user.click(screen.getByRole('button', { name: 'Continue to documents' }))
   await user.click(screen.getByRole('link', { name: 'Prepare documents' }))
@@ -99,10 +94,10 @@ describe('A05 review and simulated submission', () => {
     await reachA05(user)
 
     expect(screen.getByRole('heading', { name: 'Medical treatment' })).toBeInTheDocument()
-    expect(screen.getByText('Purpose of medical visit')).toBeInTheDocument()
-    expect(screen.getByText('18 April 2099')).toBeInTheDocument()
+    expect(screen.getByText('Type of medical treatment required')).toBeInTheDocument()
+    expect(screen.getByText('Cardiac consultation')).toBeInTheDocument()
     expect(screen.getAllByText('Ready')).toHaveLength(3)
-    expect(screen.getByRole('heading', { name: 'Calculated before payment' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Not calculated in this prototype' })).toBeInTheDocument()
     expect(requireCase(store).application.state).toBe('IN_PROGRESS')
   })
 
@@ -116,7 +111,7 @@ describe('A05 review and simulated submission', () => {
     expect(screen.queryByText(/Medical treatment intent/i)).not.toBeInTheDocument()
     expect(screen.queryByText('Hospital letter')).not.toBeInTheDocument()
     expect(screen.getAllByText('Ready')).toHaveLength(2)
-    expect(screen.getByRole('heading', { name: 'Calculated before payment' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Not calculated in this prototype' })).toBeInTheDocument()
   })
 
   it('edits application details without recreating the Case and refreshes the review', async () => {

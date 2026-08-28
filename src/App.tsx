@@ -183,9 +183,9 @@ function PurposeGuidance(props: {
           <section className={styles.feePanel} aria-labelledby="fee-heading">
             <div>
               <p className={styles.feeLabel} id="fee-heading">Visa fee</p>
-              <p className={styles.feeAmount}>Calculated before payment</p>
+              <p className={styles.feeAmount}>Varies by nationality and category</p>
             </div>
-            <strong>The applicable visa fee depends on your nationality and visa category. The amount will be shown before payment.</strong>
+            <strong>Visa fees vary by nationality and visa category.</strong>
           </section>
         ) : null}
       </div>

@@ -7,6 +7,7 @@ import {
 import { syntheticIdSchema } from '../domain/ids'
 import type { PolicyEvaluationResult } from '../policy'
 import { deepFreeze } from '../policy/schema'
+import { validateQuestionAnswerShape } from '../policy/question-validation'
 import {
   persistedCaseSchema,
   persistedDomainEventSchema,
@@ -108,7 +109,7 @@ export function buildReviewSummary(
 
   const missingQuestionIds = questionManifest.questions.flatMap((question) => {
     const answer = latestSnapshot.answers[question.id]
-    return answer !== undefined && question.allowedValues.includes(answer)
+    return answer !== undefined && validateQuestionAnswerShape(question, answer) === null
       ? []
       : question.required
         ? [question.id]

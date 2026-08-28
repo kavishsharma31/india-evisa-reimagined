@@ -1,3 +1,5 @@
+import { APPLICANT_OPTION_LABELS } from '../policy/catalogues/applicant-options.js'
+
 const ANSWER_LABELS: Readonly<Record<string, string>> = Object.freeze({
   'SYN-POLICY-COHORT-A': 'United Kingdom',
   SYNTHETIC_STANDARD_PASSPORT: 'Ordinary passport',
@@ -25,13 +27,51 @@ const ANSWER_LABELS: Readonly<Record<string, string>> = Object.freeze({
   SYNTHETIC_RELATIONSHIP_BASED_ENTRY: 'Relationship-based e-Entry',
   SYNTHETIC_ELIGIBLE_RELATIONSHIP: 'Eligible family relationship',
   SYNTHETIC_INDIAN_STATUS_BASIS: 'Indian or OCI status connection',
+  YES: 'Yes',
+  NO: 'No',
+  'TOURIST-LEISURE': 'Tourism and leisure',
+  'TOURIST-FRIENDS-RELATIVES': 'Visit friends or relatives',
+  'TOURIST-SHORT-YOGA': 'Short-term yoga programme',
+  'TOURIST-SHORT-COURSE': 'Eligible short-term course',
+  'TOURIST-SHORT-VOLUNTEERING': 'Eligible short-term voluntary work',
+  'BUSINESS-MEETINGS': 'Business meetings and related activities',
+  'BUSINESS-TRADE-FAIR': 'Trade fair or exhibition',
+  'BUSINESS-EXPERT-SPECIALIST': 'Expert or specialist assignment',
+  'BUSINESS-RECRUITMENT': 'Recruitment activity',
+  'BUSINESS-VENTURE-SETUP': 'Establishing an industrial or business venture',
+  'RELATIONSHIP-SPOUSE': 'Spouse',
+  'RELATIONSHIP-PARENT': 'Parent',
+  'RELATIONSHIP-CHILD': 'Child',
+  'RELATIONSHIP-SIBLING': 'Sibling',
+  'RELATIONSHIP-OTHER-CLOSE-RELATIVE': 'Other close relative',
+  'FUNDING-SELF': 'Self-funded',
+  'FUNDING-FAMILY': 'Family-funded',
+  'FUNDING-SCHOLARSHIP': 'Scholarship',
+  'FUNDING-SPONSOR': 'Organisation or other sponsor',
+  'PORT-AHMEDABAD-AIRPORT': 'Ahmedabad Airport',
+  'PORT-BENGALURU-AIRPORT': 'Bengaluru Airport',
+  'PORT-CHENNAI-AIRPORT': 'Chennai Airport',
+  'PORT-COCHIN-AIRPORT': 'Cochin Airport',
+  'PORT-DELHI-AIRPORT': 'Delhi Airport',
+  'PORT-GOA-DABOLIM-AIRPORT': 'Goa (Dabolim) Airport',
+  'PORT-GOA-MOPA-AIRPORT': 'Goa (Mopa) Airport',
+  'PORT-HYDERABAD-AIRPORT': 'Hyderabad Airport',
+  'PORT-KOLKATA-AIRPORT': 'Kolkata Airport',
+  'PORT-MUMBAI-AIRPORT': 'Mumbai Airport',
+  'PORT-OTHER-PERMITTED': 'Another permitted e-Visa port',
+  'DESTINATION-VISA': 'Valid visa',
+  'DESTINATION-VISA-FREE': 'Visa-free entry',
+  'DESTINATION-RESIDENCE-PERMIT': 'Residence permit',
+  'DESTINATION-OTHER-PERMISSION': 'Other valid entry permission',
+  'ENTRY-RELATIONSHIP': 'Relationship-based e-Entry',
+  'ENTRY-INDIAN-OCI-CONNECTION': 'Indian or OCI status connection',
 })
 
 const QUESTION_PROMPTS: Readonly<Record<string, string>> = Object.freeze({
   'Q-SHARED-POLICY-COHORT': 'Country of nationality',
   'Q-SHARED-PASSPORT-CLASS': 'Passport type',
   'Q-SHARED-ARRIVAL-DATE': 'Expected date of arrival',
-  'Q-MEDICAL-TREATMENT-INTENT': 'Purpose of medical visit',
+  'Q-MEDICAL-TREATMENT-INTENT': 'Type of medical treatment required',
   'Q-MEDICAL-ADMISSION-DATE': 'Proposed hospital admission date',
   'Q-MEDICAL-ATTENDANT-GUIDANCE': 'Will a medical attendant travel with you?',
   'Q-TOURIST-LEISURE-INTENT': 'Purpose of visit',
@@ -150,7 +190,7 @@ export function applicantQuestionPrompt(questionId: string, fallback: string): s
 }
 
 export function applicantAnswerLabel(value: string): string {
-  const knownLabel = ANSWER_LABELS[value]
+  const knownLabel = APPLICANT_OPTION_LABELS[value] ?? ANSWER_LABELS[value]
   if (knownLabel !== undefined) {
     return knownLabel
   }

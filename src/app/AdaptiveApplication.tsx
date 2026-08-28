@@ -3,6 +3,11 @@ import { Link } from 'react-router-dom'
 
 import type { SyntheticId } from '../domain'
 import type { PolicyEvaluationResult } from '../policy'
+import {
+  questionDateBounds,
+  validateQuestionAnswerShape,
+  validateQuestionAnswers,
+} from '../policy/question-validation'
 import type { RuntimeResumeResult } from '../runtime'
 import type { AppRuntimeServices } from './create-app-runtime'
 import { applicantAnswerLabel, applicantQuestionPrompt } from './applicant-labels'
@@ -35,7 +40,9 @@ function boundedAnswers(questions: readonly Question[], answers: AnswerMap): Ans
     Object.fromEntries(
       questions.flatMap((question) => {
         const answer = answers[question.id]
-        return answer === undefined ? [] : [[question.id, answer]]
+        return answer === undefined || validateQuestionAnswerShape(question, answer) !== null
+          ? []
+          : [[question.id, answer]]
       }),
     ),
   )
@@ -51,6 +58,19 @@ function controlId(index: number): string {
 
 function errorId(index: number): string {
   return `${controlId(index)}-error`
+}
+
+function helperId(index: number): string {
+  return `${controlId(index)}-help`
+}
+
+function guidanceId(index: number): string {
+  return `${controlId(index)}-guidance`
+}
+
+function describedByIds(values: readonly (string | undefined)[]): string | undefined {
+  const ids = values.filter((value): value is string => value !== undefined)
+  return ids.length === 0 ? undefined : ids.join(' ')
 }
 
 function focusQuestion(index: number): void {
@@ -104,37 +124,39 @@ export function AdaptiveApplication(props: AdaptiveApplicationProps) {
     return false
   }
 
-  function changeAnswer(question: Question, value: string) {
-    if (!question.allowedValues.includes(value)) {
+  function changeAnswer(question: Question, value: string, persist = true) {
+    if (
+      (question.control === 'SELECT' ||
+        question.control === 'YES_NO' ||
+        question.control === 'SINGLE_SELECT' ||
+        question.control === 'SYNTHETIC_DATE' ||
+        question.control === 'BOOLEAN_CHOICE') &&
+      !question.allowedValues.includes(value)
+    ) {
       return
     }
 
     const nextAnswers = Object.freeze({ ...answers, [question.id]: value })
     setAnswers(nextAnswers)
-    setQuestionErrors((currentErrors) => {
-      if (currentErrors[question.id] === undefined) {
-        return currentErrors
-      }
-      const { [question.id]: _removed, ...remainingErrors } = currentErrors
-      return remainingErrors
-    })
+    const nextErrors = validateQuestionAnswers(questions, nextAnswers, { requireAll: false })
+    setQuestionErrors(nextErrors)
 
-    if (!sameAnswers(authoritativeAnswers, nextAnswers)) {
+    if (persist && Object.keys(nextErrors).length === 0 && !sameAnswers(authoritativeAnswers, nextAnswers)) {
       persistSnapshot(nextAnswers, 'APPLICATION')
+    }
+  }
+
+  function persistTextAnswer() {
+    const nextErrors = validateQuestionAnswers(questions, answers, { requireAll: false })
+    setQuestionErrors(nextErrors)
+    if (Object.keys(nextErrors).length === 0 && !sameAnswers(authoritativeAnswers, answers)) {
+      persistSnapshot(answers, 'APPLICATION')
     }
   }
 
   function submitApplicationDetails(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    const nextErrors: Record<string, string> = {}
-    for (const question of questions) {
-      const answer = answers[question.id]
-      if (question.required && answer === undefined) {
-        nextErrors[question.id] = 'Choose an answer for this required question.'
-      } else if (answer !== undefined && !question.allowedValues.includes(answer)) {
-        nextErrors[question.id] = 'Choose one of the available options.'
-      }
-    }
+    const nextErrors = validateQuestionAnswers(questions, answers)
 
     setQuestionErrors(nextErrors)
     const firstInvalidIndex = questions.findIndex(
@@ -230,8 +252,17 @@ export function AdaptiveApplication(props: AdaptiveApplicationProps) {
         <div className={styles.questionList}>
           {questions.map((question, index) => {
             const fieldError = questionErrors[question.id]
-            const describedBy = fieldError === undefined ? undefined : errorId(index)
-            return question.control === 'BOOLEAN_CHOICE' ? (
+            const guidance =
+              answers[question.id] === undefined
+                ? undefined
+                : question.guidanceByValue?.[answers[question.id] ?? '']
+            const describedBy = describedByIds([
+              question.helperText === undefined ? undefined : helperId(index),
+              guidance === undefined ? undefined : guidanceId(index),
+              fieldError === undefined ? undefined : errorId(index),
+            ])
+            const prompt = applicantQuestionPrompt(question.id, question.prompt)
+            return question.control === 'BOOLEAN_CHOICE' || question.control === 'YES_NO' ? (
               <fieldset
                 className={styles.questionGroup}
                 key={question.id}
@@ -240,7 +271,7 @@ export function AdaptiveApplication(props: AdaptiveApplicationProps) {
               >
                 <legend>
                   <span className={styles.questionNumber}>{String(index + 1).padStart(2, '0')}</span>
-                  <span>{applicantQuestionPrompt(question.id, question.prompt)}</span>
+                  <span>{prompt}</span>
                   {question.required ? <span className={styles.required}>Required</span> : null}
                 </legend>
                 <div className={styles.choiceGrid}>
@@ -259,29 +290,88 @@ export function AdaptiveApplication(props: AdaptiveApplicationProps) {
                     </label>
                   ))}
                 </div>
+                {question.helperText ? <p className={styles.helperText} id={helperId(index)}>{question.helperText}</p> : null}
+                {guidance ? <p className={styles.guidanceNotice} id={guidanceId(index)} role="status">{guidance}</p> : null}
                 {fieldError ? <p className={styles.fieldError} id={errorId(index)}>{fieldError}</p> : null}
               </fieldset>
             ) : (
               <div className={styles.questionGroup} key={question.id}>
                 <label htmlFor={controlId(index)}>
                   <span className={styles.questionNumber}>{String(index + 1).padStart(2, '0')}</span>
-                  <span>{applicantQuestionPrompt(question.id, question.prompt)}</span>
+                  <span>{prompt}</span>
                   {question.required ? <span className={styles.required}>Required</span> : null}
                 </label>
-                <select
-                  id={controlId(index)}
-                  name={question.id}
-                  value={answers[question.id] ?? ''}
-                  required={question.required}
-                  aria-invalid={fieldError === undefined ? undefined : true}
-                  aria-describedby={describedBy}
-                  onChange={(changeEvent) => changeAnswer(question, changeEvent.currentTarget.value)}
-                >
-                  <option value="">Choose an option</option>
-                  {question.allowedValues.map((value) => (
-                    <option value={value} key={value}>{applicantAnswerLabel(value)}</option>
-                  ))}
-                </select>
+                {question.control === 'DATE' ? (() => {
+                  const bounds = questionDateBounds(question, answers)
+                  return (
+                    <input
+                      id={controlId(index)}
+                      name={question.id}
+                      type="date"
+                      value={answers[question.id] ?? ''}
+                      min={bounds.min}
+                      max={bounds.max}
+                      required={question.required}
+                      aria-invalid={fieldError === undefined ? undefined : true}
+                      aria-describedby={describedBy}
+                      onChange={(changeEvent) => changeAnswer(question, changeEvent.currentTarget.value)}
+                    />
+                  )
+                })() : question.control === 'TEXT' ? (
+                  <input
+                    id={controlId(index)}
+                    name={question.id}
+                    type="text"
+                    value={answers[question.id] ?? ''}
+                    placeholder={question.placeholder}
+                    maxLength={question.maxLength}
+                    required={question.required}
+                    aria-invalid={fieldError === undefined ? undefined : true}
+                    aria-describedby={describedBy}
+                    onChange={(changeEvent) => changeAnswer(question, changeEvent.currentTarget.value, false)}
+                    onBlur={persistTextAnswer}
+                  />
+                ) : (
+                  <>
+                    {question.searchable ? (
+                      <input
+                        className={styles.optionSearch}
+                        type="search"
+                        aria-label={`Search ${prompt.toLowerCase()}`}
+                        placeholder="Type to filter the list"
+                        onChange={(changeEvent) => {
+                          const select = document.getElementById(controlId(index))
+                          if (!(select instanceof HTMLSelectElement)) {
+                            return
+                          }
+                          const query = changeEvent.currentTarget.value.trim().toLocaleLowerCase()
+                          for (const option of select.options) {
+                            option.hidden =
+                              option.value !== '' &&
+                              option.value !== answers[question.id] &&
+                              !option.text.toLocaleLowerCase().includes(query)
+                          }
+                        }}
+                      />
+                    ) : null}
+                    <select
+                      id={controlId(index)}
+                      name={question.id}
+                      value={answers[question.id] ?? ''}
+                      required={question.required}
+                      aria-invalid={fieldError === undefined ? undefined : true}
+                      aria-describedby={describedBy}
+                      onChange={(changeEvent) => changeAnswer(question, changeEvent.currentTarget.value)}
+                    >
+                      <option value="">Choose an option</option>
+                      {question.allowedValues.map((value) => (
+                        <option value={value} key={value}>{applicantAnswerLabel(value)}</option>
+                      ))}
+                    </select>
+                  </>
+                )}
+                {question.helperText ? <p className={styles.helperText} id={helperId(index)}>{question.helperText}</p> : null}
+                {guidance ? <p className={styles.guidanceNotice} id={guidanceId(index)} role="status">{guidance}</p> : null}
                 {fieldError ? <p className={styles.fieldError} id={errorId(index)}>{fieldError}</p> : null}
               </div>
             )

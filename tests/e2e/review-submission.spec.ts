@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { fillMedicalApplication, fillTouristApplication } from './application-inputs.js'
 
 const P0_STORAGE_KEY = 'india-evisa-reimagined:p0'
 
@@ -28,24 +29,9 @@ async function reachReview(
   await page.getByRole('link', { name: 'Continue' }).click()
   await page.getByRole('button', { name: 'Continue application' }).click()
   await page.getByRole('button', { name: 'Start application' }).click()
-  await page.getByLabel('Country of nationality').selectOption('SYN-POLICY-COHORT-A')
-  await page.getByLabel('Passport type').selectOption('SYNTHETIC_STANDARD_PASSPORT')
-  await page
-    .getByLabel('Expected date of arrival')
-    .selectOption(scenario === 'Medical treatment' ? '2099-04-14' : '2099-05-10')
-  await page
-    .getByLabel(scenario === 'Medical treatment' ? 'Purpose of medical visit' : 'Purpose of visit')
-    .selectOption(
-      scenario === 'Medical treatment'
-        ? 'SYNTHETIC_MEDICAL_TREATMENT'
-        : 'SYNTHETIC_TOURISM',
-    )
-  if (scenario === 'Medical treatment') {
-    await page.getByLabel('Proposed hospital admission date').selectOption('2099-04-18')
-    await page.getByRole('radio', { name: 'Yes' }).check()
-  } else {
-    await page.getByLabel('Expected date of departure').selectOption('2099-05-17')
-  }
+  await (scenario === 'Medical treatment'
+    ? fillMedicalApplication(page)
+    : fillTouristApplication(page))
   await page.getByRole('button', { name: 'Continue to documents' }).click()
   await page.getByRole('link', { name: 'Prepare documents' }).click()
   const documentNames = [
@@ -141,10 +127,9 @@ test('Medical A05 reviews authoritative details and reaches one locked simulated
   await openFreshApp(page)
   await reachReview(page)
   await expect(page.getByRole('heading', { name: 'Medical treatment' })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Calculated before payment' })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Calculated before payment' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Not calculated in this prototype' })).toBeVisible()
   await expect(page.getByText('Ready', { exact: true })).toHaveCount(3)
-  await expect(page.getByText('Purpose of medical visit')).toBeVisible()
+  await expect(page.getByText('Type of medical treatment required')).toBeVisible()
 
   await submitReview(page)
   await expect(page.getByRole('link', { name: 'Continue to payment' })).toBeVisible()
@@ -153,7 +138,7 @@ test('Medical A05 reviews authoritative details and reaches one locked simulated
 
   const evidence = await loadCaseEvidence(page)
   expect(evidence.applicationState).toBe('LOCKED')
-  expect(evidence.policyQualifiedVersion).toBe('SYN-EVISA-POLICY@2.0.0')
+  expect(evidence.policyQualifiedVersion).toBe('SYN-EVISA-POLICY@2.1.0')
   expect(evidence.documents.map(({ state }) => state)).toEqual([
     'SUBMITTED',
     'SUBMITTED',
@@ -216,7 +201,7 @@ test('Tourist reuses A05 with five answers, two documents, and 41 credits', asyn
   await openFreshApp(page)
   await reachReview(page, 'Tourism')
   await expect(page.getByRole('heading', { name: 'Tourism' })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Calculated before payment' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Not calculated in this prototype' })).toBeVisible()
   await expect(page.getByText('Ready', { exact: true })).toHaveCount(2)
   await expect(page.getByText(/Medical treatment intent/i)).toHaveCount(0)
   await expect(page.getByText('Hospital letter')).toHaveCount(0)
@@ -230,7 +215,7 @@ test('A05 review and submission remain usable without horizontal overflow at 360
   await reachReview(page)
 
   const reviewPanel = page.getByRole('region', { name: 'Review your application' })
-  const feePanel = page.getByRole('region', { name: 'Calculated before payment' })
+  const feePanel = page.getByRole('region', { name: 'Not calculated in this prototype' })
   const confirmationPanel = page.locator('form').filter({
     has: page.getByRole('heading', { name: 'Ready to submit your application?' }),
   })

@@ -132,10 +132,13 @@
   text-transform: uppercase;
 }
 
-.questionGroup select {
+.questionGroup select,
+.questionGroup input[type='date'],
+.questionGroup input[type='text'],
+.questionGroup input[type='search'] {
   width: 100%;
   min-height: 3rem;
-  padding: 0.7rem 2.5rem 0.7rem 0.85rem;
+  padding: 0.7rem 0.85rem;
   border: 1px solid var(--border-strong);
   border-radius: 0.45rem;
   background: var(--surface-raised);
@@ -143,9 +146,45 @@
   font: inherit;
 }
 
-.questionGroup select[aria-invalid='true'] {
+.questionGroup select {
+  padding-right: 2.5rem;
+}
+
+.questionGroup input[type='date'] {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.questionGroup .optionSearch {
+  min-height: 2.75rem;
+  border-color: var(--border-subtle);
+  background: var(--surface-page);
+}
+
+.questionGroup select[aria-invalid='true'],
+.questionGroup input[aria-invalid='true'] {
   border-color: var(--error-strong);
   box-shadow: 0 0 0 1px var(--error-strong);
+}
+
+.helperText,
+.guidanceNotice {
+  margin: 0;
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+.helperText {
+  color: var(--ink-muted);
+}
+
+.guidanceNotice {
+  padding: 0.8rem 0.9rem;
+  border: 1px solid #d8b36a;
+  border-left: 4px solid #a56b00;
+  border-radius: 0.45rem;
+  background: #fff8e8;
+  color: var(--ink-strong);
 }
 
 .choiceGrid {
@@ -307,6 +346,7 @@
 .secondaryButton:focus-visible,
 .backButton:focus-visible,
 .questionGroup select:focus-visible,
+.questionGroup input:focus-visible,
 .choiceControl:has(input:focus-visible),
 .errorSummary button:focus-visible {
   outline: 3px solid var(--focus-ring);

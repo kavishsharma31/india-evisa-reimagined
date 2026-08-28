@@ -195,9 +195,9 @@ export function ReviewApplication(props: ReviewApplicationProps) {
         <section className={styles.feePanel} aria-labelledby="review-fee-heading">
           <div>
             <p className={styles.sectionLabel}>Visa fee</p>
-            <h3 id="review-fee-heading">Calculated before payment</h3>
+            <h3 id="review-fee-heading">Not calculated in this prototype</h3>
           </div>
-          <strong>The amount depends on nationality and visa category.</strong>
+          <strong>Visa fees vary by nationality and visa category.</strong>
         </section>
       </div>
 

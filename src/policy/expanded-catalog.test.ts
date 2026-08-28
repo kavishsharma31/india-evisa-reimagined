@@ -6,8 +6,10 @@ import { createLocalMockAdapters } from '../mocks'
 import { createDemoRuntime, createDeterministicRuntimeMetadata } from '../runtime'
 import {
   ACTIVE_POLICY_QUALIFIED_VERSION,
+  EXPANDED_POLICY_QUALIFIED_VERSION,
   LEGACY_POLICY_QUALIFIED_VERSION,
   activePolicyBundle,
+  expandedPolicyBundle,
   evaluatePolicy,
   resolvePolicyBundle,
 } from './index'
@@ -31,9 +33,12 @@ class MemoryStorage implements StoragePort {
 }
 
 describe('eight-category active policy catalog', () => {
-  it('registers a new active version without replacing frozen 1.0.0', () => {
-    expect(ACTIVE_POLICY_QUALIFIED_VERSION).toBe('SYN-EVISA-POLICY@2.0.0')
+  it('registers the real-input policy without replacing frozen 1.0.0 or 2.0.0', () => {
+    expect(ACTIVE_POLICY_QUALIFIED_VERSION).toBe('SYN-EVISA-POLICY@2.1.0')
     expect(resolvePolicyBundle(LEGACY_POLICY_QUALIFIED_VERSION)?.digest).toBe('SYN-POLICY-DIGEST-1-0-0')
+    expect(resolvePolicyBundle(EXPANDED_POLICY_QUALIFIED_VERSION)?.digest).toBe(
+      'SYN-POLICY-DIGEST-2-0-0-EIGHT-CATEGORY',
+    )
     expect(resolvePolicyBundle(ACTIVE_POLICY_QUALIFIED_VERSION)).toBe(activePolicyBundle)
   })
 
@@ -43,7 +48,17 @@ describe('eight-category active policy catalog', () => {
     const result = evaluatePolicy(createPolicyEvaluationRequest(facts!), activePolicyBundle)
     expect(result.scenarioSupport).toBe('SUPPORTED_BY_DEMO')
     expect(result.questionManifest?.id).toBe(manifestId)
-    expect(result.questionManifest?.questions).toHaveLength(scenarioId === 'SYN-MEDICAL-001' ? 6 : scenarioId === 'SYN-TOURIST-001' ? 5 : 5)
+    const expectedQuestionCount = {
+      'SYN-TOURIST-001': 5,
+      'SYN-BUSINESS-001': 7,
+      'SYN-MEDICAL-001': 6,
+      'SYN-MEDICAL-ATTENDANT-001': 7,
+      'SYN-STUDENT-001': 7,
+      'SYN-FAMILY-001': 7,
+      'SYN-TRANSIT-001': 8,
+      'SYN-MISCELLANEOUS-001': 7,
+    } as const
+    expect(result.questionManifest?.questions).toHaveLength(expectedQuestionCount[scenarioId])
     expect(result.documentManifest?.requirements.map(({ id }) => id)).toEqual(requirementIds)
     expect(result.syntheticFee).toMatchObject({ amount: fee, label: 'SYNTHETIC — NOT PAYABLE' })
   })
@@ -85,6 +100,36 @@ describe('eight-category active policy catalog', () => {
     expect(runtime.resumeCase()).toMatchObject({
       status: 'CASE_RESUMED',
       policyQualifiedVersion: LEGACY_POLICY_QUALIFIED_VERSION,
+    })
+    expect(storage.getItem(P0_STORAGE_KEY)).toBe(beforeResume)
+  })
+
+  it('creates and resumes a frozen 2.0.0 case without migrating its policy pin', () => {
+    const storage = new MemoryStorage()
+    const runtime = createDemoRuntime({
+      store: createPersistenceStore(storage),
+      adapters: createLocalMockAdapters(),
+      metadata: createDeterministicRuntimeMetadata(),
+    })
+    expect(runtime.createCase({
+      scenarioId: 'SYN-MEDICAL-001',
+      idempotencyKey: 'SYN-IDEMPOTENCY-FROZEN-2-0',
+    }).status).toBe('COMMAND_ACCEPTED')
+    const activeEnvelope = JSON.parse(storage.getItem(P0_STORAGE_KEY)!) as {
+      cases: Array<{
+        policyPin: { qualifiedVersion: string; digest: string }
+      }>
+    }
+    activeEnvelope.cases[0]!.policyPin = {
+      qualifiedVersion: EXPANDED_POLICY_QUALIFIED_VERSION,
+      digest: expandedPolicyBundle.digest,
+    }
+    storage.setItem(P0_STORAGE_KEY, JSON.stringify(activeEnvelope))
+    const beforeResume = storage.getItem(P0_STORAGE_KEY)
+
+    expect(runtime.resumeCase()).toMatchObject({
+      status: 'CASE_RESUMED',
+      policyQualifiedVersion: EXPANDED_POLICY_QUALIFIED_VERSION,
     })
     expect(storage.getItem(P0_STORAGE_KEY)).toBe(beforeResume)
   })

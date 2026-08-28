@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { fillGenericApplication, fillMedicalApplication } from './application-inputs.js'
 
 const STORAGE_KEY = 'india-evisa-reimagined:p0'
 const PROTOTYPE_NOTICE =
@@ -16,49 +17,49 @@ const PURPOSES = [
     slug: 'business',
     title: 'Business',
     category: 'e-Business Visa',
-    prompts: ['Business purpose or activity', 'Indian organisation or company', 'Organisation city', 'Expected date of arrival', 'Expected date of departure'],
+    prompts: ['Country of nationality', 'Passport type', 'Expected date of arrival', 'Business purpose or activity', 'Indian organisation or company', 'Organisation city', 'Expected date of departure'],
     documents: ['Recent photograph', 'Passport bio page', 'Business card'],
   },
   {
     slug: 'medical',
     title: 'Medical treatment',
     category: 'e-Medical Visa',
-    prompts: ['Country of nationality', 'Passport type', 'Expected date of arrival', 'Purpose of medical visit', 'Proposed hospital admission date', 'Will a medical attendant travel with you?'],
+    prompts: ['Country of nationality', 'Passport type', 'Expected date of arrival', 'Type of medical treatment required', 'Proposed hospital admission date', 'Will a medical attendant travel with you?'],
     documents: ['Recent photograph', 'Passport bio page', 'Hospital letter'],
   },
   {
     slug: 'medical-attendant',
     title: 'Accompanying a medical patient',
     category: 'e-Medical Attendant Visa',
-    prompts: ['Patient application reference', 'Relationship to the patient', 'Indian hospital', 'Hospital city', 'Expected date of arrival'],
+    prompts: ['Country of nationality', 'Passport type', 'Expected date of arrival', 'Patient application reference', 'Relationship to the patient', 'Indian hospital', 'Hospital city'],
     documents: ['Recent photograph', 'Passport bio page'],
   },
   {
     slug: 'student',
     title: 'Study',
     category: 'e-Student Visa',
-    prompts: ['Educational institution', 'Programme or course', 'Course duration', 'Funding source', 'Expected date of arrival'],
+    prompts: ['Country of nationality', 'Passport type', 'Expected date of arrival', 'Educational institution', 'Programme or course', 'Course duration', 'Funding source'],
     documents: ['Recent photograph', 'Passport bio page', 'Admission letter', 'Proof of financial support'],
   },
   {
     slug: 'family',
     title: 'Joining a student family member',
     category: 'e-Family Visa',
-    prompts: ['Student application reference', 'Relationship to the student', 'Student’s educational institution', 'Expected date of arrival', 'Expected date of departure'],
+    prompts: ['Country of nationality', 'Passport type', 'Expected date of arrival', 'Student application reference', 'Relationship to the student', 'Student’s educational institution', 'Expected date of departure'],
     documents: ['Recent photograph', 'Passport bio page'],
   },
   {
     slug: 'transit',
     title: 'Transit through India',
     category: 'e-Transit Visa',
-    prompts: ['Port of arrival in India', 'Onward destination country', 'Onward departure date', 'Confirmed ticket reference', 'Permission to enter your destination country'],
+    prompts: ['Country of nationality', 'Passport type', 'Expected date of arrival', 'Port of arrival in India', 'Onward destination country', 'Onward departure date', 'Confirmed ticket reference', 'Permission to enter your destination country'],
     documents: ['Recent photograph', 'Passport bio page', 'Confirmed travel tickets', 'Proof of permission to enter destination country'],
   },
   {
     slug: 'miscellaneous',
     title: 'Entry / another eligible purpose',
     category: 'e-Miscellaneous Visa',
-    prompts: ['Basis for your e-Entry application', 'Relationship to the relevant person', 'Related person or Indian/OCI status basis', 'Expected date of arrival', 'Expected date of departure'],
+    prompts: ['Country of nationality', 'Passport type', 'Expected date of arrival', 'Basis for your e-Entry application', 'Relationship to the relevant person', 'Related person or Indian/OCI status basis', 'Expected date of departure'],
     documents: ['Recent photograph', 'Passport bio page', 'Proof supporting your relationship or Indian/OCI status basis', 'Birth or marriage certificate'],
   },
 ] as const
@@ -79,11 +80,7 @@ async function startMedical(page: Page) {
   await page.goto('/apply/medical')
   await page.getByRole('button', { name: 'Continue application' }).click()
   await page.getByRole('button', { name: 'Start application' }).click()
-  const selects = page.locator('form select')
-  for (let index = 0; index < await selects.count(); index += 1) {
-    await selects.nth(index).selectOption({ index: 1 })
-  }
-  await page.getByRole('radio', { name: 'Yes' }).check()
+  await fillMedicalApplication(page)
 }
 
 test('all eight A01 routes use citizen-facing requirements and fee copy', async ({ page }) => {
@@ -95,7 +92,7 @@ test('all eight A01 routes use citizen-facing requirements and fee copy', async 
     await expect(page.getByText(purpose.category, { exact: true })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'What you’ll need to provide' })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Required documents' })).toBeVisible()
-    await expect(page.getByText('The applicable visa fee depends on your nationality and visa category. The amount will be shown before payment.')).toBeVisible()
+    await expect(page.getByText('Visa fees vary by nationality and visa category.')).toBeVisible()
     await expect(page.getByRole('button', { name: 'Continue application' })).toBeVisible()
     await expect(page.getByRole('link', { name: 'Choose a different purpose' })).toBeVisible()
     await expect(page.getByText('Policy version')).toHaveCount(0)
@@ -117,13 +114,7 @@ test('all eight A03 and A04 routes translate prompts and document names at the U
     }
     await expectNoImplementationLanguage(page)
 
-    const selects = page.locator('form select')
-    for (let index = 0; index < await selects.count(); index += 1) {
-      await selects.nth(index).selectOption({ index: 1 })
-    }
-    if (purpose.slug === 'medical') {
-      await page.getByRole('radio', { name: 'Yes' }).check()
-    }
+    await fillGenericApplication(page)
     await page.getByRole('button', { name: 'Continue to documents' }).click()
     await page.getByRole('link', { name: 'Prepare documents' }).click()
 
@@ -147,7 +138,7 @@ test('normal Medical A05 to A09 keeps citizen copy and only the required safety 
   }
   await page.getByRole('link', { name: 'Review application' }).click()
   await expect(page.getByRole('heading', { name: 'Review your application' })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Calculated before payment' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Not calculated in this prototype' })).toBeVisible()
   await expectNoImplementationLanguage(page)
 
   await page.getByRole('checkbox', { name: 'I confirm these application details are complete and ready to submit.' }).check()

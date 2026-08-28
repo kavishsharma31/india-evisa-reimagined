@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { fillMedicalApplication } from './application-inputs.js'
 
 const STORAGE_KEY = 'india-evisa-reimagined:p0'
 const MEDICAL_CASE = 'SYN-CASE-MED-001'
@@ -26,12 +27,7 @@ async function completeMedicalApplication(page: Page) {
   await page.getByRole('link', { name: 'Continue' }).click()
   await page.getByRole('button', { name: 'Continue application' }).click()
   await page.getByRole('button', { name: 'Start application' }).click()
-  await page.getByLabel('Country of nationality').selectOption('SYN-POLICY-COHORT-A')
-  await page.getByLabel('Passport type').selectOption('SYNTHETIC_STANDARD_PASSPORT')
-  await page.getByLabel('Expected date of arrival').selectOption('2099-04-14')
-  await page.getByLabel('Purpose of medical visit').selectOption('SYNTHETIC_MEDICAL_TREATMENT')
-  await page.getByLabel('Proposed hospital admission date').selectOption('2099-04-18')
-  await page.getByRole('radio', { name: 'Yes' }).check()
+  await fillMedicalApplication(page)
   await page.getByRole('button', { name: 'Continue to documents' }).click()
 }
 

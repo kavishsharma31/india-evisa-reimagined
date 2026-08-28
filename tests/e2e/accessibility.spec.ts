@@ -1,5 +1,6 @@
 import { AxeBuilder } from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
+import { fillMedicalApplication } from './application-inputs.js'
 
 const P0_STORAGE_KEY = 'india-evisa-reimagined:p0'
 
@@ -28,15 +29,6 @@ test('Medical A01 has no automatically detectable accessibility violations', asy
   await expectNoAxeViolations(page)
 })
 
-async function answerMedicalApplication(page: Page) {
-  await page.getByLabel('Country of nationality').selectOption('SYN-POLICY-COHORT-A')
-  await page.getByLabel('Passport type').selectOption('SYNTHETIC_STANDARD_PASSPORT')
-  await page.getByLabel('Expected date of arrival').selectOption('2099-04-14')
-  await page.getByLabel('Purpose of medical visit').selectOption('SYNTHETIC_MEDICAL_TREATMENT')
-  await page.getByLabel('Proposed hospital admission date').selectOption('2099-04-18')
-  await page.getByRole('radio', { name: 'Yes' }).check()
-}
-
 test('A02 and A03 states have no automatically detectable accessibility violations', async ({ page }) => {
   await openFreshApp(page)
   await page.getByText('Medical treatment', { exact: true }).click()
@@ -52,7 +44,7 @@ test('A02 and A03 states have no automatically detectable accessibility violatio
   await expect(page.getByRole('heading', { name: 'Check your answers' })).toBeVisible()
   await expectNoAxeViolations(page)
 
-  await answerMedicalApplication(page)
+  await fillMedicalApplication(page)
   await page.getByRole('button', { name: 'Continue to documents' }).click()
   await expect(page.getByRole('heading', { name: 'Application details saved' })).toBeVisible()
   await expectNoAxeViolations(page)

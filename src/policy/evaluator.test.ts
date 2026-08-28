@@ -10,6 +10,7 @@ import {
   activePolicyBundle,
   comparePolicyEvaluations,
   evaluatePolicy,
+  expandedPolicyBundle,
   parsePolicyBundle,
   parseScenarioFacts,
   PREVIEW_POLICY_QUALIFIED_VERSION,
@@ -78,10 +79,10 @@ describe('versioned policy evaluation', () => {
   })
 
   it('keeps the draft preview separate and changes only Medical hospital-letter guidance', () => {
-    const activeBundleBeforePreview = JSON.stringify(activePolicyBundle)
+    const activeBundleBeforePreview = JSON.stringify(expandedPolicyBundle)
     const activeResult = evaluatePolicy(
       createPolicyEvaluationRequest(medicalScenario),
-      activePolicyBundle,
+      expandedPolicyBundle,
     )
     const activeResultBeforePreview = JSON.stringify(activeResult)
     const previewResult = evaluatePolicy(
@@ -106,18 +107,18 @@ describe('versioned policy evaluation', () => {
     expect(comparison.questionManifestChanged).toBe(false)
     expect(comparison.feeChanged).toBe(false)
     expect(comparison.supportChanged).toBe(false)
-    expect(JSON.stringify(activePolicyBundle)).toBe(activeBundleBeforePreview)
+    expect(JSON.stringify(expandedPolicyBundle)).toBe(activeBundleBeforePreview)
     expect(JSON.stringify(activeResult)).toBe(activeResultBeforePreview)
     expect(Object.isFrozen(activeResult)).toBe(true)
-    expect(Object.isFrozen(activePolicyBundle)).toBe(true)
-    expect(Object.isFrozen(activePolicyBundle.rules)).toBe(true)
+    expect(Object.isFrozen(expandedPolicyBundle)).toBe(true)
+    expect(Object.isFrozen(expandedPolicyBundle.rules)).toBe(true)
     expect(Object.isFrozen(previewPolicyBundle)).toBe(true)
   })
 
   it('leaves Tourist policy effects unaffected by the Medical-only preview', () => {
     const activeResult = evaluatePolicy(
       createPolicyEvaluationRequest(touristScenario),
-      activePolicyBundle,
+      expandedPolicyBundle,
     )
     const previewResult = evaluatePolicy(
       createPolicyEvaluationRequest(touristScenario, 'PREVIEW'),

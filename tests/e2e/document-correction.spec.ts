@@ -1,5 +1,6 @@
 import { AxeBuilder } from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
+import { fillMedicalApplication, fillTouristApplication } from './application-inputs.js'
 
 const P0_STORAGE_KEY = 'india-evisa-reimagined:p0'
 
@@ -29,20 +30,9 @@ async function reachStatus(
   await page.getByRole('link', { name: 'Continue' }).click()
   await page.getByRole('button', { name: 'Continue application' }).click()
   await page.getByRole('button', { name: 'Start application' }).click()
-  await page.getByLabel('Country of nationality').selectOption('SYN-POLICY-COHORT-A')
-  await page.getByLabel('Passport type').selectOption('SYNTHETIC_STANDARD_PASSPORT')
-  await page.getByLabel('Expected date of arrival').selectOption(
-    scenario === 'Medical treatment' ? '2099-04-14' : '2099-05-10',
-  )
-  await page.getByLabel(scenario === 'Medical treatment' ? 'Purpose of medical visit' : 'Purpose of visit').selectOption(
-    scenario === 'Medical treatment' ? 'SYNTHETIC_MEDICAL_TREATMENT' : 'SYNTHETIC_TOURISM',
-  )
-  if (scenario === 'Medical treatment') {
-    await page.getByLabel('Proposed hospital admission date').selectOption('2099-04-18')
-    await page.getByRole('radio', { name: 'Yes' }).check()
-  } else {
-    await page.getByLabel('Expected date of departure').selectOption('2099-05-17')
-  }
+  await (scenario === 'Medical treatment'
+    ? fillMedicalApplication(page)
+    : fillTouristApplication(page))
   await page.getByRole('button', { name: 'Continue to documents' }).click()
   await page.getByRole('link', { name: 'Prepare documents' }).click()
   const documentNames = [

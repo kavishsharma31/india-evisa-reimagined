@@ -93,7 +93,7 @@ describe('applicant slice A00 and A01', () => {
     expect(screen.getByText('Recent photograph', { exact: true })).toBeInTheDocument()
     expect(screen.getByText('Passport bio page', { exact: true })).toBeInTheDocument()
     expect(screen.getByText('Hospital letter', { exact: true })).toBeInTheDocument()
-    expect(screen.getByText('Calculated before payment', { exact: true })).toBeInTheDocument()
+    expect(screen.getByText('Varies by nationality and category', { exact: true })).toBeInTheDocument()
     expect(screen.queryByText(/SYNTHETIC_DEMO_CREDITS/)).not.toBeInTheDocument()
     expect(screen.getByText(PROTOTYPE_NOTICE, { exact: true })).toBeInTheDocument()
   })
@@ -110,7 +110,7 @@ describe('applicant slice A00 and A01', () => {
     expect(screen.getByText('Recent photograph', { exact: true })).toBeInTheDocument()
     expect(screen.getByText('Passport bio page', { exact: true })).toBeInTheDocument()
     expect(screen.queryByText('Hospital letter', { exact: true })).not.toBeInTheDocument()
-    expect(screen.getByText('Calculated before payment', { exact: true })).toBeInTheDocument()
+    expect(screen.getByText('Varies by nationality and category', { exact: true })).toBeInTheDocument()
   })
 
   it('does not offer continuation when policy evaluation rejects the selection', async () => {

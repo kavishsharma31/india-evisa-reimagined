@@ -14,8 +14,9 @@ import {
   syntheticIdSchema,
   syntheticTimestampSchema,
 } from '../domain/ids'
-import { isSupportedPolicyPin, registeredPolicyBundles } from '../policy'
+import { isSupportedPolicyPin, registeredPolicyBundles, resolvePolicyBundle } from '../policy'
 import { deepFreeze, type DeepReadonly } from '../policy/schema'
+import { validateQuestionAnswerShape } from '../policy/question-validation'
 import {
   P0_FIXTURE_VERSION,
   P0_STORAGE_SCHEMA_VERSION,
@@ -59,35 +60,28 @@ const documentRequirementIdSchema = z.enum([
   'REQ-CIVIL-CERTIFICATE-1',
 ])
 
-const questionAllowedValues = new Map(
+const policyQuestionIds = new Set(
   registeredPolicyBundles.flatMap((bundle) => bundle.questionManifests.flatMap((manifest) =>
-    manifest.questions.map((question) => [question.id, new Set(question.allowedValues)] as const),
+    manifest.questions.map((question) => question.id),
   )),
 )
 
 export const controlledAnswerMapSchema = z
-  .record(z.string().regex(/^Q-[A-Z0-9-]+$/), z.string().min(1).max(80))
+  .record(z.string().regex(/^Q-[A-Z0-9-]+$/), z.string().min(1).max(500))
   .superRefine((answers, context) => {
-    if (Object.keys(answers).length > questionAllowedValues.size) {
+    if (Object.keys(answers).length > policyQuestionIds.size) {
       context.addIssue({
         code: 'custom',
         message: 'Draft answers exceed the bounded policy question catalogue.',
       })
     }
 
-    for (const [questionId, answer] of Object.entries(answers)) {
-      const allowedValues = questionAllowedValues.get(questionId)
-      if (!allowedValues) {
+    for (const questionId of Object.keys(answers)) {
+      if (!policyQuestionIds.has(questionId)) {
         context.addIssue({
           code: 'custom',
           path: [questionId],
           message: 'Draft answer key is not in the active policy manifests.',
-        })
-      } else if (!allowedValues.has(answer)) {
-        context.addIssue({
-          code: 'custom',
-          path: [questionId],
-          message: 'Draft answer is not an allowed controlled policy value.',
         })
       }
     }
@@ -307,6 +301,18 @@ export const persistedCaseSchema = z
     }
 
     const snapshots = persistedCase.application.draftSnapshots
+    const policyBundle = resolvePolicyBundle(persistedCase.policyPin.qualifiedVersion)
+    const scenarioRule = policyBundle?.rules.find((rule) =>
+      rule.conditions.some(
+        (condition) =>
+          condition.fact === 'scenarioId' &&
+          condition.operator === 'EQUALS' &&
+          condition.value === persistedCase.scenarioId,
+      ),
+    )
+    const questionManifest = policyBundle?.questionManifests.find(
+      (manifest) => manifest.id === scenarioRule?.effects.questionManifestId,
+    )
     const snapshotIds = new Set<string>()
     for (const [index, snapshot] of snapshots.entries()) {
       if (snapshot.caseId !== persistedCase.caseId) {
@@ -338,6 +344,18 @@ export const persistedCaseSchema = z
         })
       }
       snapshotIds.add(snapshot.snapshotId)
+      for (const [questionId, answer] of Object.entries(snapshot.answers)) {
+        const question = questionManifest?.questions.find(({ id }) => id === questionId)
+        const answerError =
+          question === undefined ? 'Answer is not part of the pinned question manifest.' : validateQuestionAnswerShape(question, answer)
+        if (answerError !== null) {
+          context.addIssue({
+            code: 'custom',
+            path: ['application', 'draftSnapshots', index, 'answers', questionId],
+            message: answerError,
+          })
+        }
+      }
     }
 
     const expectedLatestSnapshotId = snapshots.at(-1)?.snapshotId ?? null
